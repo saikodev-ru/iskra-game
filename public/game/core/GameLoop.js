@@ -7,25 +7,19 @@ export default class GameLoop {
     this._running = false;
     this._tick = this._tick.bind(this);
   }
-
   start() {
     if (this._running) return;
     this._running = true;
     this._last = performance.now();
     this._rAF = requestAnimationFrame(this._tick);
   }
-
   stop() {
     this._running = false;
-    if (this._rAF) {
-      cancelAnimationFrame(this._rAF);
-      this._rAF = null;
-    }
+    if (this._rAF) { cancelAnimationFrame(this._rAF); this._rAF = null; }
   }
-
   _tick(timestamp) {
     if (!this._running) return;
-    const delta = Math.min((timestamp - this._last) / 1000, 0.05); // cap at 50ms
+    const delta = Math.min((timestamp - this._last) / 1000, 0.05);
     this._last = timestamp;
     this.update(delta);
     this.render();

@@ -4,11 +4,9 @@ import { useEffect } from 'react'
 
 export default function Home() {
   useEffect(() => {
-    // Prevent double initialization in React strict mode
     if ((window as unknown as Record<string, boolean>).__rhythmOsLoaded) return;
     (window as unknown as Record<string, boolean>).__rhythmOsLoaded = true;
 
-    // Inject import map for Three.js, addons, and fflate
     const importMap = document.createElement('script');
     importMap.type = 'importmap';
     importMap.textContent = JSON.stringify({
@@ -20,7 +18,6 @@ export default function Home() {
     });
     document.head.appendChild(importMap);
 
-    // Load game bootstrap
     const gameScript = document.createElement('script');
     gameScript.type = 'module';
     gameScript.src = '/game/main.js';
@@ -28,19 +25,18 @@ export default function Home() {
   }, []);
 
   return (
-    <div style={{
-      margin: 0,
-      overflow: 'hidden',
-      background: '#0D1117',
-      width: '100vw',
-      height: '100vh',
-      position: 'relative'
-    }}>
-      <canvas id="three" style={{ position: 'fixed', top: 0, left: 0, zIndex: 0, pointerEvents: 'none' as const }} />
-      <canvas id="game" style={{ position: 'fixed', top: 0, left: 0, zIndex: 1 }} />
+    <div style={{ margin: 0, overflow: 'hidden', background: '#111111', width: '100vw', height: '100vh', position: 'relative' }}>
+      {/* 3D scene — bottom layer, always visible */}
+      <canvas id="three" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0 }} />
+      {/* Game canvas — transparent background, notes only */}
+      <canvas id="game" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }} />
+      {/* Judgement overlay */}
       <div id="judgement-overlay" style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none' }} />
+      {/* HUD */}
       <div id="hud" style={{ position: 'fixed', inset: 0, zIndex: 3, pointerEvents: 'none' }} />
-      <div id="screen" style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+      {/* Screen UI — semi-transparent so 3D shows through */}
+      <div id="screen" style={{ position: 'fixed', inset: 0, zIndex: 5, background: 'rgba(17,17,17,0.75)' }} />
+      {/* Modal */}
       <div id="modal" style={{ position: 'fixed', inset: 0, zIndex: 10, pointerEvents: 'none' }} />
     </div>
   );
