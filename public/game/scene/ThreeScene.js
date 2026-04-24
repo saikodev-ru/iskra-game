@@ -41,6 +41,14 @@ export default class ThreeScene {
     this._graphicsPreset = 'disco'; // 'low' | 'standard' | 'disco'
     this._missFlash = 0; // red overlay flash intensity on miss (0-1, decays)
 
+    // Video background state
+    this._videoElement = null;   // hidden HTML5 <video> element
+    this._videoTexture = null;   // THREE.VideoTexture from the video
+    this._videoMesh = null;      // mesh for the video plane
+    this._videoMaterial = null;  // shader material for the video plane
+    this._videoActive = false;   // whether video is currently playing as bg
+    this._audioEngineRef = null; // for syncing video to audio time
+
     this._init();
     this._setupListeners();
   }
@@ -458,6 +466,185 @@ export default class ThreeScene {
     }
   }
 
+  /** Set a video as the background — synced to audio playback time */
+  setBackgroundVideo(url, audioEngine) {
+    this._clearBackgroundVideo();
+    this._clearBackgroundImage(); // remove any image bg
+    if (!url) return;
+
+    this._audioEngineRef = audioEngine || this._audioEngine;
+
+    // Create hidden <video> element
+    const video = document.createElement('video');
+    video.src = url;
+    video.crossOrigin = 'anonymous';
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.loop = false;
+    video.style.display = 'none';
+    document.body.appendChild(video);
+    this._videoElement = video;
+
+    video.addEventListener('loadeddata', () => {
+      if (this._disposed) return;
+
+      // Create VideoTexture
+      const texture = new THREE.VideoTexture(video);
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.format = THREE.RGBAFormat;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      this._videoTexture = texture;
+
+      // Calculate video aspect
+      const videoAspect = video.videoWidth / video.videoHeight || 16 / 9;
+
+      // Shader material for video — similar to bg image but using video texture
+      const fragmentShader = `
+        uniform sampler2D uTexture;
+        uniform float uBass;
+        uniform float uAudioIntensity;
+        uniform float uCoverScale;
+        uniform float uPlaneAspect;
+        uniform float uBrightness;
+        uniform float uOpacity;
+        uniform float uMissFlash;
+        varying vec2 vUv;
+        void main() {
+          vec2 uv = vUv;
+          float planeAspect = uPlaneAspect;
+          float imgAspect = uCoverScale;
+          if (planeAspect > imgAspect) {
+            float scale = planeAspect / imgAspect;
+            uv.y = (uv.y - 0.5) / scale + 0.5;
+          } else {
+            float scale = imgAspect / planeAspect;
+            uv.x = (uv.x - 0.5) / scale + 0.5;
+          }
+          float zoom = 1.0 + uBass * 0.06;
+          uv = (uv - 0.5) / zoom + 0.5;
+
+          // Clamp UVs to prevent wrapping
+          uv = clamp(uv, 0.0, 1.0);
+
+          vec4 tex = texture2D(uTexture, uv);
+          vec3 color = tex.rgb * 0.3;
+          float glow = uBass * 0.2 + uAudioIntensity * 0.08;
+          color += tex.rgb * glow;
+          color += vec3(uBrightness * 0.15);
+          float vig = distance(vUv, vec2(0.5));
+          color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
+
+          // Miss flash — red overlay
+          float missVig = smoothstep(0.2, 0.9, vig);
+          color += vec3(1.0, 0.1, 0.05) * uMissFlash * (0.6 + 0.4 * missVig);
+
+          gl_FragColor = vec4(color, uOpacity);
+        }
+      `;
+
+      this._videoMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+          uTexture: { value: texture },
+          uBass: { value: 0 },
+          uAudioIntensity: { value: 0 },
+          uCoverScale: { value: videoAspect },
+          uPlaneAspect: { value: 1.0 },
+          uBrightness: { value: 0 },
+          uOpacity: { value: 0 },
+          uMissFlash: { value: 0 },
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+        `,
+        fragmentShader,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        transparent: true,
+      });
+
+      // Create mesh
+      const planeGeom = this._calcBgPlaneGeometry();
+      this._videoMaterial.uniforms.uPlaneAspect.value = planeGeom.safeAreaAspect;
+
+      this._videoMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(planeGeom.width, planeGeom.height),
+        this._videoMaterial
+      );
+      this._videoMesh.position.set(planeGeom.cx, planeGeom.cy, -4);
+      this.scene.add(this._videoMesh);
+
+      // Fade in
+      const fadeDuration = 350;
+      const startTime = performance.now();
+      const animateFadeIn = () => {
+        if (this._disposed) return;
+        const elapsed = performance.now() - startTime;
+        const t = Math.min(1, elapsed / fadeDuration);
+        if (this._videoMaterial?.uniforms) {
+          this._videoMaterial.uniforms.uOpacity.value = 1 - Math.pow(1 - t, 3);
+        }
+        if (t < 1) requestAnimationFrame(animateFadeIn);
+      };
+      requestAnimationFrame(animateFadeIn);
+
+      // Start playing at offset 0 (will be synced in update loop)
+      video.currentTime = 0;
+      video.play().catch(() => {});
+      this._videoActive = true;
+    });
+
+    video.addEventListener('error', () => {
+      console.warn('[ThreeScene] Failed to load video background');
+      this._clearBackgroundVideo();
+    });
+
+    video.load();
+  }
+
+  /** Clear the video background and release resources */
+  _clearBackgroundVideo() {
+    this._videoActive = false;
+    if (this._videoMesh) {
+      this.scene.remove(this._videoMesh);
+      this._videoMesh.geometry.dispose();
+      this._videoMesh = null;
+    }
+    if (this._videoMaterial) {
+      this._videoMaterial.dispose();
+      this._videoMaterial = null;
+    }
+    if (this._videoTexture) {
+      this._videoTexture.dispose();
+      this._videoTexture = null;
+    }
+    if (this._videoElement) {
+      this._videoElement.pause();
+      this._videoElement.src = '';
+      this._videoElement.load();
+      if (this._videoElement.parentNode) {
+        this._videoElement.parentNode.removeChild(this._videoElement);
+      }
+      this._videoElement = null;
+    }
+  }
+
+  /** Pause the video background (when game is paused) */
+  pauseVideo() {
+    if (this._videoElement && !this._videoElement.paused) {
+      this._videoElement.pause();
+    }
+  }
+
+  /** Resume the video background (when game is resumed) */
+  resumeVideo() {
+    if (this._videoElement && this._videoElement.paused && this._videoActive) {
+      this._videoElement.play().catch(() => {});
+    }
+  }
+
   _setupListeners() {
     EventBus.on('note:hit', ({ judgement }) => {
       if (this._disposed) return;
@@ -518,15 +705,26 @@ export default class ThreeScene {
     this._resizeBackgroundImage();
   }
 
-  /** Resize the background image plane to match safe area */
+  /** Resize the background image/video plane to match safe area */
   _resizeBackgroundImage() {
-    if (!this._bgImageMesh) return;
-    const pg = this._calcBgPlaneGeometry();
-    this._bgImageMesh.geometry.dispose();
-    this._bgImageMesh.geometry = new THREE.PlaneGeometry(pg.width, pg.height);
-    this._bgImageMesh.position.set(pg.cx, pg.cy, this._bgImageMesh.position.z);
-    if (this._bgImageMaterial?.uniforms) {
-      this._bgImageMaterial.uniforms.uPlaneAspect.value = pg.safeAreaAspect;
+    if (this._bgImageMesh) {
+      const pg = this._calcBgPlaneGeometry();
+      this._bgImageMesh.geometry.dispose();
+      this._bgImageMesh.geometry = new THREE.PlaneGeometry(pg.width, pg.height);
+      this._bgImageMesh.position.set(pg.cx, pg.cy, this._bgImageMesh.position.z);
+      if (this._bgImageMaterial?.uniforms) {
+        this._bgImageMaterial.uniforms.uPlaneAspect.value = pg.safeAreaAspect;
+      }
+    }
+    // Also resize video mesh if present
+    if (this._videoMesh) {
+      const pg = this._calcBgPlaneGeometry();
+      this._videoMesh.geometry.dispose();
+      this._videoMesh.geometry = new THREE.PlaneGeometry(pg.width, pg.height);
+      this._videoMesh.position.set(pg.cx, pg.cy, this._videoMesh.position.z);
+      if (this._videoMaterial?.uniforms) {
+        this._videoMaterial.uniforms.uPlaneAspect.value = pg.safeAreaAspect;
+      }
     }
   }
 
@@ -614,6 +812,32 @@ export default class ThreeScene {
       this._bgImageMaterial.uniforms.uMissFlash.value = this._missFlash * gfx;
     }
 
+    // ── Video background — sync to audio time + audio-reactive effects ──
+    if (this._videoActive && this._videoElement && this._videoMaterial) {
+      // Sync video position to audio time
+      if (this._audioEngineRef && this._audioEngineRef.isPlaying) {
+        const audioTime = this._audioEngineRef.currentTime;
+        const videoTime = this._videoElement.currentTime;
+        const drift = Math.abs(audioTime - videoTime);
+        // Only resync if drift is significant (>0.3s) to avoid stutter
+        if (drift > 0.3) {
+          this._videoElement.currentTime = audioTime;
+        }
+        // Ensure playing
+        if (this._videoElement.paused) {
+          this._videoElement.play().catch(() => {});
+        }
+      }
+      // Update video texture
+      if (this._videoTexture) {
+        this._videoTexture.needsUpdate = true;
+      }
+      // Audio-reactive uniforms
+      this._videoMaterial.uniforms.uBass.value = bassPulse;
+      this._videoMaterial.uniforms.uAudioIntensity.value = audioPulse;
+      this._videoMaterial.uniforms.uMissFlash.value = this._missFlash * gfx;
+    }
+
     // Camera position: always smoothly return to center (no shake)
     this.camera.position.x *= 0.85;
 
@@ -635,6 +859,7 @@ export default class ThreeScene {
     }
 
     this.removeTVMonitor();
+    this._clearBackgroundVideo();
     this._clearBackgroundImage();
 
     if (this._particles) {

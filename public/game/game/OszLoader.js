@@ -5,7 +5,7 @@ import DifficultyAnalyzer from './DifficultyAnalyzer.js';
 class BeatmapStore {
   static DB_NAME = 'rhythm-os-db';
   static STORE_NAME = 'beatmaps';
-  static DB_VERSION = 3; // v3: invalidate cached beatmaps with wrong hold note durations
+  static DB_VERSION = 4; // v4: add video support
 
   /** Open (or create) the database */
   static async open() {
@@ -26,6 +26,10 @@ class BeatmapStore {
           } catch (err) {
             console.warn('[BeatmapStore] v3 migration clear failed:', err);
           }
+        }
+        // v3→v4: add video fields — no data migration needed
+        if (e.oldVersion < 4) {
+          console.log('[BeatmapStore] v4 migration: video support added');
         }
       };
       request.onsuccess = () => resolve(request.result);
@@ -148,6 +152,24 @@ class BeatmapStore {
         }
       }
 
+      // Reconstruct videoUrl from videoData
+      if (entry.videoData && entry.videoMime) {
+        try {
+          let data = entry.videoData;
+          if (!(data instanceof Uint8Array)) {
+            const keys = Object.keys(data).map(Number).sort((a, b) => a - b);
+            const arr = new Uint8Array(keys.length);
+            keys.forEach(k => { arr[k] = data[k]; });
+            data = arr;
+          }
+          const blob = new Blob([data], { type: entry.videoMime });
+          entry.videoUrl = URL.createObjectURL(blob);
+        } catch (err) {
+          console.warn(`Failed to reconstruct videoUrl for ${entry.id}:`, err);
+          entry.videoUrl = null;
+        }
+      }
+
       return entry;
     });
 
@@ -214,6 +236,7 @@ export default class OszLoader {
       const osuFiles = [];
       const audioFiles = {};
       const imageFiles = {};
+      const videoFiles = {}; // .mp4, .avi, .wmv, .flv, .webm
 
       for (const [filename, data] of Object.entries(unzipped)) {
         const lower = filename.toLowerCase();
@@ -223,6 +246,8 @@ export default class OszLoader {
           audioFiles[lower] = data;
         } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png')) {
           imageFiles[lower] = data;
+        } else if (lower.endsWith('.mp4') || lower.endsWith('.avi') || lower.endsWith('.wmv') || lower.endsWith('.flv') || lower.endsWith('.webm')) {
+          videoFiles[lower] = data;
         }
       }
 
@@ -281,6 +306,27 @@ export default class OszLoader {
         }
       }
 
+      // Create video Object URL and store raw data for persistence
+      let videoUrl = null;
+      let videoData = null;
+      let videoMime = null;
+
+      // Parse video filename from Events section (0,1,filename or Video,0,filename)
+      const videoFileName = firstParsed.video?.toLowerCase();
+      if (videoFileName && videoFiles[videoFileName]) {
+        videoData = videoFiles[videoFileName];
+        videoMime = this._getVideoMime(videoFileName);
+        videoUrl = this._createVideoObjectURL(videoFileName, videoFiles[videoFileName]);
+      } else {
+        // Fallback: use the first video file found in the archive
+        const firstVideo = Object.entries(videoFiles)[0];
+        if (firstVideo) {
+          videoData = firstVideo[1];
+          videoMime = this._getVideoMime(firstVideo[0]);
+          videoUrl = this._createVideoObjectURL(firstVideo[0], firstVideo[1]);
+        }
+      }
+
       // ── Build difficulties array ───────────────────────────────────────
       const difficulties = [];
 
@@ -303,6 +349,9 @@ export default class OszLoader {
         backgroundUrl,
         backgroundData,
         backgroundMime,
+        videoUrl,
+        videoData,
+        videoMime,
         audioBuffer,
         difficulties,
       };
@@ -476,6 +525,7 @@ export default class OszLoader {
       timingPoints: [],
       hitObjects: [],
       background: null,
+      video: null, // video filename from Events
       mode: 0,
     };
 
@@ -557,6 +607,14 @@ export default class OszLoader {
         if (line.startsWith('0,0,')) {
           result.background = line.substring(4).trim().replace(/^"|"$/g, '');
         }
+        // Video line: "Video,0,filename" or "1,0,filename" or "Video,offset,filename"
+        else if (line.startsWith('Video,') || line.startsWith('1,')) {
+          const parts = line.split(',');
+          if (parts.length >= 3) {
+            const filename = parts.slice(2).join(',').trim().replace(/^"|"$/g, '');
+            if (filename) result.video = filename;
+          }
+        }
       }
     }
 
@@ -573,6 +631,25 @@ export default class OszLoader {
       }
     }
     return best;
+  }
+
+  /** Get MIME type for a video file based on extension */
+  _getVideoMime(filename) {
+    const lower = filename.toLowerCase();
+    if (lower.endsWith('.mp4')) return 'video/mp4';
+    if (lower.endsWith('.webm')) return 'video/webm';
+    if (lower.endsWith('.avi')) return 'video/x-msvideo';
+    if (lower.endsWith('.wmv')) return 'video/x-ms-wmv';
+    if (lower.endsWith('.flv')) return 'video/x-flv';
+    // Default to mp4 — most browsers can handle it
+    return 'video/mp4';
+  }
+
+  /** Create an Object URL for a video file stored in the archive */
+  _createVideoObjectURL(filename, data) {
+    const mime = this._getVideoMime(filename);
+    const blob = new Blob([data], { type: mime });
+    return URL.createObjectURL(blob);
   }
 }
 

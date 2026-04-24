@@ -159,9 +159,15 @@ async function boot() {
     if (map.backgroundUrl) noteRenderer.setBackgroundImage(map.backgroundUrl);
     else noteRenderer.clearBackground();
 
-    // Use the same Three.js background system for gameplay
-    if (map.backgroundUrl) three.setBackgroundImage(map.backgroundUrl);
-    else three._clearBackgroundImage();
+    // Use video background if available, otherwise use image background
+    if (map.videoUrl) {
+      three.setBackgroundVideo(map.videoUrl, audio);
+    } else if (map.backgroundUrl) {
+      three.setBackgroundImage(map.backgroundUrl);
+    } else {
+      three._clearBackgroundImage();
+      three._clearBackgroundVideo();
+    }
 
     // Brief delay before starting — no countdown, just a short pause
     setTimeout(() => _actuallyStartGame(map), 600);
@@ -286,6 +292,7 @@ async function boot() {
     noteRenderer.clear();
     noteRenderer.clearLaneGlows();
     three._clearBackgroundImage();
+    three._clearBackgroundVideo();
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
     EventBus.emit('game:over', stats);
@@ -300,6 +307,7 @@ async function boot() {
     gameActive = false;
     audio.pause();
     if (gameLoop) gameLoop.stop();
+    three.pauseVideo();
 
     const sa = calcSafeArea();
     const overlay = document.createElement('div');
@@ -381,6 +389,7 @@ async function boot() {
   const resumeGame = () => {
     gameActive = true;
     audio.resume();
+    three.resumeVideo();
     const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
     audio.fadeTo(vol, 0.1);
     if (gameLoop) gameLoop.start();

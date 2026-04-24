@@ -164,9 +164,9 @@ export default class SongSelect {
     const diffName = DifficultyAnalyzer.getDiffName(stars);
 
     card.innerHTML = `
-      <div class="song-card-thumb" style="${set.backgroundUrl ? `background-image:url('${set.backgroundUrl}')` : 'background:var(--zzz-graphite);'}"></div>
+      <div class="song-card-thumb" style="${set.backgroundUrl ? `background-image:url('${set.backgroundUrl}')` : set.videoUrl ? 'background:linear-gradient(135deg,#1a1a2e,#16213e);' : 'background:var(--zzz-graphite);'}">${set.videoUrl && !set.backgroundUrl ? '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;opacity:0.4;">▶</span>' : ''}</div>
       <div class="song-card-info">
-        <div class="song-card-title">${this._escHtml(set.title)}</div>
+        <div class="song-card-title">${this._escHtml(set.title)}${set.videoUrl ? ' <span style="font-size:10px;color:var(--zzz-muted);vertical-align:middle;opacity:0.6;">🎬</span>' : ''}</div>
         <div class="song-card-artist">${this._escHtml(set.artist)}</div>
         <div class="song-card-diff-row">
           <span class="song-card-stars" style="color:${starColor};">★ ${stars.toFixed(1)}</span>
@@ -283,8 +283,14 @@ export default class SongSelect {
     if (activeCard) activeCard.scrollIntoView({ behavior: fromDiffSwitch ? 'auto' : 'smooth', block: 'nearest' });
 
     if (this.three) {
-      if (set.backgroundUrl) this.three.setTVTexture(set.backgroundUrl);
-      else this.three.setTVStatic();
+      // Use video if available, otherwise use image background
+      if (set.videoUrl) {
+        this.three.setBackgroundVideo(set.videoUrl, this.audio);
+      } else if (set.backgroundUrl) {
+        this.three.setTVTexture(set.backgroundUrl);
+      } else {
+        this.three.setTVStatic();
+      }
     }
 
     this._renderSongInfo(set);
@@ -386,6 +392,11 @@ export default class SongSelect {
       if (set !== this.beatmapSets[this.selectedIndex]) return;
       this.audio.play(set.audioBuffer, Math.max(0, previewTime));
       this.audio.fadeTo(previewVolume, 0.4);
+      // Sync video to preview time if video is playing
+      if (this.three && set.videoUrl && this.three._videoElement) {
+        this.three._videoElement.currentTime = Math.max(0, previewTime);
+        this.three._videoElement.play().catch(() => {});
+      }
     }, 250);
   }
 
@@ -393,6 +404,10 @@ export default class SongSelect {
     if (this._previewFadeTimeout) { clearTimeout(this._previewFadeTimeout); this._previewFadeTimeout = null; }
     if (this._previewInterval) { clearInterval(this._previewInterval); this._previewInterval = null; }
     this.audio.fadeTo(0, 0.15);
+    // Pause video preview
+    if (this.three && this.three._videoElement) {
+      this.three._videoElement.pause();
+    }
     setTimeout(() => { this.audio.stop(); }, 200);
   }
 
@@ -404,7 +419,7 @@ export default class SongSelect {
     this._stopPreview();
     const map = {
       metadata: { ...(set.metadata || {}), ...diff.metadata, title: set.title, artist: set.artist, version: diff.version, creator: set.creator },
-      audioBuffer: set.audioBuffer, backgroundUrl: set.backgroundUrl,
+      audioBuffer: set.audioBuffer, backgroundUrl: set.backgroundUrl, videoUrl: set.videoUrl,
       notes: diff.notes, laneCount: diff.laneCount, bpmChanges: diff.bpmChanges, difficulty: diff.difficulty
     };
     this.screens.show('game', { map });
@@ -428,6 +443,7 @@ export default class SongSelect {
     this._stopPreview();
     if (this.three) {
       this.three.removeTVMonitor(); // no-op but safe
+      this.three._clearBackgroundVideo();
       this.three._clearBackgroundImage();
     }
     // Clean up parallax
