@@ -231,28 +231,38 @@ export default class SongSelect {
       <div class="song-card-info">
         <div class="song-card-title-row">
           <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(set.title)}${set.videoUrl ? ' <span style="font-size:9px;color:var(--zzz-muted);vertical-align:middle;opacity:0.5;">🎬</span>' : ''}</span>
-          ${set.difficulties.length > 1 ? `<span class="song-card-diff-count">${isExpanded ? '▲' : '▼'} ${set.difficulties.length}</span>` : ''}
         </div>
         <div class="song-card-artist">${this._escHtml(set.artist)}</div>
       </div>
-      <button class="song-card-delete" data-delete="${setIndex}" title="Delete">✕</button>
+      <div class="song-card-actions">
+        ${set.difficulties.length > 1 ? `<span class="song-card-diff-count">${isExpanded ? '▲' : '▼'} ${set.difficulties.length}</span>` : ''}
+        <button class="song-card-menu-btn" data-menu="${setIndex}">⋯</button>
+      </div>
     `;
 
+    // Diff count toggle
+    const diffCount = card.querySelector('.song-card-diff-count');
+    if (diffCount) {
+      diffCount.addEventListener('click', (e) => {
+        e.stopPropagation(); this._toggleExpand(setIndex);
+      });
+    }
+
+    // Menu button
+    const menuBtn = card.querySelector('.song-card-menu-btn');
+    if (menuBtn) {
+      menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); this._showContextMenu(e, setIndex);
+      });
+    }
+
     card.addEventListener('click', (e) => {
-      if (e.target.classList.contains('song-card-delete') || e.target.closest('.song-card-delete')) return;
-      if (e.target.classList.contains('song-card-diff-count') && set.difficulties.length > 1) {
-        e.stopPropagation(); this._toggleExpand(setIndex); return;
-      }
+      if (e.target.closest('.song-card-actions')) return;
       const now = Date.now();
       if (this.selectedIndex === setIndex && now - this._lastSelectTime < 400) this._confirmSong();
       else if (this.selectedIndex !== setIndex) this._selectSong(setIndex);
       this._lastSelectTime = now;
     });
-
-    const deleteBtn = card.querySelector('.song-card-delete');
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', (e) => { e.stopPropagation(); this._deleteMap(setIndex); });
-    }
 
     wrapper.appendChild(card);
 
@@ -347,6 +357,74 @@ export default class SongSelect {
       // Collapsing
       if (dd) dd.classList.add('collapsed');
       if (dc) dc.textContent = `▼ ${set.difficulties.length}`;
+    }
+  }
+
+  /** Show context menu for a song card */
+  _showContextMenu(event, setIndex) {
+    // Remove any existing menu
+    this._closeContextMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'song-context-menu';
+    menu.id = 'song-context-menu';
+    menu.innerHTML = `
+      <button class="song-context-item" data-action="reset-scores">RESET SCORES</button>
+      <button class="song-context-item" data-action="add-playlist">ADD TO PLAYLIST</button>
+      <button class="song-context-item" data-action="edit-chart">EDIT CHART</button>
+      <button class="song-context-item song-context-item--danger" data-action="delete-chart">DELETE CHART</button>
+    `;
+
+    // Position near the button
+    const rect = event.target.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + 4}px`;
+    menu.style.right = `${window.innerWidth - rect.right}px`;
+    document.body.appendChild(menu);
+
+    // Close on outside click
+    const closeHandler = (e) => {
+      if (!menu.contains(e.target)) {
+        this._closeContextMenu();
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
+    menu._closeHandler = closeHandler;
+
+    // Action handlers
+    menu.querySelectorAll('.song-context-item').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        this._closeContextMenu();
+        if (action === 'delete-chart') this._deleteMap(setIndex);
+        else if (action === 'reset-scores') this._resetScores(setIndex);
+        // add-playlist and edit-chart are placeholders
+      });
+    });
+  }
+
+  _closeContextMenu() {
+    const existing = document.getElementById('song-context-menu');
+    if (existing) {
+      if (existing._closeHandler) document.removeEventListener('click', existing._closeHandler);
+      existing.remove();
+    }
+  }
+
+  /** Reset all local scores for a beatmap set */
+  _resetScores(setIndex) {
+    const set = this.beatmapSets[setIndex];
+    if (!set) return;
+    set.difficulties.forEach(diff => {
+      try {
+        const key = `rhythm-record-${set.id}-${(diff.version || '').replace(/[^a-zA-Z0-9]/g, '_')}`;
+        localStorage.removeItem(key);
+      } catch (_) {}
+    });
+    // Refresh display
+    this._renderSongList();
+    if (this.selectedIndex === setIndex) {
+      this._selectSong(setIndex, true);
     }
   }
 
@@ -657,6 +735,7 @@ export default class SongSelect {
   }
 
   destroy() {
+    this._closeContextMenu();
     if (this._keyHandler) { window.removeEventListener('keydown', this._keyHandler); this._keyHandler = null; }
     this._stopPreview();
     if (this.three) {

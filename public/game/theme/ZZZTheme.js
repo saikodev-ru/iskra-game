@@ -302,22 +302,58 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   font-family: var(--zzz-font); font-size: 11px; font-weight: 700; color: var(--zzz-lime);
   background: rgba(170,255,0,0.12); border-radius: 9999px; padding: 2px 8px;
   cursor: pointer; transition: all 0.15s ease; user-select: none; flex-shrink: 0;
+  display: flex; align-items: center;
 }
 .song-card-diff-count:hover { background: var(--zzz-lime-dim); color: var(--zzz-bg); }
 
-/* DELETE BUTTON */
-.song-card-delete {
-  position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
-  width: 20px; height: 20px;
-  border-radius: 50%; border: none; background: rgba(255,61,61,0.1);
-  color: var(--zzz-red); font-size: 10px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: all 0.15s ease; z-index: 2; padding: 0; line-height: 1;
+/* Song card actions — right side, vertically centered */
+.song-card-actions {
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 8px; flex-shrink: 0; height: 100%;
 }
-.song-card:hover .song-card-delete { opacity: 0.3; }
-.song-card-delete:hover { opacity: 1 !important; background: rgba(255,61,61,0.25); transform: translateY(-50%) scale(1.1); }
 
-/* ── SONG CARD WRAPPER — osu!lazer carousel animation ────────────── */
+/* Menu button — gray, round, horizontal ellipsis */
+.song-card-menu-btn {
+  width: 28px; height: 28px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.06); color: var(--zzz-muted);
+  font-size: 16px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s ease; padding: 0; line-height: 1;
+  letter-spacing: 1px;
+}
+.song-card-menu-btn:hover {
+  background: rgba(255,255,255,0.12); color: var(--zzz-text);
+}
+
+/* DELETE BUTTON — removed, now in context menu */
+
+/* ── CONTEXT MENU ──────────────────────────────────── */
+.song-context-menu {
+  position: fixed; z-index: 50;
+  background: rgba(20,20,20,0.95); border: 2px solid var(--zzz-graphite);
+  border-radius: 16px; padding: 4px; min-width: 180px;
+  backdrop-filter: blur(16px);
+  animation: ctx-menu-in 0.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes ctx-menu-in {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.song-context-item {
+  display: block; width: 100%; padding: 10px 16px;
+  font-family: var(--zzz-font); font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--zzz-muted); background: transparent; border: none;
+  border-radius: 12px; cursor: pointer; text-align: left;
+  transition: all 0.12s ease;
+}
+.song-context-item:hover {
+  background: rgba(255,255,255,0.06); color: var(--zzz-text);
+}
+.song-context-item--danger { color: var(--zzz-red); }
+.song-context-item--danger:hover { background: rgba(255,61,61,0.12); color: #ff6b6b; }
+
+/* ── SONG CARD WRAPPER ──────────────────────────────── */
 
 .song-card-wrapper {
   display: flex; flex-direction: column;
