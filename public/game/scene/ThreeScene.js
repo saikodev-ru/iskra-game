@@ -51,7 +51,8 @@ export default class ThreeScene {
     this._videoLoadId = 0;      // generation counter to prevent stale video loads
 
     // CRT / Glitch state
-    this._crtIntensity = 0;     // 0-1, CRT overlay intensity (scanlines, chromatic aberration)
+    this._crtIntensity = 0;     // 0-1, CRT overlay intensity (scanlines, barrel distortion)
+    this._chromaticAberration = 0; // 0-1, chromatic aberration (RGB shift) — separate from CRT
     this._glitchIntensity = 0;  // 0-1, glitch effect intensity (RGB split, scan disruption)
     this._glitchSeed = 0;       // random seed for glitch patterns
 
@@ -307,6 +308,7 @@ export default class ThreeScene {
         uniform float uOpacity;
         uniform float uMissFlash;
         uniform float uCrtIntensity;
+        uniform float uChromaticAberration;
         uniform float uGlitchIntensity;
         uniform float uGlitchSeed;
         uniform float uTime;
@@ -347,8 +349,8 @@ export default class ThreeScene {
 
           uv = clamp(uv, 0.0, 1.0);
 
-          // CRT: chromatic aberration (stronger at edges)
-          float ca = uCrtIntensity * 0.003 * (1.0 + 2.0 * length(vUv - 0.5));
+          // Chromatic aberration (RGB shift) — controlled independently
+          float ca = uChromaticAberration * 0.003 * (1.0 + 2.0 * length(vUv - 0.5));
           vec4 texR = texture2D(uTexture, vec2(uv.x + ca, uv.y));
           vec4 texG = texture2D(uTexture, uv);
           vec4 texB = texture2D(uTexture, vec2(uv.x - ca, uv.y));
@@ -370,10 +372,10 @@ export default class ThreeScene {
           float cornerDark = smoothstep(0.0, 0.12, cornerLen);
           color *= 1.0 - cornerDark * 0.5;
 
-          // CRT: scanlines + phosphor flicker
+          // CRT: scanlines + phosphor flicker (wider scanlines: 500 instead of 800)
           if (uCrtIntensity > 0.01) {
-            float scanline = sin(vUv.y * 800.0 + uTime * 2.0) * 0.5 + 0.5;
-            float scanDark = 1.0 - scanline * 0.08 * uCrtIntensity;
+            float scanline = sin(vUv.y * 500.0 + uTime * 2.0) * 0.5 + 0.5;
+            float scanDark = 1.0 - scanline * 0.12 * uCrtIntensity;
             color *= scanDark;
             float flicker = 1.0 - 0.02 * uCrtIntensity * hash(uTime * 60.0);
             color *= flicker;
@@ -398,6 +400,7 @@ export default class ThreeScene {
           uOpacity: { value: 0 },
           uMissFlash: { value: 0 },
           uCrtIntensity: { value: this._crtIntensity },
+          uChromaticAberration: { value: this._chromaticAberration },
           uGlitchIntensity: { value: 0 },
           uGlitchSeed: { value: 0 },
           uTime: { value: 0 },
@@ -839,6 +842,11 @@ export default class ThreeScene {
   /** Set CRT overlay intensity (0-1) — used in song select for that retro TV feel */
   setCrtIntensity(intensity) {
     this._crtIntensity = Math.max(0, Math.min(1, intensity));
+  }
+
+  /** Set chromatic aberration (RGB shift) intensity (0-1) — separate from CRT scanlines */
+  setChromaticAberration(intensity) {
+    this._chromaticAberration = Math.max(0, Math.min(1, intensity));
   }
 
   /** Trigger a glitch transition effect */

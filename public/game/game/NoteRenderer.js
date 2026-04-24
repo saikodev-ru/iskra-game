@@ -27,6 +27,14 @@ export default class NoteRenderer {
     this._laneGlows = new Map();
     this._holdNoteDebugLogged = false;
     this._graphicsPreset = 'disco'; // 'low' | 'standard' | 'disco'
+
+    // Optimization: cached static background (lanes + grid lines)
+    this._bgCacheCanvas = null;
+    this._bgCacheLaneCount = -1;
+    this._bgCacheWidth = 0;
+    this._bgCacheHeight = 0;
+    this._bgCacheBgImage = null;  // track which bgImage was cached
+
     this.resize();
   }
 
@@ -62,13 +70,14 @@ export default class NoteRenderer {
     this._bgLoadAttempted = true;
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => { this._bgImage = img; };
+    img.onload = () => { this._bgImage = img; this.invalidateBackgroundCache(); };
     img.src = url;
   }
 
   clearBackground() {
     this._bgImage = null;
     this._bgLoadAttempted = false;
+    this.invalidateBackgroundCache();
   }
 
   addEffect(x, y, color, type = 'ring') {
@@ -130,6 +139,7 @@ export default class NoteRenderer {
     if (!this._safeAreaExplicit) {
       this.safeArea = { x: 0, y: 0, w: this.w, h: this.h };
     }
+    this.invalidateBackgroundCache();
   }
 
   clear() {
@@ -149,7 +159,7 @@ export default class NoteRenderer {
       this._displayHealth = this._health;
     }
 
-    this._drawBackground(laneCount);
+    this._drawBackgroundCached(laneCount);
     this._drawEffects();         // Effects BEHIND notes (white, transparent)
     this._drawLaneGlows(laneCount);
     this._drawNotes(notes, currentTime, laneCount);
@@ -157,6 +167,95 @@ export default class NoteRenderer {
     this._drawHPBar(laneCount);
     this._drawRedVignette();     // Low-HP danger overlay
     this._drawBlackBars();
+  }
+
+  /** Draw background using cached offscreen canvas when possible */
+  _drawBackgroundCached(laneCount) {
+    // Check if cache is valid
+    const needsRebuild = !this._bgCacheCanvas
+      || this._bgCacheLaneCount !== laneCount
+      || this._bgCacheWidth !== this.w
+      || this._bgCacheHeight !== this.h
+      || this._bgCacheBgImage !== this._bgImage;
+
+    if (needsRebuild) {
+      this._rebuildBackgroundCache(laneCount);
+    }
+
+    // Blit cached background
+    if (this._bgCacheCanvas) {
+      this.ctx.drawImage(this._bgCacheCanvas, 0, 0);
+    }
+  }
+
+  /** Rebuild the offscreen background cache */
+  _rebuildBackgroundCache(laneCount) {
+    const dpr = window.devicePixelRatio || 1;
+    const pixelW = Math.round(this.w * dpr * this._resScale);
+    const pixelH = Math.round(this.h * dpr * this._resScale);
+
+    if (!this._bgCacheCanvas) {
+      this._bgCacheCanvas = document.createElement('canvas');
+    }
+    this._bgCacheCanvas.width = pixelW;
+    this._bgCacheCanvas.height = pixelH;
+    const cctx = this._bgCacheCanvas.getContext('2d');
+    cctx.setTransform(1, 0, 0, 1, 0, 0);
+    cctx.scale(dpr * this._resScale, dpr * this._resScale);
+
+    // Draw background image
+    if (this._bgImage) {
+      cctx.save();
+      cctx.globalAlpha = 0.15;
+      const ia = this._bgImage.width / this._bgImage.height;
+      const ca = this.w / this.h;
+      let dw, dh, dx, dy;
+      if (ca > ia) { dw = this.w; dh = this.w / ia; dx = 0; dy = (this.h - dh) / 2; }
+      else { dh = this.h; dw = this.h * ia; dx = (this.w - dw) / 2; dy = 0; }
+      cctx.drawImage(this._bgImage, dx, dy, dw, dh);
+      cctx.restore();
+    }
+
+    // Draw lane trapezoids
+    const topY = this._getTopY();
+    const judgeLineY = this._getJudgeLineY();
+    for (let i = 0; i < laneCount; i++) {
+      const tg = this._getLaneGeometry(i, topY, laneCount);
+      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
+      cctx.beginPath();
+      cctx.moveTo(tg.x, topY);
+      cctx.lineTo(tg.x + tg.width, topY);
+      cctx.lineTo(bg.x + bg.width, judgeLineY);
+      cctx.lineTo(bg.x, judgeLineY);
+      cctx.closePath();
+      const b = i % 2 === 0 ? 10 : 18;
+      cctx.fillStyle = `rgba(${b},${Math.round(b * 0.7)},${Math.round(b * 0.5)},0.88)`;
+      cctx.fill();
+    }
+
+    // Draw lane dividers
+    cctx.strokeStyle = 'rgba(170,255,0,0.05)';
+    cctx.lineWidth = 1;
+    for (let i = 0; i <= laneCount; i++) {
+      const tg = this._getLaneGeometry(i, topY, laneCount);
+      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
+      cctx.beginPath();
+      cctx.moveTo(tg.x, topY);
+      cctx.lineTo(bg.x, judgeLineY);
+      cctx.stroke();
+    }
+
+    // Update cache metadata
+    this._bgCacheLaneCount = laneCount;
+    this._bgCacheWidth = this.w;
+    this._bgCacheHeight = this.h;
+    this._bgCacheBgImage = this._bgImage;
+  }
+
+  /** Invalidate background cache (call on resize, laneCount change, etc.) */
+  invalidateBackgroundCache() {
+    this._bgCacheLaneCount = -1;
+    this._bgCacheBgImage = null;
   }
 
   /* ── Perspective ────────────────────────────────────────────────── */
@@ -188,50 +287,8 @@ export default class NoteRenderer {
   }
 
   /* ── Background ─────────────────────────────────────────────────── */
-
-  _drawBackground(laneCount) {
-    const ctx = this.ctx;
-    const sa = this.safeArea;
-    const topY = this._getTopY();
-    const judgeLineY = this._getJudgeLineY();
-
-    if (this._bgImage) {
-      ctx.save();
-      ctx.globalAlpha = 0.15;
-      const ia = this._bgImage.width / this._bgImage.height;
-      const ca = this.w / this.h;
-      let dw, dh, dx, dy;
-      if (ca > ia) { dw = this.w; dh = this.w / ia; dx = 0; dy = (this.h - dh) / 2; }
-      else { dh = this.h; dw = this.h * ia; dx = (this.w - dw) / 2; dy = 0; }
-      ctx.drawImage(this._bgImage, dx, dy, dw, dh);
-      ctx.restore();
-    }
-
-    for (let i = 0; i < laneCount; i++) {
-      const tg = this._getLaneGeometry(i, topY, laneCount);
-      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
-      ctx.beginPath();
-      ctx.moveTo(tg.x, topY);
-      ctx.lineTo(tg.x + tg.width, topY);
-      ctx.lineTo(bg.x + bg.width, judgeLineY);
-      ctx.lineTo(bg.x, judgeLineY);
-      ctx.closePath();
-      const b = i % 2 === 0 ? 10 : 18;
-      ctx.fillStyle = `rgba(${b},${Math.round(b * 0.7)},${Math.round(b * 0.5)},0.88)`;
-      ctx.fill();
-    }
-
-    ctx.strokeStyle = 'rgba(170,255,0,0.05)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= laneCount; i++) {
-      const tg = this._getLaneGeometry(i, topY, laneCount);
-      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
-      ctx.beginPath();
-      ctx.moveTo(tg.x, topY);
-      ctx.lineTo(bg.x, judgeLineY);
-      ctx.stroke();
-    }
-  }
+  // Background is now drawn via _drawBackgroundCached() using an offscreen canvas.
+  // The original _drawBackground method is replaced by _rebuildBackgroundCache().
 
   /* ── Lane Glows — horizontal flash at judge line (Project Sekai style) */
 
@@ -321,31 +378,28 @@ export default class NoteRenderer {
   _drawNotes(notes, currentTime, laneCount) {
     const judgeLineY = this._getJudgeLineY();
     const topY = this._getTopY();
+    const clipTop = topY - 80;
+    const clipBottom = judgeLineY + 30;
 
-    const holdNotes = [];
-    const tapNotes = [];
-
-    for (const note of notes) {
-      // Treat very short holds as tap notes visually
+    // Draw hold note bodies first (without intermediate arrays)
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
       if (note.type === 'hold' && note.duration >= NoteRenderer.MIN_HOLD_DURATION) {
-        holdNotes.push(note);
-      } else {
-        tapNotes.push(note);
+        this._drawHoldNote(note, currentTime, laneCount, judgeLineY, topY);
       }
     }
 
-    // Draw hold note bodies first
-    for (const note of holdNotes) {
-      this._drawHoldNote(note, currentTime, laneCount, judgeLineY, topY);
-    }
+    // Draw tap notes (including short holds rendered as taps)
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
+      // Skip holds (already drawn above)
+      if (note.type === 'hold' && note.duration >= NoteRenderer.MIN_HOLD_DURATION) continue;
 
-    // Draw tap notes
-    for (const note of tapNotes) {
       if (note.hit && note.judgement !== 'miss') continue;
       if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
 
       const noteY = this._noteY(note.time, currentTime, judgeLineY);
-      if (noteY < topY - 80 || noteY > judgeLineY + 30) continue;
+      if (noteY < clipTop || noteY > clipBottom) continue;
 
       const fadeIn = this._fadeIn(noteY, judgeLineY);
       const alpha = note.judgement === 'miss' ? 0.3 : 1;

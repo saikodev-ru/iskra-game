@@ -154,25 +154,71 @@ export default class HitSounds {
 
   crtClick() {
     this._play(g => {
-      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * 0.025, this._ctx.sampleRate);
+      // Soft, muted click — very short noise burst
+      const dur = 0.018;
+      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
       const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+      for (let i = 0; i < data.length; i++) {
+        const t = i / data.length;
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3) * 0.4;
+      }
       const src = this._ctx.createBufferSource();
-      src.buffer = buf; src.connect(g); g.gain.value = 0.25;
+      src.buffer = buf;
+      const filt = this._ctx.createBiquadFilter();
+      filt.type = 'highpass'; filt.frequency.value = 3000;
+      src.connect(filt); filt.connect(g);
+      g.gain.setValueAtTime(0.12, this._ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start();
+      src.stop(this._ctx.currentTime + dur);
     });
   }
 
   crtSwitch() {
+    // Soft TV channel switch: brief electronic pop + subtle static whoosh
+    // Layer 1: Short low-frequency pop (the CRT relay click)
     this._play(g => {
-      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * 0.05, this._ctx.sampleRate);
+      const dur = 0.04;
+      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
       const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (i < data.length * 0.25 ? 1 : Math.pow(1 - i / data.length, 1.5));
+      for (let i = 0; i < data.length; i++) {
+        const t = i / data.length;
+        // Quick attack, smooth decay — mimics CRT relay snap
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 4);
+      }
       const src = this._ctx.createBufferSource();
+      src.buffer = buf;
+      // Low-mid pass gives it a warm, muffled character
       const filt = this._ctx.createBiquadFilter();
-      filt.type = 'bandpass'; filt.frequency.value = 2000; filt.Q.value = 0.5;
-      src.buffer = buf; src.connect(filt); filt.connect(g); g.gain.value = 0.35;
+      filt.type = 'lowpass'; filt.frequency.value = 1200; filt.Q.value = 0.7;
+      src.connect(filt); filt.connect(g);
+      g.gain.setValueAtTime(0.18, this._ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start();
+      src.stop(this._ctx.currentTime + dur);
+    });
+
+    // Layer 2: Very short high-frequency static sweep (the channel tuning hiss)
+    this._play(g => {
+      const dur = 0.06;
+      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const t = i / data.length;
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 2) * 0.3;
+      }
+      const src = this._ctx.createBufferSource();
+      src.buffer = buf;
+      // Sweep from high to mid — like tuning across frequencies
+      const filt = this._ctx.createBiquadFilter();
+      filt.type = 'bandpass'; filt.Q.value = 0.8;
+      filt.frequency.setValueAtTime(5000, this._ctx.currentTime);
+      filt.frequency.exponentialRampToValueAtTime(1500, this._ctx.currentTime + dur);
+      src.connect(filt); filt.connect(g);
+      g.gain.setValueAtTime(0.08, this._ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
+      src.start();
+      src.stop(this._ctx.currentTime + dur);
     });
   }
 
