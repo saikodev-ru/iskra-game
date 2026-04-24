@@ -334,7 +334,10 @@ export default class NoteRenderer {
   _getPerspectiveScale(y) {
     const topY = this._getTopY();
     const judgeLineY = this._getJudgeLineY();
-    const p = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
+    // Allow scale to grow beyond 1.0 below judge line so that
+    // the background trapezoid's linear interpolation correctly
+    // matches the geometry at judgeLineY (where notes & judge line are drawn).
+    const p = Math.max(0, (y - topY) / (judgeLineY - topY));
     return 0.18 + 0.82 * p;
   }
 
