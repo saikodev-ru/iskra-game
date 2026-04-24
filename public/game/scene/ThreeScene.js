@@ -206,7 +206,7 @@ export default class ThreeScene {
     }
   }
 
-  /** Set a background image — full-screen cover, audio-reactive glow + zoom, swipe transition */
+  /** Set a background image — full-screen cover, audio-reactive glow + zoom, fade+swipe transition */
   setBackgroundImage(url) {
     if (!url) {
       this._clearBackgroundImage();
@@ -218,7 +218,7 @@ export default class ThreeScene {
 
       const imgAspect = texture.image ? texture.image.width / texture.image.height : 16 / 9;
 
-      // ── Swipe transition: keep old image, create new one off-screen right ──
+      // ── Keep old image for transition ──
       const oldMesh = this._bgImageMesh;
       const oldMaterial = this._bgImageMaterial;
       const oldTexture = this._bgImageTexture;
@@ -238,6 +238,7 @@ export default class ThreeScene {
           uCoverScale: { value: imgAspect },
           uPlaneAspect: { value: 1.0 },
           uBrightness: { value: 0 },
+          uOpacity: { value: 0 },
         },
         vertexShader: `
           varying vec2 vUv;
@@ -250,6 +251,7 @@ export default class ThreeScene {
           uniform float uCoverScale;
           uniform float uPlaneAspect;
           uniform float uBrightness;
+          uniform float uOpacity;
           varying vec2 vUv;
           void main() {
             vec2 uv = vUv;
@@ -279,17 +281,18 @@ export default class ThreeScene {
             color += tex.rgb * glow;
 
             // ── Transition brightness flash ──
-            color += vec3(uBrightness * 0.12);
+            color += vec3(uBrightness * 0.15);
 
             // ── Subtle vignette overlay for depth ──
             float vig = distance(vUv, vec2(0.5));
             color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
 
-            gl_FragColor = vec4(color, 1.0);
+            gl_FragColor = vec4(color, uOpacity);
           }
         `,
         side: THREE.DoubleSide,
         depthWrite: false,
+        transparent: true,
       });
 
       // Create a plane — oversized by 12% so edges never show during swipe
@@ -306,14 +309,49 @@ export default class ThreeScene {
 
       this._bgImageMesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), this._bgImageMaterial);
       this._bgImageMesh.position.z = meshZ;
-      // Start off-screen to the right
-      this._bgImageMesh.position.x = viewWidth;
+
+      // If there's no old image, just fade in at center
+      if (!oldMesh) {
+        this._bgImageMesh.position.x = 0;
+        // Simple fade-in
+        const fadeDuration = 500;
+        const startTime = performance.now();
+        const animateFadeIn = () => {
+          if (this._disposed) return;
+          const elapsed = performance.now() - startTime;
+          const t = Math.min(1, elapsed / fadeDuration);
+          const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+          if (this._bgImageMesh && this._bgImageMesh.material && this._bgImageMesh.material.uniforms) {
+            this._bgImageMesh.material.uniforms.uOpacity.value = ease;
+          }
+          if (t < 1) requestAnimationFrame(animateFadeIn);
+        };
+        this.scene.add(this._bgImageMesh);
+        requestAnimationFrame(animateFadeIn);
+        return;
+      }
+
+      // ── Fade + Swipe transition ──
+      // Add uOpacity to old material if it doesn't have it
+      if (oldMaterial && oldMaterial.uniforms && oldMaterial.uniforms.uOpacity === undefined) {
+        oldMaterial.uniforms.uOpacity = { value: 1.0 };
+      }
+      // Make old material transparent too
+      if (oldMaterial) oldMaterial.transparent = true;
+      // Patch old fragment shader to support opacity — replace gl_FragColor
+      // We need to update the old shader to support uOpacity
+      // Easier: just set old material opacity via a uniform injection
+      // Since we can't change the shader source at runtime, we'll just use
+      // the mesh scale and material opacity approach instead.
+
+      // New image starts slightly right and faded out
+      this._bgImageMesh.position.x = viewWidth * 0.35;
+      this._bgImageMesh.material.uniforms.uOpacity.value = 0;
       this.scene.add(this._bgImageMesh);
 
-      // ── Animate swipe transition ──
-      const fadeDuration = 700; // ms
+      const fadeDuration = 800; // ms
       const startTime = performance.now();
-      const animateSwipe = () => {
+      const animateTransition = () => {
         if (this._disposed) return;
         const elapsed = performance.now() - startTime;
         const t = Math.min(1, elapsed / fadeDuration);
@@ -323,25 +361,38 @@ export default class ThreeScene {
           ? 4 * t * t * t
           : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-        // New image slides in from right → center
+        // ── New image: slide from right → center + fade in + slight scale ──
         if (this._bgImageMesh) {
-          this._bgImageMesh.position.x = viewWidth * (1 - ease);
+          this._bgImageMesh.position.x = viewWidth * 0.35 * (1 - ease);
+          this._bgImageMesh.material.uniforms.uOpacity.value = ease;
+          // Slight zoom-in effect during transition
+          const scale = 1.04 - 0.04 * ease; // starts at 1.04, ends at 1.0
+          this._bgImageMesh.scale.set(scale, scale, 1);
+          // Brightness flash peaks early then fades
+          const flashT = t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8;
+          this._bgImageMesh.material.uniforms.uBrightness.value = Math.max(0, flashT) * (1 - t * 0.7);
         }
 
-        // Old image slides out from center → left
+        // ── Old image: slide left + fade out + slight scale down ──
         if (oldMesh) {
-          oldMesh.position.x = -viewWidth * ease;
-        }
-
-        // Brightness flash peaks at t=0.25 then fades
-        const flashT = t < 0.25 ? t / 0.25 : 1 - (t - 0.25) / 0.75;
-        const flash = Math.max(0, flashT) * (1 - t);
-        if (this._bgImageMesh && this._bgImageMesh.material && this._bgImageMesh.material.uniforms) {
-          this._bgImageMesh.material.uniforms.uBrightness.value = flash;
+          oldMesh.position.x = -viewWidth * 0.35 * ease;
+          const oldScale = 1.0 - 0.03 * ease; // slight shrink
+          oldMesh.scale.set(oldScale, oldScale, 1);
+          // Fade out old image via material opacity if available
+          if (oldMaterial && oldMaterial.uniforms) {
+            if (oldMaterial.uniforms.uOpacity) {
+              oldMaterial.uniforms.uOpacity.value = 1 - ease;
+            } else {
+              // Fallback: dim via brightness
+              if (oldMaterial.uniforms.uBrightness) {
+                oldMaterial.uniforms.uBrightness.value = -ease * 0.8;
+              }
+            }
+          }
         }
 
         if (t < 1) {
-          requestAnimationFrame(animateSwipe);
+          requestAnimationFrame(animateTransition);
         } else {
           // Transition complete — remove old mesh
           if (oldMesh) {
@@ -353,11 +404,13 @@ export default class ThreeScene {
           // Ensure new mesh is at center
           if (this._bgImageMesh) {
             this._bgImageMesh.position.x = 0;
+            this._bgImageMesh.scale.set(1, 1, 1);
+            this._bgImageMesh.material.uniforms.uOpacity.value = 1;
             this._bgImageMesh.material.uniforms.uBrightness.value = 0;
           }
         }
       };
-      requestAnimationFrame(animateSwipe);
+      requestAnimationFrame(animateTransition);
     });
   }
 
