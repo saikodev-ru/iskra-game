@@ -21,27 +21,40 @@ export default class HUD {
   _build() {
     this.container.innerHTML = `
       <div id="hud-inner" style="position:relative;width:100%;height:100%;pointer-events:none;display:none;">
-        <!-- Score + Accuracy — left side of playfield, vertically centered -->
-        <div style="position:absolute;left:4%;top:50%;transform:translateY(-50%);text-align:right;min-width:130px;">
-          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:700;font-size:30px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;transition:transform 0.08s;line-height:1;text-shadow:-3px -3px 0 #000,3px -3px 0 #000,-3px 3px 0 #000,3px 3px 0 #000,-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 0 20px rgba(0,0,0,1),0 0 40px rgba(0,0,0,0.9),0 6px 12px rgba(0,0,0,0.95),0 2px 4px rgba(0,0,0,0.9);-webkit-text-stroke:2px rgba(0,0,0,0.8);">0</div>
-          <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-size:13px;color:var(--zzz-muted);font-variant-numeric:tabular-nums;margin-top:4px;text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 0 12px rgba(0,0,0,1);-webkit-text-stroke:1px rgba(0,0,0,0.7);">100.00%</div>
+
+        <!-- ── LEFT: Score + Accuracy ── -->
+        <div style="position:absolute;left:3%;top:50%;transform:translateY(-50%);text-align:right;">
+          <!-- Score label -->
+          <div style="font-family:var(--zzz-font);font-weight:500;font-size:10px;color:rgba(170,255,0,0.45);letter-spacing:0.25em;text-transform:uppercase;margin-bottom:2px;text-shadow:0 0 8px rgba(0,0,0,0.9);">SCORE</div>
+          <!-- Score value -->
+          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:34px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);transition:transform 0.08s;">0</div>
+          <!-- Separator line -->
+          <div style="width:60px;height:1px;background:linear-gradient(to right,transparent,rgba(170,255,0,0.3));margin:8px auto 8px 0;"></div>
+          <!-- Accuracy label -->
+          <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.35);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:1px;text-shadow:0 0 8px rgba(0,0,0,0.9);">ACCURACY</div>
+          <!-- Accuracy value -->
+          <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-weight:600;font-size:16px;color:rgba(255,255,255,0.7);font-variant-numeric:tabular-nums;letter-spacing:0.04em;text-shadow:0 0 8px rgba(0,0,0,0.9),-1px -1px 0 rgba(0,0,0,0.7),1px -1px 0 rgba(0,0,0,0.7),-1px 1px 0 rgba(0,0,0,0.7),1px 1px 0 rgba(0,0,0,0.7);">100.00%</div>
         </div>
 
-        <!-- Combo + Grade — right side, above the HP bar -->
-        <div style="position:absolute;right:5%;top:38%;transform:translateY(-50%);text-align:left;">
-          <div style="display:flex;align-items:baseline;gap:10px;">
-            <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:52px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;text-shadow:-4px -4px 0 #000,4px -4px 0 #000,-4px 4px 0 #000,4px 4px 0 #000,-3px -3px 0 #000,3px -3px 0 #000,-3px 3px 0 #000,3px 3px 0 #000,0 0 24px rgba(0,0,0,1),0 0 48px rgba(0,0,0,0.9),0 8px 16px rgba(0,0,0,0.95),0 3px 6px rgba(0,0,0,0.9);-webkit-text-stroke:2px rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0x</div>
-            <div id="hud-rank" style="font-family:var(--zzz-font);font-weight:900;font-size:28px;color:var(--zzz-lime);text-shadow:-3px -3px 0 #000,3px -3px 0 #000,-3px 3px 0 #000,3px 3px 0 #000,0 0 20px rgba(170,255,0,0.4),0 0 12px rgba(0,0,0,1);-webkit-text-stroke:1.5px rgba(0,0,0,0.6);opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;"></div>
+        <!-- ── RIGHT: Combo + Rank ── -->
+        <div style="position:absolute;right:5%;top:36%;transform:translateY(-50%);text-align:left;">
+          <!-- Combo value -->
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:56px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0</div>
+            <div style="font-family:var(--zzz-font);font-weight:700;font-size:16px;color:rgba(255,255,255,0.5);letter-spacing:0.05em;text-shadow:0 2px 8px rgba(0,0,0,0.9);">x</div>
+            <div id="hud-rank" style="font-family:var(--zzz-font);font-weight:900;font-size:30px;color:var(--zzz-lime);text-shadow:0 0 24px rgba(170,255,0,0.35),0 2px 10px rgba(0,0,0,0.9),-1px -1px 0 rgba(0,0,0,0.6),1px -1px 0 rgba(0,0,0,0.6),-1px 1px 0 rgba(0,0,0,0.6),1px 1px 0 rgba(0,0,0,0.6);opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
           </div>
+          <!-- Combo label -->
+          <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px;text-shadow:0 0 8px rgba(0,0,0,0.9);">COMBO</div>
         </div>
 
-        <!-- Progress — top edge -->
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.06);">
-          <div id="hud-progress" style="height:100%;width:0%;background:var(--zzz-lime);box-shadow:0 0 8px rgba(170,255,0,0.4);transition:width 0.3s linear;border-radius:0 2px 2px 0;"></div>
+        <!-- ── Progress bar — top edge ── -->
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.04);">
+          <div id="hud-progress" style="height:100%;width:0%;background:linear-gradient(90deg,rgba(170,255,0,0.6),rgba(170,255,0,0.9));box-shadow:0 0 10px rgba(170,255,0,0.35),0 0 20px rgba(170,255,0,0.15);transition:width 0.3s linear;border-radius:0 2px 2px 0;"></div>
         </div>
 
-        <!-- Pause button -->
-        <button id="hud-pause" class="zzz-btn zzz-btn--sm" style="position:absolute;top:16px;right:16px;pointer-events:all;font-size:11px;padding:6px 14px;">⏸</button>
+        <!-- ── Pause button ── -->
+        <button id="hud-pause" class="zzz-btn zzz-btn--sm" style="position:absolute;top:16px;right:16px;pointer-events:all;font-size:11px;padding:6px 14px;opacity:0.5;transition:opacity 0.2s;">⏸</button>
       </div>
     `;
     this.els = {
@@ -50,11 +63,13 @@ export default class HUD {
       combo: document.getElementById('hud-combo'),
       rank: document.getElementById('hud-rank'),
       accuracy: document.getElementById('hud-accuracy'),
-      health: null, // HP bar now rendered on canvas by NoteRenderer
+      health: null,
       progress: document.getElementById('hud-progress'),
       pause: document.getElementById('hud-pause'),
     };
     this.els.pause.addEventListener('click', () => EventBus.emit('game:pause', {}));
+    this.els.pause.addEventListener('mouseenter', () => { this.els.pause.style.opacity = '1'; });
+    this.els.pause.addEventListener('mouseleave', () => { this.els.pause.style.opacity = '0.5'; });
     this._startAnimLoop();
   }
 
@@ -82,12 +97,12 @@ export default class HUD {
     if (Math.abs(comboDiff) > 1) {
       this._displayCombo += comboDiff * 0.35;
       if (this.els.combo) {
-        this.els.combo.textContent = `${Math.round(this._displayCombo)}x`;
+        this.els.combo.textContent = `${Math.round(this._displayCombo)}`;
       }
     } else if (comboDiff !== 0) {
       this._displayCombo = this._targetCombo;
       if (this.els.combo) {
-        this.els.combo.textContent = `${this._targetCombo}x`;
+        this.els.combo.textContent = `${this._targetCombo}`;
       }
     }
 
@@ -131,10 +146,10 @@ export default class HUD {
   setCombo(n) {
     this._targetCombo = n;
     if (n > 0) {
-      this._comboPopScale = 1.2;
+      this._comboPopScale = 1.15;
     }
     if ([50, 100, 200, 500].includes(n)) {
-      this._comboPopScale = 1.4;
+      this._comboPopScale = 1.35;
     }
   }
 
@@ -158,8 +173,7 @@ export default class HUD {
   }
 
   setHealth(n) {
-    // HP bar is now rendered on canvas by NoteRenderer
-    // This method is kept for API compatibility
+    // HP bar rendered on canvas
   }
 
   setProgress(ratio) { this.els.progress.style.width = (ratio * 100) + '%'; }

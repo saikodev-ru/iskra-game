@@ -184,6 +184,9 @@ async function boot() {
     if (map.backgroundUrl) noteRenderer.setBackgroundImage(map.backgroundUrl);
     else noteRenderer.clearBackground();
 
+    // Enable lead-in offset for video sync (game has 1s silence prepended to audio)
+    three._leadInOffset = LEAD_IN;
+
     // Use video background if available, otherwise use image background
     if (map.videoUrl) {
       three.setBackgroundVideo(map.videoUrl, audio);
@@ -338,6 +341,7 @@ async function boot() {
     noteRenderer.clearLaneGlows();
     three._clearBackgroundImage();
     three._clearBackgroundVideo();
+    three._leadInOffset = 0; // Reset lead-in offset for preview mode
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
     // Save local record
@@ -380,6 +384,7 @@ async function boot() {
         <div style="font-family:var(--zzz-font);font-weight:900;font-size:14px;color:var(--zzz-muted);letter-spacing:0.3em;text-transform:uppercase;">PAUSED</div>
         <div style="display:flex;flex-direction:column;gap:12px;min-width:240px;">
           <button class="zzz-btn zzz-btn--primary" id="resume-btn" style="width:100%;font-size:15px;padding:14px 32px;">▶ RESUME</button>
+          <button class="zzz-btn" id="restart-btn" style="width:100%;border-color:var(--zzz-lime);color:var(--zzz-lime);">↻ RESTART</button>
           <button class="zzz-btn" id="settings-btn" style="width:100%;">⚙ SETTINGS</button>
           <div style="height:1px;background:var(--zzz-graphite);margin:4px 0;"></div>
           <button class="zzz-btn zzz-btn--danger" id="quit-btn" style="width:100%;">✕ QUIT</button>
@@ -390,6 +395,7 @@ async function boot() {
     _pauseOverlay = overlay;
 
     document.getElementById('resume-btn').addEventListener('click', () => { _closePause(); resumeGame(); });
+    document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); endGame(); startGame(currentMapData); });
     document.getElementById('settings-btn').addEventListener('click', () => { _openPauseSettings(); });
     document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); endGame(); screens.show('song-select'); });
     EventBus.emit('game:pause');

@@ -49,6 +49,7 @@ export default class ThreeScene {
     this._videoActive = false;   // whether video is currently playing as bg
     this._audioEngineRef = null; // for syncing video to audio time
     this._videoLoadId = 0;      // generation counter to prevent stale video loads
+    this._leadInOffset = 0;     // seconds to subtract from audio time for video sync (0 for preview, 1.0 in-game)
 
     // CRT / Glitch state
     this._crtIntensity = 0;     // 0-1, CRT overlay intensity (scanlines, barrel distortion)
@@ -970,8 +971,7 @@ export default class ThreeScene {
         // The audio buffer has 1s of silence prepended (lead-in), so
         // audio.currentTime includes this offset. Video starts at its own t=0,
         // so we subtract the lead-in to get the correct video position.
-        const LEAD_IN = 1.0;
-        const audioContentTime = Math.max(0, this._audioEngineRef.currentTime - LEAD_IN);
+        const audioContentTime = Math.max(0, this._audioEngineRef.currentTime - this._leadInOffset);
         const videoTime = this._videoElement.currentTime;
         const drift = audioContentTime - videoTime;
         const absDrift = Math.abs(drift);
