@@ -11,8 +11,14 @@ const WINDOWS = {
 // Judgement score multipliers for 1M base score
 const JUDGEMENT_MULT = { perfect: 1.0, great: 0.75, good: 0.5, bad: 0.25, miss: 0 };
 
-// Accuracy weight values
-const ACC_WEIGHT = { perfect: 300, great: 200, good: 100, bad: 50, miss: 0 };
+// Accuracy weight values — osu!mania standard: perfect and great both weight 300
+const ACC_WEIGHT = { perfect: 300, great: 300, good: 200, bad: 100, miss: 0 };
+
+// HP recovery/loss per judgement (osu!mania drain system)
+const HP_JUDGEMENT = { perfect: 2.0, great: 1.5, good: 0.8, bad: -0.5, miss: -1.5 };
+
+// HP drain rate per second (base, before difficulty scaling)
+const HP_DRAIN_RATE = 0.8;
 
 export default class JudgementSystem {
   constructor(beatMap) {
@@ -25,6 +31,7 @@ export default class JudgementSystem {
     this._totalJudgements = 0; // total judgement slots (tap=1, hold=2)
     this._judgementsProcessed = 0; // how many judgements have been resolved so far
     this._missCheckIndex = 0; // pointer for O(n) miss check optimization
+    this.hp = 100; // osu!mania-style HP (0–100, drain-based)
   }
 
   reset() {
@@ -34,6 +41,8 @@ export default class JudgementSystem {
     this._totalJudgements = 0;
     this._judgementsProcessed = 0;
     this._missCheckIndex = 0;
+    this.hp = 100;
+    this._lastDrainTime = 0;
     for (const note of this.map.notes) {
       note.hit = false;
       note.judgement = null;
@@ -103,7 +112,7 @@ export default class JudgementSystem {
     return { note, judgement, delta };
   }
 
-  /** Apply a judgement: update score, combo, and counts */
+  /** Apply a judgement: update score, combo, HP, and counts */
   _applyJudgement(judgement) {
     this.hitCounts[judgement]++;
     this._judgementsProcessed++;
@@ -112,6 +121,9 @@ export default class JudgementSystem {
     const baseScore = 1_000_000 / this._totalJudgements;
     this.score += Math.round(baseScore * JUDGEMENT_MULT[judgement]);
 
+    // osu!mania HP drain system: restore/drain HP on each judgement
+    this.hp = Math.max(0, Math.min(100, this.hp + (HP_JUDGEMENT[judgement] || 0)));
+
     if (judgement === 'bad' || judgement === 'miss') {
       if (this.combo > 0) EventBus.emit('combo:break', { combo: this.combo });
       this.combo = 0;
@@ -119,6 +131,13 @@ export default class JudgementSystem {
       this.combo++;
       if (this.combo > this.maxCombo) this.maxCombo = this.combo;
     }
+  }
+
+  /** Tick HP drain — call once per frame with delta time in seconds */
+  tickHP(delta) {
+    if (this._totalJudgements === 0) return;
+    // Drain HP continuously (only if there are notes to judge)
+    this.hp = Math.max(0, this.hp - HP_DRAIN_RATE * delta);
   }
 
   checkMisses(currentTime) {
@@ -208,6 +227,7 @@ export default class JudgementSystem {
       maxCombo: this.maxCombo,
       combo: this.combo,
       rank: this.getRank(),
+      health: this.hp,
       hitCounts: { ...this.hitCounts }
     };
   }

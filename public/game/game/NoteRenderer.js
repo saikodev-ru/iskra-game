@@ -34,6 +34,7 @@ export default class NoteRenderer {
     this._laneGlows = new Map();
     this._holdNoteDebugLogged = false;
     this._graphicsPreset = 'disco';
+    this._bgDim = parseInt(localStorage.getItem('rhythm-os-bg-dim') || '0');
 
     // Hold spark effects — flat arrays for fast iteration
     this._holdSparkPool = [];
@@ -45,6 +46,7 @@ export default class NoteRenderer {
     this._bgCacheWidth = 0;
     this._bgCacheHeight = 0;
     this._bgCacheBgImage = null;
+    this._bgCacheBgDim = -1;
 
     this.resize();
   }
@@ -254,7 +256,8 @@ export default class NoteRenderer {
       || this._bgCacheLaneCount !== laneCount
       || this._bgCacheWidth !== this.w
       || this._bgCacheHeight !== this.h
-      || this._bgCacheBgImage !== this._bgImage;
+      || this._bgCacheBgImage !== this._bgImage
+      || this._bgCacheBgDim !== this._bgDim;
 
     if (needsRebuild) {
       this._rebuildBackgroundCache(laneCount);
@@ -290,6 +293,15 @@ export default class NoteRenderer {
       if (ca > ia) { dw = this.w; dh = this.w / ia; dx = 0; dy = (this.h - dh) / 2; }
       else { dh = this.h; dw = this.h * ia; dx = (this.w - dw) / 2; dy = 0; }
       cctx.drawImage(this._bgImage, dx, dy, dw, dh);
+      cctx.restore();
+    }
+
+    // Background dimming overlay (0 = no dimming, 100 = fully black)
+    if (this._bgDim > 0) {
+      cctx.save();
+      cctx.globalAlpha = Math.min(1, this._bgDim / 100);
+      cctx.fillStyle = '#000000';
+      cctx.fillRect(0, 0, this.w, this.h);
       cctx.restore();
     }
 
@@ -404,11 +416,17 @@ export default class NoteRenderer {
     this._bgCacheWidth = this.w;
     this._bgCacheHeight = this.h;
     this._bgCacheBgImage = this._bgImage;
+    this._bgCacheBgDim = this._bgDim;
   }
 
   invalidateBackgroundCache() {
     this._bgCacheLaneCount = -1;
     this._bgCacheBgImage = null;
+  }
+
+  setBackgroundDim(value) {
+    this._bgDim = value;
+    this.invalidateBackgroundCache();
   }
 
   /* ── Layout (Perspective) ── */

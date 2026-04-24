@@ -68,6 +68,13 @@ export default class Settings {
         </div>
       </div>
       <div style="margin-bottom:20px;">
+        <div class="zzz-label" style="margin-bottom:8px;">BACKGROUND DIM</div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <input type="range" id="settings-bg-dim" min="0" max="100" value="${this._getSavedBgDim()}" style="flex:1;" />
+          <span id="settings-bg-dim-val" class="zzz-value" style="min-width:40px;text-align:center;">${this._getSavedBgDim()}%</span>
+        </div>
+      </div>
+      <div style="margin-bottom:20px;">
         <div class="zzz-label" style="margin-bottom:8px;">SCROLL SPEED</div>
         <div class="scroll-speed-control">
           <div style="display:flex;align-items:center;gap:8px;">
@@ -107,6 +114,9 @@ export default class Settings {
     if (vi) vi.addEventListener('input', () => { const v = parseInt(vi.value); vv.textContent = v + '%'; localStorage.setItem('rhythm-os-volume', v.toString()); if (this.audio) this.audio.setVolume(v / 100); });
     const gvi = document.getElementById('settings-game-volume'), gvv = document.getElementById('settings-game-volume-val');
     if (gvi) gvi.addEventListener('input', () => { const v = parseInt(gvi.value); gvv.textContent = v + '%'; localStorage.setItem('rhythm-os-game-volume', v.toString()); EventBus.emit('settings:changed', { key: 'gameVolume', value: v }); });
+
+    const bdi = document.getElementById('settings-bg-dim'), bdv = document.getElementById('settings-bg-dim-val');
+    if (bdi) bdi.addEventListener('input', () => { const v = parseInt(bdi.value); bdv.textContent = v + '%'; localStorage.setItem('rhythm-os-bg-dim', v.toString()); EventBus.emit('settings:changed', { key: 'bgDim', value: v }); });
 
     // Scroll speed — synced number input + slider
     const si = document.getElementById('settings-scroll'), sv = document.getElementById('settings-scroll-val');
@@ -279,6 +289,7 @@ export default class Settings {
   _getSavedOffset() { return parseInt(localStorage.getItem('rhythm-os-audio-offset') || '0'); }
   _getSavedVolume() { return parseInt(localStorage.getItem('rhythm-os-volume') || '70'); }
   _getSavedGameVolume() { return parseInt(localStorage.getItem('rhythm-os-game-volume') || '70'); }
+  _getSavedBgDim() { return parseInt(localStorage.getItem('rhythm-os-bg-dim') || '0'); }
   _getSavedScrollSpeed() { return parseInt(localStorage.getItem('rhythm-os-scroll-speed') || '400'); }
 
   destroy() {

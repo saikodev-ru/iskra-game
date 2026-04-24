@@ -146,7 +146,7 @@ export default class HitSounds {
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'lowpass'; filt.frequency.value = 180;
       src.buffer = buf; src.connect(filt); filt.connect(g);
-      g.gain.value = 0.3; src.start(); src.stop(this._ctx.currentTime + 0.1);
+      g.gain.value = 0.6; src.start(); src.stop(this._ctx.currentTime + 0.1);
     });
   }
 
@@ -168,7 +168,7 @@ export default class HitSounds {
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'lowpass'; filt.frequency.value = 400;
       src.buffer = buf; src.connect(filt); filt.connect(g);
-      g.gain.value = 0.4; src.start(); src.stop(this._ctx.currentTime + dur);
+      g.gain.value = 0.8; src.start(); src.stop(this._ctx.currentTime + dur);
     });
   }
 
@@ -187,7 +187,7 @@ export default class HitSounds {
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'highpass'; filt.frequency.value = 3000;
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.48, this._ctx.currentTime);
+      g.gain.setValueAtTime(0.96, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start();
       src.stop(this._ctx.currentTime + dur);
@@ -212,7 +212,7 @@ export default class HitSounds {
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'lowpass'; filt.frequency.value = 1200; filt.Q.value = 0.7;
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.72, this._ctx.currentTime);
+      g.gain.setValueAtTime(1.0, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start();
       src.stop(this._ctx.currentTime + dur);
@@ -235,7 +235,7 @@ export default class HitSounds {
       filt.frequency.setValueAtTime(5000, this._ctx.currentTime);
       filt.frequency.exponentialRampToValueAtTime(1500, this._ctx.currentTime + dur);
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.32, this._ctx.currentTime);
+      g.gain.setValueAtTime(0.64, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start();
       src.stop(this._ctx.currentTime + dur);
@@ -251,7 +251,7 @@ export default class HitSounds {
         o.type = 'sine'; o.connect(env); env.connect(g);
         o.frequency.value = pitch + i * 200;
         env.gain.setValueAtTime(0, this._ctx.currentTime + delay);
-        env.gain.linearRampToValueAtTime(0.15, this._ctx.currentTime + delay + 0.02);
+        env.gain.linearRampToValueAtTime(0.3, this._ctx.currentTime + delay + 0.02);
         env.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + delay + 0.1);
         o.start(this._ctx.currentTime + delay); o.stop(this._ctx.currentTime + delay + 0.1);
       });

@@ -499,17 +499,17 @@ body.zzz-active::before {
   opacity: 0.2;
 }
 
-/* Local record badge in diff panel */
-.diff-record {
-  font-family: var(--zzz-font); font-weight: 700; font-size: 11px;
-  padding: 2px 8px; border-radius: 8px;
-  white-space: nowrap; flex-shrink: 0;
-}
-.diff-record--none {
-  color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04);
-}
-.diff-record--has {
-  color: var(--zzz-lime); background: rgba(170,255,0,0.1);
+/* Grade icon in diff panel — osu!mania style badge */
+.diff-grade-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
+  transform: rotate(-12deg);
+  font-family: var(--zzz-font); font-weight: 900; font-size: 16px;
+  color: transparent; -webkit-text-fill-color: transparent;
+  background-clip: text; -webkit-background-clip: text;
+  -webkit-text-stroke: 1.5px rgba(0,0,0,0.7);
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+  line-height: 1;
 }
 
 /* IMPORT BUTTON */

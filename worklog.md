@@ -644,3 +644,53 @@ Stage Summary:
 - Difficulty text color properly reverts when switching away
 - In-game grade display tilted -25 degrees permanently
 - Lint passes clean
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix accuracy system, increase system sounds, move grade to diff badge, add bg dim setting
+
+Work Log:
+
+Task 1 — Fix accuracy system to work like osu!mania:
+- Updated ACC_WEIGHT in JudgementSystem.js: great now weights 300 (same as perfect) instead of 200, bad weights 100 instead of 50, matching osu!mania standard
+- Added HP drain system: HP_JUDGEMENT constants (perfect: +2.0, great: +1.5, good: +0.8, bad: -0.5, miss: -1.5) and HP_DRAIN_RATE (0.8/sec)
+- Added hp property to JudgementSystem, initialized to 100 in constructor and reset()
+- Added tickHP(delta) method that drains HP each frame
+- _applyJudgement() now applies HP change per judgement
+- getStats() now includes health: this.hp
+- Updated main.js game loop: removed old static health calculation (100 - miss*5 + perfect*0.3), replaced with currentJudgement.tickHP(delta)
+- Death check now uses stats.health from the drain system
+
+Task 2 — Increase system sounds volume (except hitsounds):
+- Doubled miss() gain: 0.3 → 0.6
+- Doubled fail() gain: 0.4 → 0.8
+- Doubled crtClick() gain: 0.48 → 0.96
+- Doubled crtSwitch() layer 1 gain: 0.72 → 1.0
+- Doubled crtSwitch() layer 2 gain: 0.32 → 0.64
+- Doubled milestone() gain: 0.15 → 0.3
+- hit(), perfect(), emptyHit() volumes unchanged
+
+Task 3 — Move grade from song card to difficulty badge:
+- Removed grade calculation and display from SongSelect._createSongCard() (no more bestGrade/gradeGradients in card HTML)
+- Added _getGradeGradient(rank) method to SongSelect for gradient lookup
+- Updated _buildDiffDropdown() to show grade as styled icon using CSS .diff-grade-icon class instead of plain text
+- Grade icon uses gradient text with -12deg rotation, 28x28px size, 16px font
+- Replaced .diff-record CSS classes with new .diff-grade-icon class in ZZZTheme.js
+
+Task 4 — Add background dim setting:
+- Added _bgDim property to NoteRenderer constructor (reads from localStorage 'rhythm-os-bg-dim', default 0)
+- Added _bgCacheBgDim to cache invalidation check
+- Added setBackgroundDim(value) method that invalidates cache
+- Added dimming overlay in _rebuildBackgroundCache(): semi-transparent black rectangle with alpha = bgDim/100
+- Added "BACKGROUND DIM" slider (0-100%) in Settings._buildSettingsContent()
+- Added init handler that saves to localStorage and emits settings:changed event
+- Added _getSavedBgDim() getter method
+- Added bgDim handler in main.js EventBus listener that calls noteRenderer.setBackgroundDim()
+
+Stage Summary:
+- Accuracy now matches osu!mania: perfect and great both weight 300
+- HP system is drain-based: drains 0.8/sec, recovers on hits, depletes on misses
+- System sounds (miss, fail, crtClick, crtSwitch, milestone) doubled in volume
+- Grade icons moved from song cards to difficulty dropdown items with -12deg tilt and gradient styling
+- Background dim slider added to settings (0-100%, default 0)
+- Lint passes clean

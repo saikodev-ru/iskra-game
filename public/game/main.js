@@ -153,6 +153,8 @@ async function boot() {
       noteRenderer.scrollSpeed = value;
     } else if (key === 'gameVolume') {
       if (hitSounds) hitSounds.setVolume(value / 100);
+    } else if (key === 'bgDim') {
+      noteRenderer.setBackgroundDim(value);
     }
   });
 
@@ -287,7 +289,6 @@ async function boot() {
 
     audio.startBeatScheduler(currentBeatMap.metadata.bpm);
 
-    let health = 100;
     gameLoop = new GameLoop({
       update(delta) {
         if (!gameActive) return;
@@ -295,10 +296,10 @@ async function boot() {
         // During countdown (after resume), skip game logic
         if (_inCountdown) return;
         currentJudgement.checkMisses(ct);
-        health = Math.max(0, Math.min(100, 100 - currentJudgement.hitCounts.miss * 5 + currentJudgement.hitCounts.perfect * 0.3));
+        // osu!mania HP drain: tick per frame
+        currentJudgement.tickHP(delta);
         const stats = currentJudgement.getStats();
-        stats.health = health;
-        noteRenderer.setHealth(health);
+        noteRenderer.setHealth(stats.health);
         hud.update(stats);
 
         // Progress bar
@@ -313,7 +314,7 @@ async function boot() {
           if (ct > 0.5) endGame();
         }
         // Death: HP depleted — start death sequence (once only)
-        if (health <= 0 && !_dying) {
+        if (stats.health <= 0 && !_dying) {
           _dying = true;
           if (hitSounds) hitSounds.fail();
           input.disable();

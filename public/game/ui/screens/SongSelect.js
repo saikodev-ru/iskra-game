@@ -315,31 +315,11 @@ export default class SongSelect {
       ? '<span style="font-size:8px;color:var(--zzz-purple);background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);border-radius:6px;padding:1px 5px;vertical-align:middle;margin-left:4px;font-weight:700;letter-spacing:0.05em;">MANIA</span>'
       : '';
 
-    // Best grade badge from all difficulties
-    const bestGrade = set.difficulties.reduce((best, diff) => {
-      const rec = this._getRecord(set.id, diff.version);
-      if (!rec || !rec.rank) return best;
-      const gradeOrder = ['X','SS','S','A','B','C','D','?'];
-      return gradeOrder.indexOf(rec.rank) < gradeOrder.indexOf(best) ? rec.rank : best;
-    }, '?');
-
-    const gradeGradients = {
-      X: 'linear-gradient(180deg, #FFD700, #FFA500)',
-      SS: 'linear-gradient(180deg, #67E8F9, #FDA4AF)',
-      S: 'linear-gradient(180deg, #FDE68A, #F97316)',
-      A: 'linear-gradient(180deg, #86EFAC, #22D3EE)',
-      B: 'linear-gradient(180deg, #60A5FA, #A855F7)',
-      C: 'linear-gradient(180deg, #C4B5FD, #991B1B)',
-      D: 'linear-gradient(180deg, #EF4444, #7F1D1D)',
-    };
-
-    const gradeGrad = gradeGradients[bestGrade] || gradeGradients.D;
-
     card.innerHTML = `
       <div class="song-card-thumb" style="${set.backgroundUrl ? `background-image:url('${set.backgroundUrl}')` : set.videoUrl ? 'background:linear-gradient(135deg,#1a1a2e,#16213e);' : 'background:var(--zzz-graphite);'}">${set.videoUrl && !set.backgroundUrl ? '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;opacity:0.4;">▶</span>' : ''}</div>
       <div class="song-card-info">
         <div class="song-card-title-row">
-          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(set.title)}${set.videoUrl ? ' <span style="font-size:9px;color:var(--zzz-muted);vertical-align:middle;opacity:0.5;">🎬</span>' : ''}${maniaBadge}${bestGrade !== '?' ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;font-family:var(--zzz-font);font-weight:900;font-size:11px;color:transparent;-webkit-text-fill-color:transparent;background:${gradeGrad};-webkit-background-clip:text;background-clip:text;-webkit-text-stroke:1px rgba(0,0,0,0.6);margin-left:4px;flex-shrink:0;transform:rotate(-25deg);">${bestGrade}</span>` : ''}</span>
+          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(set.title)}${set.videoUrl ? ' <span style="font-size:9px;color:var(--zzz-muted);vertical-align:middle;opacity:0.5;">🎬</span>' : ''}${maniaBadge}</span>
         </div>
         <div class="song-card-artist">${this._escHtml(set.artist)}</div>
       </div>
@@ -386,6 +366,20 @@ export default class SongSelect {
     return wrapper;
   }
 
+  /** Grade gradient map for difficulty badges */
+  _getGradeGradient(rank) {
+    const g = {
+      X: 'linear-gradient(180deg, #FFD700, #FFA500)',
+      SS: 'linear-gradient(180deg, #67E8F9, #FDA4AF)',
+      S: 'linear-gradient(180deg, #FDE68A, #F97316)',
+      A: 'linear-gradient(180deg, #86EFAC, #22D3EE)',
+      B: 'linear-gradient(180deg, #60A5FA, #A855F7)',
+      C: 'linear-gradient(180deg, #C4B5FD, #991B1B)',
+      D: 'linear-gradient(180deg, #EF4444, #7F1D1D)',
+    };
+    return g[rank] || null;
+  }
+
   /** Build a diff dropdown element */
   _buildDiffDropdown(set, setIndex, isSelected, isExpanded) {
     const diffList = document.createElement('div');
@@ -399,9 +393,15 @@ export default class SongSelect {
       const starSpectrumHtml = this._buildStarSpectrum(s, c);
 
       const record = this._getRecord(set.id, diff.version);
-      const recordHtml = record
-        ? `<span class="diff-record diff-record--has">${record.rank || '?'}</span>`
-        : `<span class="diff-record diff-record--none">—</span>`;
+      let recordHtml;
+      if (record && record.rank) {
+        const grad = this._getGradeGradient(record.rank);
+        recordHtml = grad
+          ? `<span class="diff-grade-icon" style="background:${grad};">${record.rank}</span>`
+          : `<span style="font-family:var(--zzz-font);font-weight:700;font-size:11px;color:var(--zzz-muted);flex-shrink:0;">${record.rank}</span>`;
+      } else {
+        recordHtml = `<span style="font-family:var(--zzz-font);font-size:10px;color:rgba(255,255,255,0.12);flex-shrink:0;width:28px;text-align:center;">—</span>`;
+      }
 
       const diffRow = document.createElement('div');
       diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
