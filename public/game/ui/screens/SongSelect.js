@@ -111,8 +111,10 @@ export default class SongSelect {
     window.addEventListener('keydown', this._keyHandler);
 
     if (this.three) {
-      // Enable CRT effect on song select
+      // Enable CRT effect on song select (scanlines, barrel distortion)
       this.three.setCrtIntensity(0.7);
+      // Disable chromatic aberration (RGB shift) on song select — keep it clean
+      this.three.setChromaticAberration(0);
       // Create CRT overlay for additional scanline effect
       ZZZTheme.createCrtOverlay();
     }
@@ -746,6 +748,8 @@ export default class SongSelect {
       this.three._clearBackgroundImage();
       // Disable CRT effect when leaving song select
       this.three.setCrtIntensity(0);
+      // Re-enable chromatic aberration for other screens (gameplay)
+      this.three.setChromaticAberration(1);
     }
     // Remove CRT overlay
     ZZZTheme.removeCrtOverlay();

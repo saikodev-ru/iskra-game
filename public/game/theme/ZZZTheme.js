@@ -42,8 +42,8 @@ body.zzz-active::before {
   position: fixed; inset: 0; z-index: 1;
   pointer-events: none;
   background:
-    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.08) 3px, rgba(0,0,0,0.08) 5px),
-    repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(0,0,0,0.03) 8px, rgba(0,0,0,0.03) 12px);
+    repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(0,0,0,0.14) 4px, rgba(0,0,0,0.14) 6px),
+    repeating-linear-gradient(0deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 14px);
   mix-blend-mode: multiply;
 }
 .crt-overlay::before {
