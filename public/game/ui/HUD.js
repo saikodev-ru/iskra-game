@@ -36,8 +36,8 @@ export default class HUD {
         </div>
 
         <!-- Progress — top edge -->
-        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:rgba(255,255,255,0.03);">
-          <div id="hud-progress" style="height:100%;width:0%;background:var(--zzz-lime);transition:width 0.5s linear;border-radius:0 2px 2px 0;"></div>
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.06);">
+          <div id="hud-progress" style="height:100%;width:0%;background:var(--zzz-lime);box-shadow:0 0 8px rgba(170,255,0,0.4);transition:width 0.3s linear;border-radius:0 2px 2px 0;"></div>
         </div>
 
         <!-- Pause button -->

@@ -345,13 +345,13 @@ export default class NoteRenderer {
   _noteY(time, currentTime, judgeLineY) {
     const topY = this._getTopY();
     const travelH = judgeLineY - topY;
+    // Linear scroll: note position is directly proportional to time difference.
+    // Perspective V effect is already handled by _getPerspectiveScale() which
+    // makes notes smaller at the top and larger near the judge line.
+    // A non-linear curve here would break timing — notes must visually
+    // cross the judge line exactly when currentTime === note.time.
     const distFromJudge = (time - currentTime) * this.scrollSpeed;
-    if (distFromJudge <= 0) return judgeLineY - distFromJudge; // past judge line — no curve
-    const t = Math.min(1, distFromJudge / travelH);
-    // Exponent < 1 creates proper perspective: notes accelerate toward judge line
-    // (spend more screen time at top where they're small, rush past near bottom)
-    const curvedT = Math.pow(t, 0.65);
-    return judgeLineY - curvedT * travelH;
+    return judgeLineY - distFromJudge;
   }
 
   _fadeIn(noteY, judgeLineY) {

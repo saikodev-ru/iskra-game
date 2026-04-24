@@ -163,24 +163,8 @@ async function boot() {
     if (map.backgroundUrl) three.setBackgroundImage(map.backgroundUrl);
     else three._clearBackgroundImage();
 
-    _showCountdown(() => _actuallyStartGame(map));
-  };
-
-  const _showCountdown = (callback) => {
-    const overlay = document.createElement('div');
-    overlay.id = 'countdown-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:50;background:rgba(17,17,17,0.7);';
-    overlay.innerHTML = '<div class="zzz-title" style="font-size:100px;color:var(--zzz-lime);text-shadow:0 0 50px rgba(170,255,0,0.5);">3</div>';
-    document.body.appendChild(overlay);
-    let count = 3;
-    const el = overlay.firstElementChild;
-    const tick = () => {
-      count--;
-      if (count > 0) { el.textContent = count; el.style.animation = 'none'; void el.offsetHeight; el.style.animation = ''; }
-      else { el.textContent = 'GO!'; el.style.color = 'var(--zzz-yellow)'; setTimeout(() => { overlay.remove(); callback(); }, 400); return; }
-      setTimeout(tick, 800);
-    };
-    setTimeout(tick, 800);
+    // Brief delay before starting — no countdown, just a short pause
+    setTimeout(() => _actuallyStartGame(map), 600);
   };
 
   const _actuallyStartGame = (map) => {
@@ -236,6 +220,9 @@ async function boot() {
     input.enable();
     gameActive = true;
 
+    // Get audio duration for progress bar + end-of-map detection
+    const audioDuration = map.audioBuffer ? map.audioBuffer.duration : 0;
+
     if (map.audioBuffer) {
       audio.play(map.audioBuffer);
       const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
@@ -255,13 +242,19 @@ async function boot() {
         stats.health = health;
         noteRenderer.setHealth(health);
         hud.update(stats);
-        if (currentBeatMap.notes.length > 0) {
-          const last = currentBeatMap.notes[currentBeatMap.notes.length - 1];
-          hud.setProgress(Math.min(1, ct / (last.time + last.duration + 2)));
+
+        // Progress bar: use audio duration as the total map length
+        if (audioDuration > 0) {
+          hud.setProgress(Math.min(1, ct / audioDuration));
         }
-        if (currentJudgement.isComplete(ct) || health <= 0) {
-          if (health <= 0 && hitSounds) hitSounds.fail();
-          endGame();
+
+        // End map when audio finishes (or health depleted)
+        if (!audio.isPlaying || health <= 0) {
+          // Don't end if audio hasn't actually started yet (currentTime ~0)
+          if (ct > 0.5 || health <= 0) {
+            if (health <= 0 && hitSounds) hitSounds.fail();
+            endGame();
+          }
         }
       },
       render() {
