@@ -254,8 +254,8 @@ export default class ThreeScene {
               uv.x = (uv.x - 0.5) / scale + 0.5;
             }
 
-            // ── Subtle zoom on bass (z-scale effect) ──
-            float zoom = 1.0 + uBass * 0.02;
+            // ── Z-scale zoom on bass ──
+            float zoom = 1.0 + uBass * 0.06;
             uv = (uv - 0.5) / zoom + 0.5;
 
             vec4 tex = texture2D(uTexture, uv);
@@ -280,7 +280,7 @@ export default class ThreeScene {
 
       // Create a plane that covers the full camera viewport
       const cam = this.camera;
-      const meshZ = -9;
+      const meshZ = -6;
       const dist = cam.position.z - meshZ; // actual distance from camera to plane
       const vFov = cam.fov * Math.PI / 180;
       const planeH = 2 * Math.tan(vFov / 2) * dist;
