@@ -1,8 +1,5 @@
 const LANE_COLORS = [
-  '#CCFF33', // Vibrant lime
-  '#FFD700', // Vibrant gold
-  '#FF3355', // Vibrant red-pink
-  '#BF5FFF', // Vibrant purple
+  '#CCFF33', '#FFD700', '#FF3355', '#BF5FFF',
   '#CCFF33', '#FFD700', '#FF3355', '#BF5FFF'
 ];
 
@@ -12,8 +9,8 @@ export default class NoteRenderer {
     this.ctx = canvas.getContext('2d');
     this.scrollSpeed = 400;
     this.noteHeight = 20;
-    this._effectsPool = new Array(64);
-    for (let i = 0; i < 64; i++) {
+    this._effectsPool = new Array(48);
+    for (let i = 0; i < 48; i++) {
       this._effectsPool[i] = {
         active: false, x: 0, y: 0, radius: 0, maxRadius: 0,
         opacity: 0, color: '', age: 0, type: 'ring', particles: []
@@ -27,9 +24,7 @@ export default class NoteRenderer {
     this.resize();
   }
 
-  /* ------------------------------------------------------------------ */
-  /*  Public API                                                         */
-  /* ------------------------------------------------------------------ */
+  /* ── Public API ─────────────────────────────────────────────────── */
 
   setSafeArea(x, y, w, h) {
     this.safeArea = { x, y, w, h };
@@ -51,35 +46,26 @@ export default class NoteRenderer {
   }
 
   addEffect(x, y, color, type = 'ring') {
-    const effect = this._effectsPool[this._effectIndex % 64];
+    const effect = this._effectsPool[this._effectIndex % 48];
     effect.active = true;
-    effect.x = x;
-    effect.y = y;
+    effect.x = x; effect.y = y;
     effect.radius = 5;
-    effect.maxRadius = type === 'perfect' ? 90 : type === 'great' ? 70 : 50;
-    effect.opacity = 1;
-    effect.color = color;
-    effect.age = 0;
-    effect.type = type;
+    effect.maxRadius = type === 'perfect' ? 70 : type === 'great' ? 55 : 40;
+    effect.opacity = 1; effect.color = color; effect.age = 0; effect.type = type;
+    effect.particles = [];
     if (type === 'perfect' || type === 'great') {
-      effect.particles = [];
-      const count = type === 'perfect' ? 12 : 8;
+      const count = type === 'perfect' ? 10 : 6;
       for (let i = 0; i < count; i++) {
-        const angle = (Math.PI * 2 / count) * i + Math.random() * 0.4;
-        const speed = 100 + Math.random() * 80;
-        effect.particles.push({ angle, speed, x: 0, y: 0, life: 1 });
+        const angle = (Math.PI * 2 / count) * i + Math.random() * 0.3;
+        const speed = 80 + Math.random() * 60;
+        effect.particles.push({ angle, speed });
       }
-    } else {
-      effect.particles = [];
     }
     this._effectIndex++;
   }
 
-  flashLane(lane) {
-    // No-op: flash effects moved to Three.js camera glow
-  }
+  flashLane() { /* no-op */ }
 
-  /** Returns the perspective-corrected hit position for a lane at the judge line. */
   getLaneHitPosition(lane, laneCount) {
     const sa = this.safeArea;
     const judgeLineY = sa.y + sa.h * 0.92;
@@ -101,17 +87,14 @@ export default class NoteRenderer {
     }
   }
 
-  /** Clear the entire canvas and draw black bars outside safe area */
   clear() {
-    const ctx = this.ctx;
-    ctx.clearRect(0, 0, this.w, this.h);
+    this.ctx.clearRect(0, 0, this.w, this.h);
     this._drawBlackBars();
   }
 
-  render({ notes, currentTime, laneCount, combo }) {
+  render({ notes, currentTime, laneCount }) {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
-
     this._drawBackground(laneCount);
     this._drawNotes(notes, currentTime, laneCount);
     this._drawJudgeLine(laneCount);
@@ -119,7 +102,75 @@ export default class NoteRenderer {
     this._drawBlackBars();
   }
 
-  /** Draw black bars outside the safe area (letterbox/pillarbox) */
+  /* ── Perspective ────────────────────────────────────────────────── */
+
+  _getPerspectiveScale(y) {
+    const sa = this.safeArea;
+    const topY = sa.y;
+    const judgeLineY = sa.y + sa.h * 0.92;
+    const p = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
+    return 0.18 + 0.82 * p;
+  }
+
+  _getLaneGeometry(laneIndex, y, laneCount) {
+    const sa = this.safeArea;
+    const pw = sa.w * 0.55;
+    const cx = sa.x + sa.w / 2;
+    const scale = this._getPerspectiveScale(y);
+    const cw = pw * scale;
+    const lw = cw / laneCount;
+    const le = cx - cw / 2;
+    return { x: le + laneIndex * lw, width: lw, centerX: le + (laneIndex + 0.5) * lw };
+  }
+
+  /* ── Background ─────────────────────────────────────────────────── */
+
+  _drawBackground(laneCount) {
+    const ctx = this.ctx;
+    const sa = this.safeArea;
+    const topY = sa.y;
+    const judgeLineY = sa.y + sa.h * 0.92;
+
+    if (this._bgImage) {
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      const ia = this._bgImage.width / this._bgImage.height;
+      const ca = this.w / this.h;
+      let dw, dh, dx, dy;
+      if (ca > ia) { dw = this.w; dh = this.w / ia; dx = 0; dy = (this.h - dh) / 2; }
+      else { dh = this.h; dw = this.h * ia; dx = (this.w - dw) / 2; dy = 0; }
+      ctx.drawImage(this._bgImage, dx, dy, dw, dh);
+      ctx.restore();
+    }
+
+    for (let i = 0; i < laneCount; i++) {
+      const tg = this._getLaneGeometry(i, topY, laneCount);
+      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
+      ctx.beginPath();
+      ctx.moveTo(tg.x, topY);
+      ctx.lineTo(tg.x + tg.width, topY);
+      ctx.lineTo(bg.x + bg.width, judgeLineY);
+      ctx.lineTo(bg.x, judgeLineY);
+      ctx.closePath();
+      const b = i % 2 === 0 ? 10 : 18;
+      ctx.fillStyle = `rgba(${b},${Math.round(b * 0.7)},${Math.round(b * 0.5)},0.88)`;
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = 'rgba(170,255,0,0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= laneCount; i++) {
+      const tg = this._getLaneGeometry(i, topY, laneCount);
+      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
+      ctx.beginPath();
+      ctx.moveTo(tg.x, topY);
+      ctx.lineTo(bg.x, judgeLineY);
+      ctx.stroke();
+    }
+  }
+
+  /* ── Black bars ─────────────────────────────────────────────────── */
+
   _drawBlackBars() {
     const ctx = this.ctx;
     const sa = this.safeArea;
@@ -132,149 +183,64 @@ export default class NoteRenderer {
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /*  Perspective helpers — tilted playfield fills screen vertically     */
-  /* ------------------------------------------------------------------ */
-
-  _getPerspectiveScale(y) {
-    const sa = this.safeArea;
-    const topY = sa.y;
-    const judgeLineY = sa.y + sa.h * 0.92;
-    const progress = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
-    return 0.18 + 0.82 * progress;
-  }
-
-  _getLaneGeometry(laneIndex, y, laneCount) {
-    const sa = this.safeArea;
-    const playfieldWidth = sa.w * 0.55;
-    const playfieldCenterX = sa.x + sa.w / 2;
-    const scale = this._getPerspectiveScale(y);
-    const currentWidth = playfieldWidth * scale;
-    const laneWidth = currentWidth / laneCount;
-    const leftEdge = playfieldCenterX - currentWidth / 2;
-    return {
-      x: leftEdge + laneIndex * laneWidth,
-      width: laneWidth,
-      centerX: leftEdge + (laneIndex + 0.5) * laneWidth
-    };
-  }
-
-  /* ------------------------------------------------------------------ */
-  /*  Background / lanes — clean static rendering, no flash/pulse       */
-  /* ------------------------------------------------------------------ */
-
-  _drawBackground(laneCount) {
-    const ctx = this.ctx;
-    const sa = this.safeArea;
-    const topY = sa.y;
-    const judgeLineY = sa.y + sa.h * 0.92;
-
-    /* Dimmed background image */
-    if (this._bgImage) {
-      ctx.save();
-      ctx.globalAlpha = 0.15;
-      const imgAspect = this._bgImage.width / this._bgImage.height;
-      const canvasAspect = this.w / this.h;
-      let drawW, drawH, drawX, drawY;
-      if (canvasAspect > imgAspect) {
-        drawW = this.w; drawH = this.w / imgAspect;
-        drawX = 0; drawY = (this.h - drawH) / 2;
-      } else {
-        drawH = this.h; drawW = this.h * imgAspect;
-        drawX = (this.w - drawW) / 2; drawY = 0;
-      }
-      ctx.drawImage(this._bgImage, drawX, drawY, drawW, drawH);
-      ctx.restore();
-    }
-
-    /* Lane trapezoids — clean static rendering */
-    for (let i = 0; i < laneCount; i++) {
-      const topGeom = this._getLaneGeometry(i, topY, laneCount);
-      const botGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
-
-      ctx.beginPath();
-      ctx.moveTo(topGeom.x, topY);
-      ctx.lineTo(topGeom.x + topGeom.width, topY);
-      ctx.lineTo(botGeom.x + botGeom.width, judgeLineY);
-      ctx.lineTo(botGeom.x, judgeLineY);
-      ctx.closePath();
-
-      const base = i % 2 === 0 ? 10 : 18;
-      ctx.fillStyle = `rgba(${base},${Math.round(base * 0.7)},${Math.round(base * 0.5)},0.88)`;
-      ctx.fill();
-    }
-
-    /* Lane separators */
-    ctx.strokeStyle = 'rgba(170,255,0,0.05)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= laneCount; i++) {
-      const topGeom = this._getLaneGeometry(i, topY, laneCount);
-      const botGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
-      ctx.beginPath();
-      ctx.moveTo(topGeom.x, topY);
-      ctx.lineTo(botGeom.x, judgeLineY);
-      ctx.stroke();
-    }
-  }
-
-  /* ------------------------------------------------------------------ */
-  /*  Notes — hold notes clipped at judge line                           */
-  /* ------------------------------------------------------------------ */
+  /* ── Notes ──────────────────────────────────────────────────────── */
 
   _drawNotes(notes, currentTime, laneCount) {
-    const ctx = this.ctx;
     const sa = this.safeArea;
     const judgeLineY = sa.y + sa.h * 0.92;
-    const topBound = sa.y - 40;
 
     for (const note of notes) {
-      if (note.type !== 'hold') {
-        if (note.hit && note.judgement !== 'miss') continue;
-        if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
-      } else {
-        if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
-        if (note.released && note.hit && note.judgement !== 'miss' && currentTime - (note.time + note.duration) > 0.5) continue;
-      }
-
       const color = LANE_COLORS[note.lane % LANE_COLORS.length];
 
       if (note.type === 'hold' && note.duration > 0) {
-        this._drawHoldNote(ctx, note, currentTime, note.lane, laneCount, color, judgeLineY, topBound);
+        this._drawHoldNote(note, currentTime, laneCount, color, judgeLineY);
       } else {
-        const noteY = judgeLineY - (note.time - currentTime) * this.scrollSpeed;
+        // Tap note: skip if already hit (non-miss), or if miss has faded
+        if (note.hit && note.judgement !== 'miss') continue;
+        if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
+
+        const noteY = this._noteY(note.time, currentTime, judgeLineY);
         if (noteY < -80 || noteY > judgeLineY + 30) continue;
 
-        const distToJudge = judgeLineY - noteY;
-        const fadeIn = Math.min(1, distToJudge / (this.scrollSpeed * 0.3));
+        const fadeIn = this._fadeIn(noteY, judgeLineY);
         const alpha = note.judgement === 'miss' ? 0.3 : 1;
-
-        this._drawTapNote(ctx, note.lane, noteY, laneCount, color, fadeIn * alpha);
+        this._drawTapNote(note.lane, noteY, laneCount, color, fadeIn * alpha);
       }
     }
   }
 
-  _drawTapNote(ctx, laneIndex, noteY, laneCount, color, alpha) {
+  /** Convert note time to screen Y. Notes above judge line are < judgeLineY. */
+  _noteY(time, currentTime, judgeLineY) {
+    return judgeLineY - (time - currentTime) * this.scrollSpeed;
+  }
+
+  _fadeIn(noteY, judgeLineY) {
+    return Math.min(1, (judgeLineY - noteY) / (this.scrollSpeed * 0.3));
+  }
+
+  /* ── Tap note ───────────────────────────────────────────────────── */
+
+  _drawTapNote(ctx_or_lane, laneIndex_or_noteY, laneCount, color, alpha) {
+    // Support both calling conventions
+    const lane = typeof ctx_or_lane === 'number' ? ctx_or_lane : 0;
+    const noteY = typeof laneIndex_or_noteY === 'number' ? laneIndex_or_noteY : 0;
+    const ctx = this.ctx;
     const scale = this._getPerspectiveScale(noteY);
-    const geom = this._getLaneGeometry(laneIndex, noteY, laneCount);
-    const padding = 5 * scale;
-    const x = geom.x + padding;
-    const w = geom.width - padding * 2;
+    const geom = this._getLaneGeometry(lane, noteY, laneCount);
+    const pad = 5 * scale;
+    const x = geom.x + pad;
+    const w = geom.width - pad * 2;
     const h = this.noteHeight * scale;
-    const radius = Math.max(2, 8 * scale);
+    const r = Math.max(2, 8 * scale);
 
     ctx.save();
     ctx.globalAlpha = alpha;
-
-    /* Glow */
     ctx.shadowBlur = 14 * scale;
     ctx.shadowColor = color;
-
-    /* Note body */
     ctx.fillStyle = color;
-    this._roundRect(ctx, x, noteY - h / 2, w, h, radius);
+    this._roundRect(ctx, x, noteY - h / 2, w, h, r);
     ctx.fill();
 
-    /* Gradient highlight */
     ctx.shadowBlur = 0;
     ctx.shadowColor = 'transparent';
     const grad = ctx.createLinearGradient(x, noteY - h / 2, x, noteY + h / 2);
@@ -282,76 +248,99 @@ export default class NoteRenderer {
     grad.addColorStop(0.3, 'rgba(255,255,255,0.05)');
     grad.addColorStop(1, 'rgba(0,0,0,0.25)');
     ctx.fillStyle = grad;
-    this._roundRect(ctx, x, noteY - h / 2, w, h, radius);
+    this._roundRect(ctx, x, noteY - h / 2, w, h, r);
     ctx.fill();
-
     ctx.restore();
   }
 
-  _drawHoldNote(ctx, note, currentTime, laneIndex, laneCount, color, judgeLineY, topBound) {
-    // noteY = position of the hold note HEAD (start time)
-    const noteY = note.hit && note.judgement !== 'miss'
-      ? judgeLineY // head was hit, clamp to judge line
-      : judgeLineY - (note.time - currentTime) * this.scrollSpeed;
+  /* ── Hold note — osu!mania style ────────────────────────────────── */
+  /*
+    In osu!mania, notes scroll from top to bottom toward the judge line.
+    For a hold note:
+    - The HEAD (start time) is at the BOTTOM of the hold body (closer to judge line)
+    - The TAIL (end time) is at the TOP of the hold body (further from judge line)
+    
+    When the head is being held:
+    - The body extends FROM the judge line UPWARD to wherever the tail currently is
+    - The head cap stays at the judge line
+    - The tail cap scrolls down normally
+    
+    When released early or head missed:
+    - The body should not be shown below the judge line
+  */
 
-    // holdEndY = position of the hold note TAIL (end time)
-    const holdEndY = judgeLineY - ((note.time + note.duration) - currentTime) * this.scrollSpeed;
-
-    // Skip if both head and tail are far below judge line and not held
-    if (noteY > judgeLineY + 50 && holdEndY > judgeLineY + 50 && !note.hit) return;
-    // Skip if both head and tail are way above the screen and note is done
-    if (holdEndY < -200 && noteY < -200 && note.released) return;
-
+  _drawHoldNote(note, currentTime, laneCount, color, judgeLineY) {
+    const headTime = note.time;
+    const tailTime = note.time + note.duration;
     const isHolding = note.hit && note.judgement !== 'miss' && !note.released;
-    const alpha = note.judgement === 'miss' ? 0.3 : 1;
+    const isMissed = note.judgement === 'miss';
 
-    // The tail (holdEndY) is further in the future → higher on screen (smaller Y)
-    // The head (noteY) is closer to now → lower on screen (larger Y)
-    // rawTopY = the topmost point (smallest Y = tail end)
-    // rawBottomY = the bottommost point (largest Y = head end)
-    const rawTopY = Math.min(noteY, holdEndY);
-    const rawBottomY = Math.max(noteY, holdEndY);
+    // Skip fully faded misses
+    if (isMissed && currentTime - headTime > 0.5) return;
+    // Skip fully released notes that have faded
+    if (note.released && !isMissed && currentTime - tailTime > 0.5) return;
 
-    // Clip: don't draw below judge line, don't draw above top bound
-    const drawTopY = Math.max(rawTopY, topBound);
-    const drawBottomY = Math.min(rawBottomY, judgeLineY);
+    const alpha = isMissed ? 0.3 : 1;
 
-    // Nothing visible
-    if (drawTopY >= drawBottomY) return;
+    // Head Y: if held, clamp to judge line. Otherwise compute normally.
+    const headY = isHolding ? judgeLineY : this._noteY(headTime, currentTime, judgeLineY);
+    // Tail Y: always computed from time
+    const tailY = this._noteY(tailTime, currentTime, judgeLineY);
 
-    // Get geometry at draw points
-    const topGeom = this._getLaneGeometry(laneIndex, drawTopY, laneCount);
-    const bottomGeom = this._getLaneGeometry(laneIndex, drawBottomY, laneCount);
-    const topScale = this._getPerspectiveScale(drawTopY);
-    const bottomScale = this._getPerspectiveScale(drawBottomY);
+    // In our coordinate system:
+    // tailY < headY (tail is above, further from judge line)
+    // headY approaches judgeLineY from above as note reaches judge line
 
+    // Clip the body: only draw between topBound and judgeLineY
+    const topBound = this.safeArea.y - 40;
+    const bodyTop = Math.max(tailY, topBound);    // top of visible body (narrow end)
+    const bodyBottom = Math.min(headY, judgeLineY); // bottom of visible body (wide end)
+
+    // Draw body if visible
+    if (bodyTop < bodyBottom && bodyBottom > topBound && bodyTop < judgeLineY) {
+      this._drawHoldBody(note, laneCount, color, bodyTop, bodyBottom, alpha, isHolding);
+    }
+
+    // Draw tail cap if within visible bounds
+    if (tailY >= topBound && tailY <= judgeLineY) {
+      this._drawHoldCap(note.lane, tailY, laneCount, color, alpha);
+    }
+
+    // Draw head cap ONLY if not held and within visible bounds above judge line
+    if (!isHolding && headY >= topBound && headY <= judgeLineY) {
+      this._drawHoldCap(note.lane, headY, laneCount, color, alpha);
+    }
+  }
+
+  _drawHoldBody(note, laneCount, color, topY, bottomY, alpha, isHolding) {
+    const ctx = this.ctx;
+    const topGeom = this._getLaneGeometry(note.lane, topY, laneCount);
+    const botGeom = this._getLaneGeometry(note.lane, bottomY, laneCount);
+    const topScale = this._getPerspectiveScale(topY);
+    const botScale = this._getPerspectiveScale(bottomY);
     const topPad = 4 * topScale;
-    const bottomPad = 4 * bottomScale;
+    const botPad = 4 * botScale;
 
     ctx.save();
     ctx.globalAlpha = alpha * (isHolding ? 0.95 : 0.85);
 
-    /* Hold body — trapezoid from top (narrow) to bottom (wide) */
+    // Body fill — trapezoid
     ctx.beginPath();
-    ctx.moveTo(topGeom.x + topPad, drawTopY);
-    ctx.lineTo(topGeom.x + topGeom.width - topPad, drawTopY);
-    ctx.lineTo(bottomGeom.x + bottomGeom.width - bottomPad, drawBottomY);
-    ctx.lineTo(bottomGeom.x + bottomPad, drawBottomY);
+    ctx.moveTo(topGeom.x + topPad, topY);
+    ctx.lineTo(topGeom.x + topGeom.width - topPad, topY);
+    ctx.lineTo(botGeom.x + botGeom.width - botPad, bottomY);
+    ctx.lineTo(botGeom.x + botPad, bottomY);
     ctx.closePath();
-
     ctx.fillStyle = isHolding ? this._withAlpha(color, 0.45) : this._withAlpha(color, 0.30);
     ctx.fill();
-
     ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.7) : this._withAlpha(color, 0.5);
     ctx.lineWidth = isHolding ? 2 : 1.5;
     ctx.stroke();
-
     ctx.restore();
 
-    /* Center glow line */
-    const topCenterX = topGeom.x + topGeom.width / 2;
-    const bottomCenterX = bottomGeom.x + bottomGeom.width / 2;
-
+    // Center glow line
+    const topCX = topGeom.x + topGeom.width / 2;
+    const botCX = botGeom.x + botGeom.width / 2;
     ctx.save();
     ctx.globalAlpha = alpha * (isHolding ? 0.4 : 0.2);
     ctx.shadowBlur = isHolding ? 16 : 10;
@@ -359,41 +348,28 @@ export default class NoteRenderer {
     ctx.strokeStyle = this._withAlpha(color, 0.5);
     ctx.lineWidth = isHolding ? 5 : 3;
     ctx.beginPath();
-    ctx.moveTo(topCenterX, drawTopY);
-    ctx.lineTo(bottomCenterX, drawBottomY);
+    ctx.moveTo(topCX, topY);
+    ctx.lineTo(botCX, bottomY);
     ctx.stroke();
     ctx.restore();
-
-    /* Start cap (head) — only if head not hit yet AND head is within visible bounds above judge line */
-    if (!note.hit || note.judgement === 'miss') {
-      const headY = Math.min(noteY, judgeLineY); // clamp head to judge line
-      if (headY >= topBound && headY <= judgeLineY) {
-        this._drawHoldCap(ctx, laneIndex, headY, laneCount, color, alpha);
-      }
-    }
-
-    /* End cap (tail) — only if within visible bounds above judge line */
-    if (holdEndY >= topBound && holdEndY <= judgeLineY) {
-      this._drawHoldCap(ctx, laneIndex, holdEndY, laneCount, color, alpha);
-    }
   }
 
-  _drawHoldCap(ctx, laneIndex, y, laneCount, color, alpha) {
+  _drawHoldCap(laneIndex, y, laneCount, color, alpha) {
+    const ctx = this.ctx;
     const scale = this._getPerspectiveScale(y);
     const geom = this._getLaneGeometry(laneIndex, y, laneCount);
-    const padding = 5 * scale;
-    const x = geom.x + padding;
-    const w = geom.width - padding * 2;
+    const pad = 5 * scale;
+    const x = geom.x + pad;
+    const w = geom.width - pad * 2;
     const h = this.noteHeight * scale;
-    const radius = Math.max(2, 8 * scale);
+    const r = Math.max(2, 8 * scale);
 
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.shadowBlur = 10 * scale;
     ctx.shadowColor = color;
-
     ctx.fillStyle = color;
-    this._roundRect(ctx, x, y - h / 2, w, h, radius);
+    this._roundRect(ctx, x, y - h / 2, w, h, r);
     ctx.fill();
 
     ctx.shadowBlur = 0;
@@ -403,42 +379,34 @@ export default class NoteRenderer {
     grad.addColorStop(0.35, 'rgba(255,255,255,0)');
     grad.addColorStop(1, 'rgba(0,0,0,0.15)');
     ctx.fillStyle = grad;
-    this._roundRect(ctx, x, y - h / 2, w, h, radius);
+    this._roundRect(ctx, x, y - h / 2, w, h, r);
     ctx.fill();
-
     ctx.restore();
   }
 
-  /* ------------------------------------------------------------------ */
-  /*  Judge line — clean glow, no arrows                                 */
-  /* ------------------------------------------------------------------ */
+  /* ── Judge line ─────────────────────────────────────────────────── */
 
   _drawJudgeLine(laneCount) {
     const ctx = this.ctx;
     const sa = this.safeArea;
     const judgeLineY = sa.y + sa.h * 0.92;
-
     const fullGeom = this._getLaneGeometry(0, judgeLineY, laneCount);
     const startX = fullGeom.x;
     const totalWidth = laneCount * fullGeom.width;
 
-    /* Glowing line */
     ctx.save();
     ctx.shadowBlur = 20;
     ctx.shadowColor = '#AAFF00';
-
-    const gradient = ctx.createLinearGradient(startX, judgeLineY, startX + totalWidth, judgeLineY);
-    gradient.addColorStop(0, 'rgba(170,255,0,0)');
-    gradient.addColorStop(0.06, 'rgba(170,255,0,0.5)');
-    gradient.addColorStop(0.5, '#AAFF00');
-    gradient.addColorStop(0.94, 'rgba(170,255,0,0.5)');
-    gradient.addColorStop(1, 'rgba(170,255,0,0)');
-
-    ctx.fillStyle = gradient;
+    const grad = ctx.createLinearGradient(startX, judgeLineY, startX + totalWidth, judgeLineY);
+    grad.addColorStop(0, 'rgba(170,255,0,0)');
+    grad.addColorStop(0.06, 'rgba(170,255,0,0.5)');
+    grad.addColorStop(0.5, '#AAFF00');
+    grad.addColorStop(0.94, 'rgba(170,255,0,0.5)');
+    grad.addColorStop(1, 'rgba(170,255,0,0)');
+    ctx.fillStyle = grad;
     ctx.fillRect(startX, judgeLineY - 2.5, totalWidth, 5);
     ctx.restore();
 
-    /* Soft outer glow */
     ctx.save();
     ctx.globalAlpha = 0.25;
     ctx.shadowBlur = 35;
@@ -448,89 +416,58 @@ export default class NoteRenderer {
     ctx.restore();
   }
 
-  /* ------------------------------------------------------------------ */
-  /*  Effects — hit animations                                           */
-  /* ------------------------------------------------------------------ */
+  /* ── Effects ────────────────────────────────────────────────────── */
 
   _drawEffects() {
     const ctx = this.ctx;
-    for (const effect of this._effectsPool) {
-      if (!effect.active) continue;
-      effect.age += 0.016;
-      const duration = 0.35;
-      const progress = effect.age / duration;
-      if (progress >= 1) { effect.active = false; continue; }
+    for (const e of this._effectsPool) {
+      if (!e.active) continue;
+      e.age += 0.016;
+      const dur = 0.3;
+      const p = e.age / dur;
+      if (p >= 1) { e.active = false; continue; }
+      e.radius = e.maxRadius * p;
+      e.opacity = 1 - p;
 
-      effect.radius = effect.maxRadius * progress;
-      effect.opacity = 1 - progress;
-
-      /* Expanding ring */
+      // Ring
       ctx.save();
-      ctx.strokeStyle = effect.color;
-      ctx.globalAlpha = effect.opacity * 0.9;
-      ctx.lineWidth = 4 * (1 - progress);
-      ctx.shadowBlur = 16;
-      ctx.shadowColor = effect.color;
+      ctx.strokeStyle = e.color;
+      ctx.globalAlpha = e.opacity * 0.8;
+      ctx.lineWidth = 3 * (1 - p);
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = e.color;
       ctx.beginPath();
-      ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
+      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
-      /* Inner flash */
-      if (progress < 0.35) {
+      // Inner flash
+      if (p < 0.3) {
         ctx.save();
-        ctx.globalAlpha = (0.35 - progress) / 0.35 * 0.5;
-        ctx.fillStyle = effect.color;
-        ctx.shadowBlur = 12;
-        ctx.shadowColor = effect.color;
+        ctx.globalAlpha = (0.3 - p) / 0.3 * 0.4;
+        ctx.fillStyle = e.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = e.color;
         ctx.beginPath();
-        ctx.arc(effect.x, effect.y, 28 * (1 - progress), 0, Math.PI * 2);
+        ctx.arc(e.x, e.y, 20 * (1 - p), 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
 
-      /* Great / Perfect — outer glow ring */
-      if (effect.type === 'great' || effect.type === 'perfect') {
+      // Particles
+      if (e.particles.length > 0) {
         ctx.save();
-        ctx.globalAlpha = effect.opacity * (effect.type === 'perfect' ? 0.5 : 0.3);
-        ctx.strokeStyle = '#00E5FF';
-        ctx.lineWidth = 2 * (1 - progress);
-        ctx.shadowBlur = 22;
-        ctx.shadowColor = '#00E5FF';
-        ctx.beginPath();
-        ctx.arc(effect.x, effect.y, effect.radius * 1.4, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      /* Perfect — second expanding ring */
-      if (effect.type === 'perfect') {
-        ctx.save();
-        ctx.strokeStyle = '#AAFF00';
-        ctx.globalAlpha = effect.opacity * 0.35;
-        ctx.lineWidth = 2 * (1 - progress);
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#AAFF00';
-        ctx.beginPath();
-        ctx.arc(effect.x, effect.y, effect.radius * 0.7, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      /* Burst particles */
-      if (effect.particles && effect.particles.length > 0) {
-        ctx.save();
-        ctx.globalAlpha = effect.opacity;
-        for (const p of effect.particles) {
-          const dist = p.speed * progress;
-          const px = effect.x + Math.cos(p.angle) * dist;
-          const py = effect.y + Math.sin(p.angle) * dist;
-          const size = (4 + (effect.type === 'perfect' ? 2 : 0)) * (1 - progress);
-          ctx.fillStyle = effect.color;
-          ctx.shadowBlur = 8;
-          ctx.shadowColor = effect.color;
+        ctx.globalAlpha = e.opacity * 0.8;
+        for (const pt of e.particles) {
+          const d = pt.speed * p;
+          const px = e.x + Math.cos(pt.angle) * d;
+          const py = e.y + Math.sin(pt.angle) * d;
+          const sz = 3 * (1 - p);
+          ctx.fillStyle = e.color;
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = e.color;
           ctx.beginPath();
-          ctx.arc(px, py, size, 0, Math.PI * 2);
+          ctx.arc(px, py, sz, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.restore();
@@ -538,9 +475,7 @@ export default class NoteRenderer {
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /*  Utility                                                            */
-  /* ------------------------------------------------------------------ */
+  /* ── Utility ────────────────────────────────────────────────────── */
 
   _roundRect(ctx, x, y, w, h, r) {
     r = Math.min(r, w / 2, h / 2);
@@ -557,10 +492,10 @@ export default class NoteRenderer {
     ctx.closePath();
   }
 
-  _withAlpha(hex, alpha) {
+  _withAlpha(hex, a) {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r},${g},${b},${alpha})`;
+    return `rgba(${r},${g},${b},${a})`;
   }
 }

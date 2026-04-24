@@ -88,5 +88,32 @@ Stage Summary:
 - All flash/pulse effects removed from the 2D canvas playfield
 - Camera glow is now reactive to audio: bloom, FOV, and light intensity all respond to music
 - Bass frequencies drive the most visible effects (FOV pulse, bloom, bass light)
+- Lint passes clean
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Fix long notes, osu!mania scoring, smaller judgement, openhat sounds, empty key presses, animated combo+grade, parallax menus, osu!lazer song list
+
+Work Log:
+- Rewrote JudgementSystem.js: osu!mania scoring with 1,000,000 base (1M / totalJudgements * multiplier per slot). Accuracy starts at 100%. _applyJudgement() centralizes score/combo logic. Hold notes count as 2 judgement slots (head+tail).
+- Rewrote NoteRenderer.js _drawHoldNote(): Clean osu!mania-style hold note rendering. Head Y clamps to judgeLineY when held. Body draws from tailY (top/narrow) to headY (bottom/wide), clipped to [topBound, judgeLineY]. Head cap only drawn when NOT held. Tail cap always drawn when visible. Removed beat pulse/lane flash entirely.
+- Rewrote HitSounds.js: hit() uses bandpass-filtered noise burst at 8kHz for open-hat character. perfect() adds metallic square wave shimmer. Added emptyHit() for quiet tick on empty key presses. All sounds are high-frequency filtered noise = cymbal/hat style.
+- Updated main.js hitHandler: when judgeHit returns null (empty press), plays hitSounds.emptyHit(). Passes stats.rank to HUD via update().
+- Rewrote HUD.js: Combo counter with pop scale animation (_comboPopScale), grade display (SS/S/A/B/C/D) next to combo with animated scale-in transitions (_rankScale), rank colors (SS=gold, S=gold, A=cyan, B=lime, C=yellow, D=red). Simplified layout: score top-left, combo+grade right of playfield, health bottom-center.
+- Updated ZZZTheme.js: Judgement text reduced from 42px to 22px with tighter letter-spacing. Song card styles refined for osu!lazer look (12px border-radius, active left accent bar, smaller thumb 64px, tighter padding). Added .parallax-layer class and global mousemove handler for parallax effect. Card animation changed from slide-in to translateY+scale appear (osu!lazer carousel feel).
+- Updated MainMenu.js: Added parallax layers (title at intensity 6, buttons at intensity 3). Cleanup on destroy.
+- Updated SongSelect.js: Added parallax on song info (intensity 5) and right column (intensity 2). Increased song title to 40px. Refined card sizes and spacing. Cleanup parallax on destroy.
+
+Stage Summary:
+- Hold notes render correctly: head at bottom, tail at top, body between them, clipped at judge line
+- Scoring: 1M base, accuracy starts at 100%, osu!mania multipliers (perfect=1.0, great=0.75, good=0.5, bad=0.25)
+- Hitsounds: open-hat style (filtered noise bursts at 8-10kHz)
+- Empty key presses play a quiet tick sound (osu!lazer behavior)
+- Combo counter pops on hit with scale animation; grade animates in next to it
+- Judgement text is much smaller (22px vs 42px)
+- Parallax effect on all menus (mouse-driven subtle movement)
+- Song list has osu!lazer-style card animations and active accent bar
+- Lint passes clean
 - Hit feedback moved entirely to the 3D scene (bloom spikes, FOV pulses, light color changes)
 - Lint passes clean

@@ -17,7 +17,6 @@ import SongSelect    from './ui/screens/SongSelect.js';
 import Settings      from './ui/screens/Settings.js';
 import ResultScreen  from './ui/screens/ResultScreen.js';
 
-// ── Safe area calculation for aspect ratio ──
 function calcSafeArea() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -33,17 +32,11 @@ function calcSafeArea() {
     const arH = parseInt(parts[1]) || 9;
     const targetAR = arW / arH;
     const screenAR = w / h;
-    if (screenAR > targetAR) {
-      targetH = h;
-      targetW = h * targetAR;
-    } else {
-      targetW = w;
-      targetH = w / targetAR;
-    }
+    if (screenAR > targetAR) { targetH = h; targetW = h * targetAR; }
+    else { targetW = w; targetH = w / targetAR; }
   }
   targetW = Math.round(targetW * resScale);
   targetH = Math.round(targetH * resScale);
-
   const x = Math.round((w - targetW) / 2);
   const y = Math.round((h - targetH) / 2);
   return { x, y, w: targetW, h: targetH };
@@ -52,14 +45,10 @@ function calcSafeArea() {
 async function boot() {
   console.log('[RHYTHM::OS] Booting...');
 
-  // ── Cleanup any previous instance (HMR safety) ──
   if (window.__rhythmOsBooted) {
-    console.warn('[RHYTHM::OS] Previous instance detected, cleaning up...');
     try {
       if (window.__threeSceneInstances) {
-        for (const inst of window.__threeSceneInstances) {
-          try { inst.dispose(); } catch (_) {}
-        }
+        for (const inst of window.__threeSceneInstances) { try { inst.dispose(); } catch (_) {} }
         window.__threeSceneInstances.length = 0;
       }
     } catch (_) {}
@@ -77,11 +66,8 @@ async function boot() {
 
   const threeCanvas = document.getElementById('three');
   const three = new ThreeScene(threeCanvas);
-
-  // Connect audio engine to ThreeScene for reactive glow
   three.setAudioEngine(audio);
 
-  // Apply saved aspect ratio to 3D scene
   const savedAR = localStorage.getItem('rhythm-os-aspect-ratio') || '16:9';
   const savedResScale = parseInt(localStorage.getItem('rhythm-os-res-scale') || '100') / 100;
   three.setAspectRatio(savedAR);
@@ -98,34 +84,23 @@ async function boot() {
   const screenContainer = document.getElementById('screen');
   const screens = new ScreenManager(screenContainer);
 
-  // Apply initial safe area to all containers
   const initialSA = calcSafeArea();
   noteRenderer.setSafeArea(initialSA.x, initialSA.y, initialSA.w, initialSA.h);
   const applySafeAreaToContainers = (sa) => {
-    screenContainer.style.left = sa.x + 'px';
-    screenContainer.style.top = sa.y + 'px';
-    screenContainer.style.width = sa.w + 'px';
-    screenContainer.style.height = sa.h + 'px';
-    hudContainer.style.left = sa.x + 'px';
-    hudContainer.style.top = sa.y + 'px';
-    hudContainer.style.width = sa.w + 'px';
-    hudContainer.style.height = sa.h + 'px';
-    judgementContainer.style.left = sa.x + 'px';
-    judgementContainer.style.top = sa.y + 'px';
-    judgementContainer.style.width = sa.w + 'px';
-    judgementContainer.style.height = sa.h + 'px';
+    [screenContainer, hudContainer, judgementContainer].forEach(c => {
+      c.style.left = sa.x + 'px'; c.style.top = sa.y + 'px';
+      c.style.width = sa.w + 'px'; c.style.height = sa.h + 'px';
+    });
   };
   applySafeAreaToContainers(initialSA);
 
   let gameLoop = null, currentBeatMap = null, currentJudgement = null, gameActive = false;
   let currentMapData = null;
 
-  // ── Apply saved volume on boot ──
   const savedVolume = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
   audio._ensureCtx();
   audio.setVolume(savedVolume);
 
-  // ── Safe area + 3D update helper ──
   const updateSafeArea = () => {
     const sa = calcSafeArea();
     noteRenderer.setSafeArea(sa.x, sa.y, sa.w, sa.h);
@@ -135,12 +110,10 @@ async function boot() {
 
   EventBus.on('settings:changed', ({ key, value }) => {
     if (key === 'aspectRatio') {
-      updateSafeArea();
-      three.setAspectRatio(value);
+      updateSafeArea(); three.setAspectRatio(value);
       if (!gameActive) noteRenderer.clear();
     } else if (key === 'resScale') {
-      updateSafeArea();
-      three.setResScale(parseInt(value) / 100);
+      updateSafeArea(); three.setResScale(parseInt(value) / 100);
       if (!gameActive) noteRenderer.clear();
     }
   });
@@ -176,7 +149,7 @@ async function boot() {
     const tick = () => {
       count--;
       if (count > 0) { el.textContent = count; el.style.animation = 'none'; void el.offsetHeight; el.style.animation = ''; }
-      else { el.textContent = 'GO!'; el.style.color = 'var(--zzz-yellow)'; el.style.textShadow = '0 0 50px rgba(245,197,24,0.5)'; setTimeout(() => { overlay.remove(); callback(); }, 400); return; }
+      else { el.textContent = 'GO!'; el.style.color = 'var(--zzz-yellow)'; setTimeout(() => { overlay.remove(); callback(); }, 400); return; }
       setTimeout(tick, 800);
     };
     setTimeout(tick, 800);
@@ -186,22 +159,27 @@ async function boot() {
     const hitHandler = ({ lane, hitTime }) => {
       if (!gameActive) return;
       const result = currentJudgement.judgeHit(lane, hitTime);
-      if (!result) return;
 
-      const pos = noteRenderer.getLaneHitPosition(lane, currentBeatMap.laneCount);
-      const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };
-      noteRenderer.addEffect(pos.x, pos.y, effectColors[result.judgement] || '#AAFF00', result.judgement);
+      if (result) {
+        const pos = noteRenderer.getLaneHitPosition(lane, currentBeatMap.laneCount);
+        const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };
+        noteRenderer.addEffect(pos.x, pos.y, effectColors[result.judgement] || '#AAFF00', result.judgement);
 
-      if (hitSounds) { if (result.judgement === 'perfect') hitSounds.perfect(); else if (result.judgement !== 'miss') hitSounds.hit(); }
-
-      judgementDisplay.checkMilestone(currentJudgement.combo);
-      if (hitSounds && [50, 100, 200, 500].includes(currentJudgement.combo)) hitSounds.milestone(currentJudgement.combo);
+        if (hitSounds) {
+          if (result.judgement === 'perfect') hitSounds.perfect();
+          else if (result.judgement !== 'miss') hitSounds.hit();
+        }
+        judgementDisplay.checkMilestone(currentJudgement.combo);
+        if (hitSounds && [50, 100, 200, 500].includes(currentJudgement.combo)) hitSounds.milestone(currentJudgement.combo);
+      } else {
+        // Empty key press (no note nearby) — still play a quiet sound like osu!lazer
+        if (hitSounds) hitSounds.emptyHit();
+      }
     };
 
     const missHandler = () => { if (!gameActive) return; if (hitSounds) hitSounds.miss(); };
     const comboBreakHandler = ({ combo }) => { judgementDisplay.showComboBreak(combo); };
 
-    // Hold note release handler
     const releaseHandler = ({ lane, releaseTime }) => {
       if (!gameActive) return;
       const result = currentJudgement.judgeRelease(lane, releaseTime);
@@ -211,7 +189,7 @@ async function boot() {
       const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };
       noteRenderer.addEffect(pos.x, pos.y, effectColors[result.judgement] || '#AAFF00', result.judgement);
 
-      if (hitSounds && result.judgement !== 'bad') hitSounds.hit();
+      if (hitSounds && result.judgement !== 'bad' && result.judgement !== 'miss') hitSounds.hit();
       judgementDisplay.checkMilestone(currentJudgement.combo);
     };
 
@@ -224,7 +202,6 @@ async function boot() {
     input.enable();
     gameActive = true;
 
-    // Play audio
     if (map.audioBuffer) {
       audio.play(map.audioBuffer);
       const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
@@ -255,7 +232,7 @@ async function boot() {
       render() {
         if (!gameActive) return;
         const ct = audio.currentTime;
-        noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentBeatMap.laneCount, combo: currentJudgement.combo });
+        noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentBeatMap.laneCount });
         three.update(performance.now());
       }
     });
@@ -278,10 +255,7 @@ async function boot() {
     audio.stopBeatScheduler();
     hud.hide();
     noteRenderer.clearBackground();
-    noteRenderer.clear(); // Clear the game canvas completely
-    // Also explicitly hide the game canvas content
-    const gameCtx = gameCanvas.getContext('2d');
-    if (gameCtx) gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+    noteRenderer.clear();
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
     EventBus.emit('game:over', stats);
@@ -323,19 +297,15 @@ async function boot() {
 
   screens.show('main-menu');
 
-  // Background loop: update 3D scene when not playing
   const bgLoop = () => {
     if (!gameActive) three.update(performance.now());
     requestAnimationFrame(bgLoop);
   };
   bgLoop();
 
-  // Draw black bars on game canvas initially
   noteRenderer.clear();
-  // Redraw bars on resize
   window.addEventListener('resize', () => {
-    updateSafeArea();
-    three.resize();
+    updateSafeArea(); three.resize();
     if (!gameActive) noteRenderer.clear();
   });
 
