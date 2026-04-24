@@ -158,36 +158,7 @@ body.zzz-active::before {
   transform: translate(-50%, -50%);
   white-space: nowrap;
 }
-.judgement--perfect {
-  position: relative;
-  color: #000;
-  text-shadow:
-    0 4px 0 rgba(0,0,0,0.8),
-    0 7px 0 rgba(0,0,0,0.5),
-    -2px -2px 0 rgba(0,0,0,0.9),
-    2px -2px 0 rgba(0,0,0,0.9),
-    -2px 2px 0 rgba(0,0,0,0.9),
-    2px 2px 0 rgba(0,0,0,0.9);
-  filter: none !important;
-}
-.judgement--perfect::after {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  font-family: inherit;
-  font-weight: inherit;
-  font-size: inherit;
-  text-transform: inherit;
-  letter-spacing: inherit;
-  white-space: inherit;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  background: linear-gradient(180deg, #67E8F9 0%, #FDA4AF 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-stroke: 2px rgba(0,0,0,0.6);
-  pointer-events: none;
-}
+
 .judgement--great   { color: #00E5FF; }
 .judgement--good    { color: #F5C518; }
 .judgement--bad     { color: #FF8C00; }
@@ -204,13 +175,60 @@ body.zzz-active::before {
 .judgement--in  { animation: judge-in  0.08s ease-out forwards; }
 .judgement--out { animation: judge-out 0.2s ease-in forwards; }
 
-/* COMBO BREAK */
+/* COMBO BREAK — red vignette overlay on game canvas */
 @keyframes combo-fly { to { transform: translateY(-50px); opacity:0; } }
-@keyframes vignette-red {
-  0%,100% { box-shadow: inset 0 0 0px rgba(255,61,61,0); }
-  50%      { box-shadow: inset 0 0 100px rgba(255,61,61,0.5); }
+.combo-break-flash {
+  position: fixed; inset: 0; z-index: 4;
+  pointer-events: none;
+  box-shadow: inset 0 0 120px rgba(255,61,61,0.5);
+  animation: combo-break-fade 0.35s ease-out forwards;
 }
-body.combo-break { animation: vignette-red 0.3s ease; }
+@keyframes combo-break-fade {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ── DEATH ANIMATION ──────────────────────────── */
+.death-overlay {
+  position: fixed; inset: 0; z-index: 6;
+  pointer-events: none;
+  animation: death-sequence 2.6s ease-in forwards;
+}
+@keyframes death-sequence {
+  0%   { opacity: 0; }
+  8%   { opacity: 1; }
+  100% { opacity: 1; }
+}
+.death-overlay::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255,50,50,0.15) 2px,
+      rgba(255,50,50,0.15) 4px
+    );
+  animation: death-scanlines 0.15s steps(3) infinite;
+}
+@keyframes death-scanlines {
+  0%   { transform: translateY(0); }
+  33%  { transform: translateY(2px); }
+  66%  { transform: translateY(-1px); }
+  100% { transform: translateY(0); }
+}
+.death-overlay::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.7) 100%);
+  animation: death-vignette-grow 2.6s ease-in forwards;
+}
+@keyframes death-vignette-grow {
+  0%   { opacity: 0; }
+  15%  { opacity: 0.3; }
+  100% { opacity: 1; }
+}
 
 /* MILESTONE BANNER */
 @keyframes banner-in  { from { transform: translateX(100%); opacity:0; } to { transform: translateX(0); opacity:1; } }
@@ -529,32 +547,6 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 .result-grade {
   font-family: var(--zzz-font); font-weight: 900; font-size: 140px;
   line-height: 1; letter-spacing: 0.08em;
-  position: relative;
-  color: #000;
-  text-shadow:
-    0 5px 0 rgba(0,0,0,0.85),
-    0 10px 0 rgba(0,0,0,0.5),
-    -3px -3px 0 rgba(0,0,0,0.9),
-    3px -3px 0 rgba(0,0,0,0.9),
-    -3px 3px 0 rgba(0,0,0,0.9),
-    3px 3px 0 rgba(0,0,0,0.9);
-}
-.result-grade::after {
-  content: attr(data-grade);
-  position: absolute;
-  inset: 0;
-  font-family: inherit;
-  font-weight: inherit;
-  font-size: inherit;
-  letter-spacing: inherit;
-  line-height: inherit;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  background: var(--grade-bg, linear-gradient(180deg, #EF4444, #7F1D1D));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-stroke: 4px rgba(0,0,0,0.55);
-  pointer-events: none;
 }
 
 .result-song-info {
@@ -689,34 +681,38 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   .result-btn { padding: 12px 24px; font-size: 12px; }
 }
 
-/* ── HUD RANK (gradient text with 3D shadow) ──── */
-.hud-rank {
+/* ── GRADE GRADIENT (two-element approach) ──── */
+.grade-gradient {
   position: relative;
   color: #000;
   text-shadow:
-    0 2px 0 rgba(0,0,0,0.8),
-    0 4px 0 rgba(0,0,0,0.4),
-    -1px -1px 0 rgba(0,0,0,0.9),
-    1px -1px 0 rgba(0,0,0,0.9),
-    -1px 1px 0 rgba(0,0,0,0.9),
-    1px 1px 0 rgba(0,0,0,0.9);
+    0 3px 0 rgba(0,0,0,0.8),
+    0 6px 0 rgba(0,0,0,0.4),
+    -2px -2px 0 rgba(0,0,0,0.9),
+    2px -2px 0 rgba(0,0,0,0.9),
+    -2px 2px 0 rgba(0,0,0,0.9),
+    2px 2px 0 rgba(0,0,0,0.9);
 }
-.hud-rank::after {
-  content: attr(data-rank);
+.grade-gradient > .gg-fill {
   position: absolute;
   inset: 0;
-  font-family: inherit;
-  font-weight: inherit;
-  font-size: inherit;
-  line-height: inherit;
-  letter-spacing: inherit;
+  pointer-events: none;
+  overflow: visible;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  background: var(--grade-bg, linear-gradient(180deg, #67E8F9, #FDA4AF));
+  background: var(--gg-grad, linear-gradient(180deg, #67E8F9, #FDA4AF));
   -webkit-background-clip: text;
   background-clip: text;
-  -webkit-text-stroke: 1px rgba(0,0,0,0.5);
-  pointer-events: none;
+  -webkit-text-stroke: var(--gg-stroke, 2px rgba(0,0,0,0.6));
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  white-space: inherit;
+  line-height: inherit;
+}
+.grade-gradient--sm > .gg-fill {
+  text-shadow: none;
+  -webkit-text-stroke: var(--gg-stroke, 1px rgba(0,0,0,0.5));
 }
 
 /* PARALLAX layer */

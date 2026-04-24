@@ -641,15 +641,15 @@ export default class ThreeScene {
 
           vec3 texRgb = texture2D(uTexture, uv).rgb;
 
-          vec3 color = texRgb * 0.25;
+          vec3 color = texRgb * 0.6;
           float glow = uBass * 0.2 + uAudioIntensity * 0.08;
           color += texRgb * glow;
           color += vec3(uBrightness * 0.15);
 
           // ── Vignette (pure black, subtle) ──
           float vig = distance(vUv, vec2(0.5));
-          float vigDark = smoothstep(0.5, 1.0, vig);
-          color *= 1.0 - vigDark * 0.6;
+          float vigDark = smoothstep(0.55, 1.0, vig);
+          color *= 1.0 - vigDark * 0.55;
 
           // Rounded corners — soft darkening
           vec2 cornerDist = max(abs(vUv - 0.5) - 0.38, vec2(0.0));

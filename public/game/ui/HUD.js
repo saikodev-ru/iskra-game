@@ -23,11 +23,11 @@ export default class HUD {
       <div id="hud-inner" style="position:relative;width:100%;height:100%;pointer-events:none;display:none;">
 
         <!-- ── LEFT: Score + Accuracy ── -->
-        <div style="position:absolute;left:3%;top:50%;transform:translateY(-50%);text-align:right;">
+        <div style="position:absolute;left:3%;top:44%;transform:translateY(-50%);text-align:right;">
           <!-- Score label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:10px;color:rgba(170,255,0,0.45);letter-spacing:0.25em;text-transform:uppercase;margin-bottom:2px;text-shadow:0 0 8px rgba(0,0,0,0.9);">SCORE</div>
           <!-- Score value -->
-          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:34px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);transition:transform 0.08s;">0</div>
+          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:38px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);transition:transform 0.08s;">0</div>
           <!-- Separator line -->
           <div style="width:60px;height:1px;background:linear-gradient(to right,transparent,rgba(170,255,0,0.3));margin:8px auto 8px 0;"></div>
           <!-- Accuracy label -->
@@ -37,12 +37,12 @@ export default class HUD {
         </div>
 
         <!-- ── RIGHT: Combo + Rank ── -->
-        <div style="position:absolute;right:5%;top:36%;transform:translateY(-50%);text-align:left;">
+        <div style="position:absolute;right:5%;top:44%;transform:translateY(-50%);text-align:left;">
           <!-- Combo value -->
           <div style="display:flex;align-items:baseline;gap:8px;">
             <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:56px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0</div>
             <div style="font-family:var(--zzz-font);font-weight:700;font-size:16px;color:rgba(255,255,255,0.5);letter-spacing:0.05em;text-shadow:0 2px 8px rgba(0,0,0,0.9);">x</div>
-            <div id="hud-rank" class="hud-rank" data-rank="" style="font-family:var(--zzz-font);font-weight:900;font-size:30px;opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
+            <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="" style="font-family:var(--zzz-font);font-weight:900;font-size:30px;opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
           </div>
           <!-- Combo label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px;text-shadow:0 0 8px rgba(0,0,0,0.9);">COMBO</div>
@@ -157,18 +157,26 @@ export default class HUD {
     if (!rank || rank === this._currentRank) return;
     this._currentRank = rank;
     const rankStyles = {
-      SS: { bg: 'linear-gradient(180deg, #67E8F9, #FDA4AF)', shadow: 'rgba(103,232,249,0.5)' },
-      S:  { bg: 'linear-gradient(180deg, #FDE68A, #F97316)', shadow: 'rgba(253,230,138,0.5)' },
-      A:  { bg: 'linear-gradient(180deg, #86EFAC, #22D3EE)', shadow: 'rgba(134,239,172,0.4)' },
-      B:  { bg: 'linear-gradient(180deg, #60A5FA, #A855F7)', shadow: 'rgba(96,165,250,0.4)' },
-      C:  { bg: 'linear-gradient(180deg, #C4B5FD, #991B1B)', shadow: 'rgba(196,181,253,0.35)' },
-      D:  { bg: 'linear-gradient(180deg, #EF4444, #7F1D1D)', shadow: 'rgba(239,68,68,0.4)' },
+      SS: { bg: 'linear-gradient(180deg, #67E8F9, #FDA4AF)' },
+      S:  { bg: 'linear-gradient(180deg, #FDE68A, #F97316)' },
+      A:  { bg: 'linear-gradient(180deg, #86EFAC, #22D3EE)' },
+      B:  { bg: 'linear-gradient(180deg, #60A5FA, #A855F7)' },
+      C:  { bg: 'linear-gradient(180deg, #C4B5FD, #991B1B)' },
+      D:  { bg: 'linear-gradient(180deg, #EF4444, #7F1D1D)' },
     };
     if (this.els.rank) {
       const style = rankStyles[rank] || rankStyles.D;
       this.els.rank.textContent = rank;
       this.els.rank.dataset.rank = rank;
-      this.els.rank.style.setProperty('--grade-bg', style.bg);
+      this.els.rank.style.setProperty('--gg-grad', style.bg);
+      this.els.rank.style.setProperty('--gg-stroke', '1px rgba(0,0,0,0.5)');
+      let fill = this.els.rank.querySelector('.gg-fill');
+      if (!fill) {
+        fill = document.createElement('span');
+        fill.className = 'gg-fill';
+        this.els.rank.appendChild(fill);
+      }
+      fill.textContent = rank;
       this.els.rank.style.opacity = '1';
       this._rankScale = 1.5;
     }

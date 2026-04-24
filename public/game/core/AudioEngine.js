@@ -113,6 +113,12 @@ export default class AudioEngine {
     this._gain.gain.linearRampToValueAtTime(volume, this._ctx.currentTime + durationSec);
   }
 
+  /** Gradually slow playback from 1.0 → ~0 over durationSec */
+  slowDown(durationSec) {
+    if (!this._source || !this._ctx || !this._playing) return;
+    this._source.playbackRate.linearRampToValueAtTime(0.01, this._ctx.currentTime + durationSec);
+  }
+
   setVolume(volume) {
     if (!this._gain) return;
     this._gain.gain.value = volume;

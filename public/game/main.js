@@ -113,6 +113,7 @@ async function boot() {
   let gameLoop = null, currentBeatMap = null, currentJudgement = null, gameActive = false;
   let _endingGame = false;  // guard against double-calling endGame()
   let _inCountdown = false; // true during 3-2-1 countdown (after resume)
+  let _dying = false;       // true during death animation (HP depleted)
   let currentMapData = null;
   let currentLaneCount = 4;
 
@@ -147,6 +148,7 @@ async function boot() {
 
   const startGame = (map) => {
     if (gameActive) endGame();
+    _dying = false;
     initAudio();
 
     // Restore HUD and judgement container opacity (hidden during song-select transition)
@@ -295,12 +297,24 @@ async function boot() {
 
         // End map when audio finishes (or health depleted)
         const songFinished = !audio.isPlaying || (audioDuration > 0 && ct >= audioDuration - 0.1);
-        if (songFinished || health <= 0) {
+        if (songFinished) {
           // Don't end if audio hasn't actually started yet
-          if (ct > 0.5 || health <= 0) {
-            if (health <= 0 && hitSounds) hitSounds.fail();
-            endGame();
-          }
+          if (ct > 0.5) endGame();
+        }
+        // Death: HP depleted — start death sequence (once only)
+        if (health <= 0 && !_dying) {
+          _dying = true;
+          if (hitSounds) hitSounds.fail();
+          input.disable();
+          // Slow music down over 2.5 seconds
+          audio.slowDown(2.5);
+          // Create death overlay (red scanlines → black vignette)
+          const deathEl = document.createElement('div');
+          deathEl.className = 'death-overlay';
+          deathEl.id = 'death-overlay';
+          document.body.appendChild(deathEl);
+          // After music finishes slowing, show result
+          setTimeout(() => endGame(), 2800);
         }
       },
       render(delta) {
@@ -327,11 +341,14 @@ async function boot() {
     if (_endingGame) return;  // prevent double-call
     _endingGame = true;
     _inCountdown = false;
+    _dying = false;
     gameActive = false;
     input.disable();
-    // Remove countdown overlay if present
+    // Remove overlays
     const cdOverlay = document.getElementById('countdown-overlay');
     if (cdOverlay) cdOverlay.remove();
+    const deathOverlay = document.getElementById('death-overlay');
+    if (deathOverlay) deathOverlay.remove();
     if (gameLoop) { gameLoop.stop(); gameLoop = null; }
     audio.stop();
     audio.stopBeatScheduler();

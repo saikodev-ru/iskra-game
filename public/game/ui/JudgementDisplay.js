@@ -4,7 +4,6 @@ export default class JudgementDisplay {
   constructor(container) {
     this.container = container;
     this._currentEl = null;
-    this._deltaEl = null;
     this._timingEl = null;
     this._comboBreakEl = null;
     this._milestoneEl = null;
@@ -20,24 +19,23 @@ export default class JudgementDisplay {
 
   show(judgement, delta, timing) {
     if (this._currentEl) this._currentEl.remove();
-    if (this._deltaEl) this._deltaEl.remove();
     if (this._timingEl) this._timingEl.remove();
     const el = document.createElement('div');
     el.className = `judgement-text judgement--${judgement} judgement--in`;
-    el.textContent = judgement.toUpperCase();
-    el.dataset.text = judgement.toUpperCase();
+    if (judgement === 'perfect') {
+      el.classList.add('grade-gradient');
+      el.style.setProperty('--gg-grad', 'linear-gradient(180deg, #67E8F9, #FDA4AF)');
+      el.style.setProperty('--gg-stroke', '2px rgba(0,0,0,0.6)');
+      el.textContent = judgement.toUpperCase();
+      const fill = document.createElement('span');
+      fill.className = 'gg-fill';
+      fill.textContent = judgement.toUpperCase();
+      el.appendChild(fill);
+    } else {
+      el.textContent = judgement.toUpperCase();
+    }
     this.container.appendChild(el);
     this._currentEl = el;
-
-    // Show delta ms value
-    if (delta !== undefined && Math.abs(delta) > 5) {
-      const deltaEl = document.createElement('div');
-      deltaEl.className = 'delta-display judgement--in';
-      const sign = delta >= 0 ? '+' : '';
-      deltaEl.textContent = `${sign}${delta}ms`;
-      this.container.appendChild(deltaEl);
-      this._deltaEl = deltaEl;
-    }
 
     // Show early/late indicator (only for non-perfect hits with significant offset)
     if (timing && judgement !== 'perfect') {
@@ -56,22 +54,23 @@ export default class JudgementDisplay {
     const duration = judgement === 'perfect' ? 600 : judgement === 'great' ? 500 : 350;
     this._outTimer = setTimeout(() => {
       if (this._currentEl) { this._currentEl.classList.remove('judgement--in'); this._currentEl.classList.add('judgement--out'); const r = this._currentEl; setTimeout(() => r.remove(), 250); this._currentEl = null; }
-      if (this._deltaEl) { this._deltaEl.classList.remove('judgement--in'); this._deltaEl.classList.add('judgement--out'); const r = this._deltaEl; setTimeout(() => r.remove(), 250); this._deltaEl = null; }
       if (this._timingEl) { this._timingEl.classList.remove('judgement--in'); this._timingEl.classList.add('judgement--out'); const r = this._timingEl; setTimeout(() => r.remove(), 250); this._timingEl = null; }
     }, duration);
   }
 
   showMiss() {
     if (this._currentEl) this._currentEl.remove();
-    if (this._deltaEl) this._deltaEl.remove();
     const el = document.createElement('div');
     el.className = 'judgement-text judgement--miss judgement--in';
     el.textContent = 'MISS';
     el.dataset.text = 'MISS';
     this.container.appendChild(el);
     this._currentEl = el;
-    document.body.classList.add('combo-break');
-    setTimeout(() => document.body.classList.remove('combo-break'), 300);
+    // Red vignette flash on combo break (DOM overlay, not body class)
+    const flash = document.createElement('div');
+    flash.className = 'combo-break-flash';
+    document.body.appendChild(flash);
+    setTimeout(() => { if (flash.parentNode) flash.remove(); }, 400);
     clearTimeout(this._outTimer);
     this._outTimer = setTimeout(() => {
       if (this._currentEl) { this._currentEl.classList.remove('judgement--in'); this._currentEl.classList.add('judgement--out'); const r = this._currentEl; setTimeout(() => r.remove(), 250); this._currentEl = null; }

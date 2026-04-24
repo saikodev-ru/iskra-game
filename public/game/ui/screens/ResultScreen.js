@@ -48,10 +48,9 @@ export default class ResultScreen {
         </div>
 
         <!-- Grade letter -->
-        <div class="result-grade"
-             data-grade="${s.rank}"
-             style="--grade-bg: ${grade.bg};">
-          ${s.rank}
+        <div class="result-grade grade-gradient"
+             style="--gg-grad: ${grade.bg}; --gg-stroke: 4px rgba(0,0,0,0.55);">
+          ${s.rank}<span class="gg-fill">${s.rank}</span>
         </div>
 
         <!-- Score -->
