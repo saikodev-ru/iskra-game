@@ -255,12 +255,10 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 .song-card:hover {
   background: rgba(20,20,20,0.9);
   box-shadow: 0 2px 16px rgba(0,0,0,0.3);
-  transform: translateX(6px);
 }
 .song-card.active {
   background: rgba(10,10,10,0.9);
   box-shadow: 0 0 16px rgba(0,0,0,0.3), 0 0 8px rgba(170,255,0,0.08);
-  transform: translateX(8px);
 }
 
 /* Active card left accent bar */
@@ -351,7 +349,7 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   border: 2px solid transparent;
 }
-.diff-dropdown-item:hover { transform: translateX(4px); background: rgba(30,30,30,0.8) !important; }
+.diff-dropdown-item:hover { background: rgba(30,30,30,0.8) !important; }
 .diff-dropdown-item.active {
   border-color: var(--zzz-lime);
   box-shadow: 0 0 12px rgba(170,255,0,0.12), inset 0 0 20px rgba(170,255,0,0.03);
