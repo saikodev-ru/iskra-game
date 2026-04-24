@@ -70,11 +70,8 @@ export default class SongSelect {
         <!-- Enhanced vignette overlay -->
         <div style="position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.35) 70%, rgba(0,0,0,0.7) 100%);"></div>
 
-        <!-- Song info backdrop (top-left) -->
-        <div style="position:absolute;top:8px;left:12px;right:55%;bottom:58%;z-index:1;pointer-events:none;background:linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.3) 60%, transparent 100%);border-radius:16px;"></div>
-
         <!-- Song info (top-left) with parallax -->
-        <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:16px;left:24px;z-index:2;max-width:45%;pointer-events:none;"></div>
+        <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:20px;left:20px;z-index:2;width:clamp(280px, 42%, 440px);"></div>
 
         <!-- PLAY button (bottom-left) with parallax -->
         <div id="ss-play-area" class="parallax-layer" data-parallax="5" style="position:absolute;bottom:28px;left:24px;z-index:3;pointer-events:auto;"></div>
@@ -820,16 +817,65 @@ export default class SongSelect {
       </div>`;
     }
 
-    // Remove PLAY button from info panel (moved to bottom-left)
+    // Difficulty name & pattern type
+    const diffName = DifficultyAnalyzer.getDiffName(stars);
+    const mapperInfo = set.creator ? this._escHtml(set.creator) : '';
+    const noteCount = diff.noteCount || 0;
+    const laneCount = diff.laneCount || set.laneCount || 4;
+
+    // Mapper line
+    const mapperHtml = mapperInfo
+      ? `<div class="ss-info-mapper">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>${mapperInfo}</span>
+      </div>`
+      : '';
+
     info.innerHTML = `
-      <div style="font-family:var(--zzz-font);font-weight:900;font-size:${titleSize};color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.05;word-break:break-word;text-shadow:0 2px 20px rgba(0,0,0,0.9);">${this._escHtml(set.title)}</div>
-      <div style="font-family:var(--zzz-font);font-weight:500;font-size:15px;color:var(--zzz-muted);margin-top:4px;text-shadow:0 1px 10px rgba(0,0,0,0.9);">${this._escHtml(set.artist)}</div>
-      <div style="margin-top:10px;">${infoStarSpectrum}</div>
-      <div style="display:flex;gap:14px;margin-top:6px;align-items:baseline;flex-wrap:wrap;">
-        <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${bpm} BPM · ${durationStr}</span>
+      <div class="ss-info-panel">
+        <!-- Glass shine line -->
+        <div class="ss-info-panel-shine"></div>
+
+        <!-- Title & Artist -->
+        <div class="ss-info-title" style="font-size:${titleSize};">${this._escHtml(set.title)}</div>
+        <div class="ss-info-artist">${this._escHtml(set.artist)}</div>
+        ${mapperHtml}
+
+        <!-- Star spectrum -->
+        <div class="ss-info-stars-row">
+          ${infoStarSpectrum}
+          <span class="ss-info-diff-label" style="color:${starColor};">${diffName}</span>
+        </div>
+
+        <!-- Stats pills -->
+        <div class="ss-info-stats">
+          <div class="ss-info-pill">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8 4-8 11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>${bpm}</span>
+          </div>
+          <div class="ss-info-pill">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>${durationStr}</span>
+          </div>
+          <div class="ss-info-pill">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <span>${noteCount > 0 ? noteCount.toLocaleString() : '—'} N</span>
+          </div>
+          <div class="ss-info-pill">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span>${laneCount}K</span>
+          </div>
+        </div>
+
+        <!-- Score row -->
+        <div class="ss-info-score-row">
+          <div class="ss-info-score-value">${record ? record.score.toLocaleString() : '—'}</div>
+          <div class="ss-info-score-label">${record ? 'BEST SCORE' : 'NO RECORD'}</div>
+          ${record && record.rank ? `<div class="ss-info-grade-badge" style="background:${this._getGradeGradient(record.rank)};">${record.rank}</div>` : ''}
+        </div>
+
+        ${resultsHtml}
       </div>
-      <div style="margin-top:8px;display:flex;align-items:baseline;gap:4px;">${recordHtml}</div>
-      ${resultsHtml}
     `;
 
     // Add delete button listeners for results

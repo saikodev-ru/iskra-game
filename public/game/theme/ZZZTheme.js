@@ -515,6 +515,128 @@ body.zzz-active::before {
 /* IMPORT BUTTON */
 .zzz-import-btn { border-radius: 12px !important; font-weight: 900 !important; letter-spacing: 0.08em !important; }
 
+/* ── SONG INFO PANEL (top-left) ────────────────────────── */
+.ss-info-panel {
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(20px);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 20px 22px 16px;
+  position: relative;
+  overflow: hidden;
+}
+.ss-info-panel-shine {
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(170,255,0,0.15), transparent);
+  pointer-events: none;
+}
+.ss-info-panel::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(170,255,0,0.02) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+.ss-info-title {
+  font-family: var(--zzz-font); font-weight: 900;
+  color: var(--zzz-text); text-transform: uppercase;
+  letter-spacing: 0.06em; line-height: 1.08;
+  word-break: break-word;
+  text-shadow: 0 2px 20px rgba(0,0,0,0.9);
+  position: relative;
+}
+.ss-info-artist {
+  font-family: var(--zzz-font); font-weight: 500;
+  font-size: 14px; color: var(--zzz-muted);
+  margin-top: 3px;
+  text-shadow: 0 1px 10px rgba(0,0,0,0.9);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ss-info-mapper {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 6px;
+  font-family: var(--zzz-font); font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.04em;
+}
+.ss-info-mapper svg { opacity: 0.5; flex-shrink: 0; }
+.ss-info-mapper span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ss-info-stars-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 12px;
+}
+.ss-info-diff-label {
+  font-family: var(--zzz-font); font-weight: 900;
+  font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 12px currentColor;
+  flex-shrink: 0;
+}
+
+.ss-info-stats {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 10px;
+}
+.ss-info-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  font-family: var(--zzz-mono); font-weight: 700;
+  font-size: 11px; color: var(--zzz-text);
+  white-space: nowrap; transition: all 0.15s ease;
+}
+.ss-info-pill svg { opacity: 0.35; flex-shrink: 0; }
+.ss-info-pill span { opacity: 0.7; }
+.ss-info-pill:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.1);
+}
+.ss-info-pill:hover svg { opacity: 0.6; }
+.ss-info-pill:hover span { opacity: 1; }
+
+.ss-info-score-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+.ss-info-score-value {
+  font-family: var(--zzz-font); font-weight: 900;
+  font-size: 20px; color: var(--zzz-lime);
+  text-shadow: 0 0 16px rgba(170,255,0,0.3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.ss-info-score-label {
+  font-family: var(--zzz-font); font-weight: 700;
+  font-size: 9px; color: var(--zzz-muted);
+  letter-spacing: 0.15em; text-transform: uppercase;
+  opacity: 0.5;
+}
+.ss-info-grade-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  transform: rotate(-12deg);
+  font-family: var(--zzz-font); font-weight: 900; font-size: 18px;
+  color: transparent; -webkit-text-fill-color: transparent;
+  background-clip: text; -webkit-background-clip: text;
+  -webkit-text-stroke: 1.5px rgba(0,0,0,0.7);
+  filter: drop-shadow(0 1px 4px rgba(0,0,0,0.5));
+  line-height: 1; margin-left: auto;
+}
+
+@media (max-width: 768px) {
+  .ss-info-panel { padding: 14px 16px 12px; border-radius: 14px; }
+  .ss-info-title { letter-spacing: 0.04em; }
+  .ss-info-stats { gap: 4px; }
+  .ss-info-pill { padding: 4px 7px; font-size: 10px; border-radius: 8px; }
+  .ss-info-pill svg { width: 9px; height: 9px; }
+  .ss-info-score-value { font-size: 16px; }
+  .ss-info-mapper { font-size: 9px; }
+}
+
 /* ── SONG SELECT TOOLBAR & ACTION BAR ────────────────────────── */
 .ss-toolbar {
   display: flex; align-items: center; gap: 8px;
