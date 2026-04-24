@@ -60,11 +60,7 @@ export default class SongSelect {
               <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." style="flex:1;min-width:0;font-size:13px;padding:8px 16px;" />
             </div>
             <!-- Song list with dynamic fade edges -->
-            <div style="flex:1;min-height:0;position:relative;">
-              <div id="song-list-fade-top" class="song-list-fade-edge song-list-fade-top"></div>
-              <div id="song-list" class="zzz-scroll" style="height:100%;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:4px;padding-right:4px;"></div>
-              <div id="song-list-fade-bottom" class="song-list-fade-edge song-list-fade-bottom"></div>
-            </div>
+            <div id="song-list" class="zzz-scroll" style="flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:4px;padding-right:4px;min-height:0;"></div>
             <!-- Action buttons -->
             <div style="flex-shrink:0;padding:4px 0 6px;display:flex;gap:6px;">
               <label class="zzz-btn zzz-btn--primary zzz-btn--sm zzz-import-btn" style="cursor:pointer;display:block;flex:1;text-align:center;" for="osz-input">IMPORT .OSZ</label>
@@ -130,23 +126,35 @@ export default class SongSelect {
     if (right) { ZZZTheme.addParallax(right, 2); this._parallaxEls.push(right); }
   }
 
-  /** Update fade edge opacity based on scroll position */
+  /** Update fade mask based on scroll position */
   _updateFadeEdges() {
     const list = document.getElementById('song-list');
-    const fadeTop = document.getElementById('song-list-fade-top');
-    const fadeBottom = document.getElementById('song-list-fade-bottom');
-    if (!list || !fadeTop || !fadeBottom) return;
+    if (!list) return;
 
-    const threshold = 24;
-    // Top: fade out overlay when scrolled near top
-    const topOpacity = list.scrollTop < threshold ? list.scrollTop / threshold : 1;
-    fadeTop.style.opacity = topOpacity;
-
-    // Bottom: fade out overlay when scrolled near bottom
+    const fadeSize = 36;
+    const threshold = 48;
+    const atTop = list.scrollTop < threshold;
     const maxScroll = list.scrollHeight - list.clientHeight;
-    const bottomDist = maxScroll - list.scrollTop;
-    const bottomOpacity = bottomDist < threshold ? bottomDist / threshold : 1;
-    fadeBottom.style.opacity = Math.max(0, bottomOpacity);
+    const atBottom = maxScroll - list.scrollTop < threshold;
+
+    // Build dynamic mask gradient
+    let mask;
+    if (atTop && atBottom) {
+      // Both edges hidden — no fade needed
+      mask = 'none';
+    } else if (atTop) {
+      // Only fade bottom
+      mask = `linear-gradient(to bottom, black 0px, black calc(100% - ${fadeSize}px), transparent 100%)`;
+    } else if (atBottom) {
+      // Only fade top
+      mask = `linear-gradient(to bottom, transparent 0px, black ${fadeSize}px, black 100%)`;
+    } else {
+      // Fade both edges
+      mask = `linear-gradient(to bottom, transparent 0px, black ${fadeSize}px, black calc(100% - ${fadeSize}px), transparent 100%)`;
+    }
+
+    list.style.webkitMaskImage = mask;
+    list.style.maskImage = mask;
   }
 
   _buildFilteredIndices() {
