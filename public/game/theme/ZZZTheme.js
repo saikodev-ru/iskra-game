@@ -1044,6 +1044,13 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   pointer-events: none;
   z-index: 2;
 }
+
+/* ── SONG SELECT LOADING ────────────────────── */
+.ss-loading { position:absolute;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(0,0,0,0.9); }
+.ss-loading-spinner { width:40px;height:40px;border:3px solid var(--zzz-graphite);border-top-color:var(--zzz-lime);border-radius:50%;animation:ss-spin 0.8s linear infinite; }
+@keyframes ss-spin { to { transform:rotate(360deg); } }
+.ss-loading-text { font-family:var(--zzz-font);font-weight:700;font-size:12px;color:var(--zzz-muted);letter-spacing:0.2em;text-transform:uppercase;animation:ss-pulse 1.5s ease-in-out infinite; }
+@keyframes ss-pulse { 0%,100%{opacity:0.4;} 50%{opacity:1;} }
 `;
 
 let _crtSounds = null;

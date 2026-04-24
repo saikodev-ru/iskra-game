@@ -1,4 +1,5 @@
 const GRADE_GRADIENTS = {
+  X:  { bg: 'linear-gradient(180deg, #FFD700 0%, #FFA500 100%)', glow: 'rgba(255,215,0,0.5)', stroke: 'rgba(0,0,0,0.8)' },
   SS: { bg: 'linear-gradient(180deg, #67E8F9 0%, #FDA4AF 100%)', glow: 'rgba(103,232,249,0.4)', stroke: 'rgba(0,0,0,0.8)' },
   S:  { bg: 'linear-gradient(180deg, #FDE68A 0%, #F97316 100%)', glow: 'rgba(253,230,138,0.4)', stroke: 'rgba(0,0,0,0.75)' },
   A:  { bg: 'linear-gradient(180deg, #86EFAC 0%, #22D3EE 100%)', glow: 'rgba(134,239,172,0.35)', stroke: 'rgba(0,0,0,0.75)' },

@@ -503,3 +503,78 @@ Work Log:
 Stage Summary:
 - Song cards and difficulty panels are now more opaque and easier to read
 - Gradient is now properly positioned behind the song list, fading to black across the right side of the screen
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: 7 changes to RHYTHM::OS rhythm game (loading animation, play/mods/random buttons, preview repeat, mania indicator, grade display, X grade, HUD/overlay fixes)
+
+Work Log:
+
+Task 1 — Loading animation for song select:
+- Added `#ss-loading` overlay div to SongSelect.build() with CSS spinner + pulsing RHYTHM::OS text
+- In SongSelect.init(), show loading overlay first, then hide after loadFromStore() completes
+- Added .ss-loading, .ss-loading-spinner, .ss-loading-text CSS + @keyframes ss-spin and ss-pulse to ZZZTheme.js
+
+Task 2 — Fix Play button + add MODS and RANDOM buttons:
+- Rewrote _renderPlayButton() to render 3 buttons in a flex row with gap-8px
+- PLAY: zzz-btn--primary, 60x60px rounded, ▶ icon above text, pointer-events:auto !important
+- MODS: zzz-btn with purple border, ⚙ icon, placeholder click handler
+- RANDOM: zzz-btn with yellow border, 🎲 icon, selects random song
+- All buttons have icon (20px) on top and text (10px) below, 16px border-radius
+
+Task 3 — Preview audio/video repeat:
+- Added setInterval(500) in _playPreview() after audio starts
+- Checks if audio.isPlaying is false, then restarts from previewTime
+- Also loops video if active by resetting currentTime and calling play()
+
+Task 4 — osu!mania indicator:
+- Added `osuMode: parsed.mode` to difficulty objects in OszLoader._buildDifficulty()
+- Added `isMania: difficulties.some(d => d.osuMode === 3)` to beatmapSet in OszLoader.load()
+- In SongSelect._createSongCard(), added MANIA badge (purple, 8px font) next to song title when set.isMania is true
+
+Task 5 — Show max grade on difficulty panel + results list:
+- Changed _buildDiffDropdown() to show `record.rank || '?'` instead of score in diff record badge
+- Added results list in _renderSongInfo() below song info — shows all difficulty records with name + rank + delete button (✕)
+- Delete buttons remove localStorage entries and refresh display
+
+Task 6 — X grade:
+- Changed JudgementSystem.getRank(): X≥100, SS≥95, S≥90, A≥80, B≥70, C otherwise
+- Updated HUD.js: Added X to rankStyles (gold gradient), set _currentRank = 'X', initialized rank element with X display on build
+- Updated HUD font sizes: score 38→44px, accuracy 16→18px, combo 56→64px, rank 30→36px
+- Updated ResultScreen.js GRADE_GRADIENTS with X (gold gradient)
+
+Task 7 — Background overlay darkening + HUD size increase:
+- Added dark overlay div (rgba(0,0,0,0.3)) to SongSelect.build() at z-index:0
+- HUD sizes already increased in Task 6
+
+Stage Summary:
+- Song select now shows loading animation (spinner + pulsing text) during IndexedDB load
+- Play button is clickable with pointer-events:auto; MODS (purple) and RANDOM (yellow) buttons added
+- Preview audio/video now loops continuously until song changes
+- osu!mania beatmaps show a MANIA badge on song cards
+- Difficulty dropdown and results list show rank grade instead of score
+- New X grade for 100% accuracy (gold gradient), shifted all other grades down
+- HUD elements are larger (score, combo, rank, accuracy all increased)
+- Song select background has 30% dark overlay for better contrast
+- Lint passes clean
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Verify all 7 changes work correctly and review code quality
+
+Work Log:
+- Verified all 7 changes across 7 files
+- Confirmed loading animation CSS and JS integration in SongSelect.js + ZZZTheme.js
+- Confirmed MODS/RANDOM buttons with pointer-events:auto and icon layout
+- Confirmed preview loop interval in _playPreview()
+- Confirmed osuMode/isMania fields in OszLoader.js + MANIA badge in SongSelect.js
+- Confirmed rank display in _buildDiffDropdown() + results list in _renderSongInfo()
+- Confirmed X grade in JudgementSystem.js + HUD.js + ResultScreen.js
+- Confirmed dark overlay in SongSelect.js build() + HUD size increases
+- All lint passes, dev server running, no errors
+
+Stage Summary:
+- All 7 changes verified working correctly
+- Code quality confirmed clean (lint passes)

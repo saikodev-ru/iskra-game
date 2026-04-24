@@ -12,7 +12,7 @@ export default class HUD {
     this._targetScore = 0;
     this._targetCombo = 0;
     this._targetAccuracy = 100;
-    this._currentRank = '';
+    this._currentRank = 'X';
     this._rankScale = 1;
     this._comboPopScale = 1;
     this._build();
@@ -27,22 +27,22 @@ export default class HUD {
           <!-- Score label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:10px;color:rgba(170,255,0,0.45);letter-spacing:0.25em;text-transform:uppercase;margin-bottom:2px;text-shadow:0 0 8px rgba(0,0,0,0.9);">SCORE</div>
           <!-- Score value -->
-          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:38px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);transition:transform 0.08s;">0</div>
+          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:44px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);transition:transform 0.08s;">0</div>
           <!-- Separator line -->
           <div style="width:60px;height:1px;background:linear-gradient(to right,transparent,rgba(170,255,0,0.3));margin:8px auto 8px 0;"></div>
           <!-- Accuracy label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.35);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:1px;text-shadow:0 0 8px rgba(0,0,0,0.9);">ACCURACY</div>
           <!-- Accuracy value -->
-          <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-weight:600;font-size:16px;color:rgba(255,255,255,0.7);font-variant-numeric:tabular-nums;letter-spacing:0.04em;text-shadow:0 0 8px rgba(0,0,0,0.9),-1px -1px 0 rgba(0,0,0,0.7),1px -1px 0 rgba(0,0,0,0.7),-1px 1px 0 rgba(0,0,0,0.7),1px 1px 0 rgba(0,0,0,0.7);">100.00%</div>
+          <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-weight:600;font-size:18px;color:rgba(255,255,255,0.7);font-variant-numeric:tabular-nums;letter-spacing:0.04em;text-shadow:0 0 8px rgba(0,0,0,0.9),-1px -1px 0 rgba(0,0,0,0.7),1px -1px 0 rgba(0,0,0,0.7),-1px 1px 0 rgba(0,0,0,0.7),1px 1px 0 rgba(0,0,0,0.7);">100.00%</div>
         </div>
 
         <!-- ── RIGHT: Combo + Rank ── -->
         <div style="position:absolute;right:5%;top:44%;transform:translateY(-50%);text-align:left;">
           <!-- Combo value -->
           <div style="display:flex;align-items:baseline;gap:8px;">
-            <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:56px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0</div>
+            <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:64px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0</div>
             <div style="font-family:var(--zzz-font);font-weight:700;font-size:16px;color:rgba(255,255,255,0.5);letter-spacing:0.05em;text-shadow:0 2px 8px rgba(0,0,0,0.9);">x</div>
-            <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="" style="font-family:var(--zzz-font);font-weight:900;font-size:30px;opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
+            <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="X" style="font-family:var(--zzz-font);font-weight:900;font-size:36px;opacity:1;transform:scale(1);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
           </div>
           <!-- Combo label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px;text-shadow:0 0 8px rgba(0,0,0,0.9);">COMBO</div>
@@ -70,6 +70,19 @@ export default class HUD {
     this.els.pause.addEventListener('click', () => EventBus.emit('game:pause', {}));
     this.els.pause.addEventListener('mouseenter', () => { this.els.pause.style.opacity = '1'; });
     this.els.pause.addEventListener('mouseleave', () => { this.els.pause.style.opacity = '0.5'; });
+
+    // Initialize X rank display
+    if (this.els.rank) {
+      this.els.rank.textContent = 'X';
+      this.els.rank.dataset.rank = 'X';
+      this.els.rank.style.setProperty('--gg-grad', 'linear-gradient(180deg, #FFD700, #FFA500)');
+      this.els.rank.style.setProperty('--gg-stroke', '1px rgba(0,0,0,0.5)');
+      const fill = document.createElement('span');
+      fill.className = 'gg-fill';
+      fill.textContent = 'X';
+      this.els.rank.appendChild(fill);
+    }
+
     this._startAnimLoop();
   }
 
@@ -157,6 +170,7 @@ export default class HUD {
     if (!rank || rank === this._currentRank) return;
     this._currentRank = rank;
     const rankStyles = {
+      X:  { bg: 'linear-gradient(180deg, #FFD700, #FFA500)' },
       SS: { bg: 'linear-gradient(180deg, #67E8F9, #FDA4AF)' },
       S:  { bg: 'linear-gradient(180deg, #FDE68A, #F97316)' },
       A:  { bg: 'linear-gradient(180deg, #86EFAC, #22D3EE)' },

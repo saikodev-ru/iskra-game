@@ -187,12 +187,12 @@ export default class JudgementSystem {
 
   getRank() {
     const acc = this.getAccuracy();
-    if (acc >= 100) return 'SS';
-    if (acc >= 95)  return 'S';
-    if (acc >= 90)  return 'A';
-    if (acc >= 80)  return 'B';
-    if (acc >= 70)  return 'C';
-    return 'D';
+    if (acc >= 100) return 'X';
+    if (acc >= 95)  return 'SS';
+    if (acc >= 90)  return 'S';
+    if (acc >= 80)  return 'A';
+    if (acc >= 70)  return 'B';
+    return 'C';
   }
 
   isComplete(currentTime) {

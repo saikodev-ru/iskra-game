@@ -354,6 +354,7 @@ export default class OszLoader {
         videoMime,
         audioBuffer,
         difficulties,
+        isMania: difficulties.some(d => d.osuMode === 3),
       };
 
       // ── Persist to IndexedDB ───────────────────────────────────────────
@@ -462,6 +463,7 @@ export default class OszLoader {
         previewTime: (parseFloat(parsed.general.PreviewTime) || 0) / 1000,
       },
       difficulty: diffResult,
+      osuMode: parsed.mode,  // 0 = osu!standard, 3 = osu!mania
     };
   }
 

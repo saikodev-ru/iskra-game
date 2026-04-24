@@ -58,6 +58,15 @@ export default class SongSelect {
   build() {
     return `
       <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;">
+        <!-- Loading overlay -->
+        <div id="ss-loading" class="ss-loading">
+          <div class="ss-loading-spinner"></div>
+          <div class="ss-loading-text">RHYTHM::OS</div>
+        </div>
+
+        <!-- Darken background by 30% -->
+        <div style="position:absolute;inset:0;z-index:0;background:rgba(0,0,0,0.3);pointer-events:none;"></div>
+
         <!-- Enhanced vignette overlay -->
         <div style="position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.35) 70%, rgba(0,0,0,0.7) 100%);"></div>
 
@@ -95,12 +104,18 @@ export default class SongSelect {
   }
 
   async init() {
+    // Show loading overlay
+    const loadingEl = document.getElementById('ss-loading');
+
     try {
       const stored = await this.oszLoader.loadFromStore();
       this.beatmapSets = Array.isArray(stored) ? stored : [];
     } catch (err) {
       this.beatmapSets = [];
     }
+
+    // Hide loading overlay
+    if (loadingEl) loadingEl.style.display = 'none';
 
     this._buildFilteredIndices();
     this._renderSongList();
@@ -296,11 +311,15 @@ export default class SongSelect {
     const card = document.createElement('div');
     card.className = 'song-card' + (isSelected ? ' active' : '');
 
+    const maniaBadge = set.isMania
+      ? '<span style="font-size:8px;color:var(--zzz-purple);background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);border-radius:6px;padding:1px 5px;vertical-align:middle;margin-left:4px;font-weight:700;letter-spacing:0.05em;">MANIA</span>'
+      : '';
+
     card.innerHTML = `
       <div class="song-card-thumb" style="${set.backgroundUrl ? `background-image:url('${set.backgroundUrl}')` : set.videoUrl ? 'background:linear-gradient(135deg,#1a1a2e,#16213e);' : 'background:var(--zzz-graphite);'}">${set.videoUrl && !set.backgroundUrl ? '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;opacity:0.4;">▶</span>' : ''}</div>
       <div class="song-card-info">
         <div class="song-card-title-row">
-          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(set.title)}${set.videoUrl ? ' <span style="font-size:9px;color:var(--zzz-muted);vertical-align:middle;opacity:0.5;">🎬</span>' : ''}</span>
+          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(set.title)}${set.videoUrl ? ' <span style="font-size:9px;color:var(--zzz-muted);vertical-align:middle;opacity:0.5;">🎬</span>' : ''}${maniaBadge}</span>
         </div>
         <div class="song-card-artist">${this._escHtml(set.artist)}</div>
       </div>
@@ -361,8 +380,8 @@ export default class SongSelect {
 
       const record = this._getRecord(set.id, diff.version);
       const recordHtml = record
-        ? `<span class="diff-record diff-record--has">${record.score.toLocaleString()}</span>`
-        : `<span class="diff-record diff-record--none">?</span>`;
+        ? `<span class="diff-record diff-record--has">${record.rank || '?'}</span>`
+        : `<span class="diff-record diff-record--none">—</span>`;
 
       const diffRow = document.createElement('div');
       diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
@@ -735,6 +754,28 @@ export default class SongSelect {
                       titleLen <= 28 ? 'clamp(24px, 4vw, 36px)' :
                       'clamp(18px, 3vw, 28px)';
 
+    // Build results list for all difficulties
+    let resultsHtml = '';
+    const resultsList = set.difficulties
+      .map(diff => {
+        const rec = this._getRecord(set.id, diff.version);
+        return { version: diff.version, record: rec };
+      })
+      .filter(r => r.record);
+
+    if (resultsList.length > 0) {
+      resultsHtml = `<div style="margin-top:10px;max-height:80px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;" class="zzz-scroll">
+        <div style="font-family:var(--zzz-font);font-weight:700;font-size:9px;color:var(--zzz-muted);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:2px;">RECORDS</div>
+        ${resultsList.map(r => `
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-family:var(--zzz-font);font-size:10px;color:rgba(255,255,255,0.5);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(r.version)}</span>
+            <span style="font-family:var(--zzz-font);font-weight:900;font-size:11px;color:var(--zzz-lime);flex-shrink:0;">${r.record.rank || '?'}</span>
+            <button class="result-delete-btn" data-diff="${this._escHtml(r.version)}" style="width:16px;height:16px;border:none;background:rgba(255,61,61,0.1);color:var(--zzz-red);font-size:10px;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;opacity:0.4;transition:opacity 0.15s;">✕</button>
+          </div>
+        `).join('')}
+      </div>`;
+    }
+
     // Remove PLAY button from info panel (moved to bottom-left)
     info.innerHTML = `
       <div style="font-family:var(--zzz-font);font-weight:900;font-size:${titleSize};color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.05;word-break:break-word;text-shadow:0 2px 20px rgba(0,0,0,0.9);">${this._escHtml(set.title)}</div>
@@ -744,7 +785,25 @@ export default class SongSelect {
         <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${bpm} BPM · ${durationStr}</span>
       </div>
       <div style="margin-top:8px;display:flex;align-items:baseline;gap:4px;">${recordHtml}</div>
+      ${resultsHtml}
     `;
+
+    // Add delete button listeners for results
+    info.querySelectorAll('.result-delete-btn').forEach(btn => {
+      btn.addEventListener('mouseenter', () => { btn.style.opacity = '1'; });
+      btn.addEventListener('mouseleave', () => { btn.style.opacity = '0.4'; });
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const diffName = btn.dataset.diff;
+        try {
+          const key = `rhythm-record-${set.id}-${(diffName || '').replace(/[^a-zA-Z0-9]/g, '_')}`;
+          localStorage.removeItem(key);
+        } catch (_) {}
+        // Re-render info to update list
+        this._renderSongInfo(set);
+        this._renderSongList();
+      });
+    });
 
     // Update the PLAY button in bottom-left
     this._renderPlayButton(set);
@@ -760,9 +819,35 @@ export default class SongSelect {
     const starColor = DifficultyAnalyzer.getStarColor(stars);
 
     area.innerHTML = `
-      <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="font-size:22px;padding:16px 48px;letter-spacing:0.12em;border-radius:24px;box-shadow:0 0 30px ${starColor}30;">▶ PLAY</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="pointer-events:auto !important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:60px;height:60px;border-radius:16px;padding:0;box-shadow:0 0 30px ${starColor}30;">
+          <span style="font-size:20px;line-height:1;">▶</span>
+          <span style="font-family:var(--zzz-font);font-weight:900;font-size:10px;letter-spacing:0.08em;">PLAY</span>
+        </button>
+        <button id="song-mods-btn" class="zzz-btn" style="pointer-events:auto !important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:60px;height:60px;border-radius:16px;padding:0;border-color:var(--zzz-purple);color:var(--zzz-purple);">
+          <span style="font-size:20px;line-height:1;">⚙</span>
+          <span style="font-family:var(--zzz-font);font-weight:700;font-size:10px;letter-spacing:0.08em;">MODS</span>
+        </button>
+        <button id="song-random-btn" class="zzz-btn" style="pointer-events:auto !important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:60px;height:60px;border-radius:16px;padding:0;border-color:var(--zzz-yellow);color:var(--zzz-yellow);">
+          <span style="font-size:20px;line-height:1;">🎲</span>
+          <span style="font-family:var(--zzz-font);font-weight:700;font-size:10px;letter-spacing:0.08em;">RANDOM</span>
+        </button>
+      </div>
     `;
     document.getElementById('song-play-btn')?.addEventListener('click', () => this._confirmSong());
+    document.getElementById('song-mods-btn')?.addEventListener('click', () => {
+      // Placeholder: open mods overlay
+    });
+    document.getElementById('song-random-btn')?.addEventListener('click', () => {
+      // Select a random song
+      if (this.beatmapSets.length > 0) {
+        let randomIdx;
+        do {
+          randomIdx = Math.floor(Math.random() * this.beatmapSets.length);
+        } while (randomIdx === this.selectedIndex && this.beatmapSets.length > 1);
+        this._selectSong(randomIdx);
+      }
+    });
   }
 
   _renderEmptyState() {
@@ -803,6 +888,25 @@ export default class SongSelect {
           this.three._videoElement.play().catch(() => {});
         } catch (_) { /* video not seekable yet */ }
       }
+
+      // Repeat preview when it ends
+      this._previewInterval = setInterval(() => {
+        if (set !== this.beatmapSets[this.selectedIndex]) {
+          clearInterval(this._previewInterval);
+          this._previewInterval = null;
+          return;
+        }
+        if (!this.audio.isPlaying) {
+          this.audio.play(set.audioBuffer, Math.max(0, previewTime));
+          // Also loop video
+          if (this.three && set.videoUrl && this.three._videoActive && this.three._videoElement) {
+            try {
+              this.three._videoElement.currentTime = Math.max(0, previewTime);
+              this.three._videoElement.play().catch(() => {});
+            } catch (_) {}
+          }
+        }
+      }, 500);
     }, 250);
   }
 
@@ -916,114 +1020,85 @@ export default class SongSelect {
     overlay.appendChild(card);
     document.body.appendChild(overlay);
 
-    // Trigger glitch effect on Three.js canvas
-    ZZZTheme.glitchTransition(this.three?.canvas);
-    if (this.three) this.three.triggerGlitch(0.8);
-    ZZZTheme.playSwitchSound();
-
-    // Phase 1: Fly to center (after a frame) — target: rectangular card (~55% of viewport width)
+    // Phase 1: fly card to center
     requestAnimationFrame(() => {
-      const targetW = Math.min(window.innerWidth * 0.55, 520);
-      const targetH = targetW * 0.42;  // ~2.4:1 aspect ratio
-      const targetX = (window.innerWidth - targetW) / 2;
-      const targetY = (window.innerHeight - targetH) / 2;
-
-      card.style.left = targetX + 'px';
-      card.style.top = targetY + 'px';
-      card.style.width = targetW + 'px';
-      card.style.height = targetH + 'px';
-
-      // Darken background
-      overlay.classList.add('fade-bg');
+      requestAnimationFrame(() => {
+        const targetW = Math.min(400, window.innerWidth * 0.6);
+        const targetH = targetW * 0.55;
+        card.style.left = `${(window.innerWidth - targetW) / 2}px`;
+        card.style.top = `${(window.innerHeight - targetH) / 2}px`;
+        card.style.width = `${targetW}px`;
+        card.style.height = `${targetH}px`;
+        overlay.classList.add('fade-bg');
+      });
     });
 
-    // Phase 2: Show loading bar after card arrives
+    // Phase 2: show loading bar animation
     setTimeout(() => {
-      // Animate loading bar
       const fill = document.getElementById('song-loading-fill');
-      if (fill) {
-        setTimeout(() => { fill.style.width = '100%'; }, 100);
-      }
+      if (fill) fill.style.width = '100%';
+    }, 600);
 
-      // Trigger another subtle glitch
-      if (this.three) this.three.triggerGlitch(0.3);
-    }, 550);
-
-    // Phase 3: After minimum 1.5s total, fade out and transition to game
-    const totalDelay = 1600;
+    // Phase 3: glitch burst → start game
     setTimeout(() => {
-      // Simple fade out
-      card.style.transition = 'opacity 0.5s ease-out';
-      card.style.opacity = '0';
-      ZZZTheme.playSwitchSound();
+      card.classList.add('burst');
+      // Reset screen opacity
+      if (screenContainer) screenContainer.style.opacity = '1';
 
-      // After fade, clean up and transition to game
+      // Start the game after burst animation
       setTimeout(() => {
         overlay.remove();
         this._transitioning = false;
+        this._leavingToGame = false;
         this.screens.show('game', { map });
-      }, 550);
-    }, totalDelay);
+      }, 600);
+    }, 1200);
   }
 
   async _handleOszFiles(files) {
     if (!files || files.length === 0) return;
     for (const file of files) {
-      try { this.beatmapSets.push(await this.oszLoader.load(file)); }
-      catch (err) { console.error('Failed to load .osz:', err); }
+      try {
+        const newSet = await this.oszLoader.load(file);
+        this.beatmapSets.push(newSet);
+      } catch (err) {
+        console.error('Failed to load .osz:', err);
+      }
     }
-    const oszInput = document.getElementById('osz-input');
-    if (oszInput) oszInput.value = '';
     this._buildFilteredIndices();
     this._renderSongList();
-    if (this.beatmapSets.length > 0) this._selectSong(this.beatmapSets.length - 1);
+    if (this.beatmapSets.length > 0) {
+      if (this.selectedIndex < 0) this._restoreSelection();
+      else this._selectSong(this.selectedIndex, true);
+    }
+    // Reset file input so the same file can be re-imported
+    const input = document.getElementById('osz-input');
+    if (input) input.value = '';
   }
 
   destroy() {
-    this._closeContextMenu();
-    if (this._keyHandler) { window.removeEventListener('keydown', this._keyHandler); this._keyHandler = null; }
-    if (this._dragHandler) { window.removeEventListener('mousemove', this._dragHandler); this._dragHandler = null; }
-    if (this._dragUpHandler) { window.removeEventListener('mouseup', this._dragUpHandler); this._dragUpHandler = null; }
-    this._dragScrolling = false;
-    this._transitioning = false;
-    // Clean up any lingering transition overlay
-    const transOverlay = document.getElementById('song-transition-overlay');
-    if (transOverlay) transOverlay.remove();
-
-    // Restore screen container opacity
-    const screenContainer = document.getElementById('screen');
-    if (screenContainer) screenContainer.style.opacity = '';
-    const crtOverlay = document.getElementById('crt-overlay');
-    if (crtOverlay) crtOverlay.style.display = '';
-
-    if (this._leavingToGame) {
-      // When transitioning to game, don't stop audio (game needs it)
-      // and don't clear background video/image (game needs them)
-      // Just clear any pending preview timeouts without stopping audio
-      if (this._previewFadeTimeout) { clearTimeout(this._previewFadeTimeout); this._previewFadeTimeout = null; }
-      if (this._previewInterval) { clearInterval(this._previewInterval); this._previewInterval = null; }
-      // Cancel any pending audio.stop() from _stopPreview
-      if (this._previewStopTimeout) { clearTimeout(this._previewStopTimeout); this._previewStopTimeout = null; }
-      this._leavingToGame = false;
-    } else {
-      this._stopPreview();
-      if (this.three) {
-        this.three._clearBackgroundVideo();
-        this.three._clearBackgroundImage();
-      }
-    }
-
-    if (this.three) {
-      this.three.removeTVMonitor(); // no-op but safe
-      // Disable CRT effect when leaving song select
-      this.three.setCrtIntensity(0);
-      // Re-enable chromatic aberration for other screens (gameplay)
-      this.three.setChromaticAberration(1);
-    }
-    // Remove CRT overlay
-    ZZZTheme.removeCrtOverlay();
     // Clean up parallax
-    for (const el of this._parallaxEls) ZZZTheme.removeParallax(el);
+    for (const el of this._parallaxEls) {
+      ZZZTheme.removeParallax(el);
+    }
     this._parallaxEls = [];
+
+    // Clean up listeners
+    if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler);
+    if (this._dragHandler) window.removeEventListener('mousemove', this._dragHandler);
+    if (this._dragUpHandler) window.removeEventListener('mouseup', this._dragUpHandler);
+
+    // Stop preview
+    this._stopPreview();
+
+    // Clean up CRT
+    if (this.three) {
+      this.three.setCrtIntensity(0);
+      ZZZTheme.removeCrtOverlay();
+    }
+
+    // Reset transitioning state
+    this._transitioning = false;
+    this._leavingToGame = false;
   }
 }
