@@ -20,7 +20,7 @@ export default class ResultScreen {
   constructor({ screens }) { this.screens = screens; this._stats = null; this._lastMap = null; this._keyHandler = null; }
 
   build() {
-    const s = this._stats || { score: 0, accuracy: 100, maxCombo: 0, rank: 'D', hitCounts: { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 } };
+    const s = this._stats || { score: 0, accuracy: 100, maxCombo: 0, rank: 'D', sliderBreaks: 0, hitCounts: { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 }, totalNotes: 0 };
     const map = this._lastMap || {};
     const meta = map.metadata || {};
     const grade = GRADE_GRADIENTS[s.rank] || GRADE_GRADIENTS.D;
@@ -30,8 +30,8 @@ export default class ResultScreen {
     const songArtist = meta.artist || '';
     const songDiff = meta.version || meta.difficulty || '';
 
-    // Judgment bar percentages
-    const total = Math.max(1, Object.values(s.hitCounts).reduce((a, b) => a + b, 0));
+    // Judgment bar percentages — per-note basis (one judgement per note)
+    const total = s.totalNotes || Math.max(1, Object.values(s.hitCounts).reduce((a, b) => a + b, 0));
     const pPct = (s.hitCounts.perfect / total * 100).toFixed(1);
     const gPct = (s.hitCounts.great / total * 100).toFixed(1);
     const goPct = (s.hitCounts.good / total * 100).toFixed(1);
@@ -74,6 +74,11 @@ export default class ResultScreen {
             <div class="result-stat-label">NOTES</div>
             <div class="result-stat-value" style="color:var(--zzz-text);">${total}</div>
           </div>
+          ${s.sliderBreaks > 0 ? `
+          <div class="result-stat-card">
+            <div class="result-stat-label">SB</div>
+            <div class="result-stat-value" style="color:#FF8C00;font-size:18px;">${s.sliderBreaks}</div>
+          </div>` : ''}
         </div>
 
         <!-- Judgment breakdown -->

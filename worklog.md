@@ -790,3 +790,32 @@ Stage Summary:
 - OSZ importer auto-resolves note conflicts (overlap/too-close) by shifting to adjacent lanes
 - AVI video backgrounds are skipped (unsupported in browsers), maps fall back to image BG
 - All changes lint clean
+
+---
+Task ID: 1
+Agent: main
+Task: Rewrite accuracy and scoring system with Score V2 formula, align score with accuracy, weaken lenient hold system
+
+Work Log:
+- Read and analyzed JudgementSystem.js, ResultScreen.js, HUD.js, main.js
+- Rewrote JudgementSystem.js with new Score V2 accuracy formula:
+  - ACC_WEIGHT: PERFECT=305, GREAT=300, GOOD=200, BAD=50, MISS=0
+  - Accuracy = sum(per-note weights) / (totalNotes × 305) × 100
+  - GREAT ≠ PERFECT (98.36% vs 100%) — SS impossible with any GREAT
+  - Per-note scoring (not per-judgement-slot): score = baseScore × (weight/305)
+  - Score and accuracy perfectly aligned (1M max for all PERFECT)
+- Combo system: only head hits affect combo (standard osu!mania)
+- Slider breaks: degrade note to BAD (50) for accuracy, reduce score, HP penalty -0.8
+- Weakened lenient hold system:
+  - HOLD_GRACE_PERIOD: 150ms → 80ms
+  - RELEASE_WINDOWS: 1.5× → 1.2× (tighter)
+  - Slider break HP: -0.3 → -0.8
+- Updated ResultScreen.js: shows totalNotes, slider breaks (SB) badge
+- Removed _totalJudgements/_judgementsProcessed (replaced with per-note _totalNotes/_baseScore)
+
+Stage Summary:
+- Accuracy starts at 100%, degrades from GREAT/GOOD/BAD/MISS/slider breaks
+- Score directly reflects accuracy (score = acc% × 10,000)
+- Lenient system no longer "plays long notes for you" (much shorter grace period)
+- All PERFECT = 1,000,000 score / 100.00% acc / X rank
+- Any GREAT → max 98.36% acc → SS rank (impossible to get X)
