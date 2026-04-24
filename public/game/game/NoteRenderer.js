@@ -384,8 +384,8 @@ export default class NoteRenderer {
     const judgeLineY = this._getJudgeLineY();
     const topY = this._getTopY();
     const t = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
-    // Quadratic ease: 0.3 at top → 1.0 at judge line
-    return 0.3 + 0.7 * t * t;
+    // Linear: 0.3 at top → 1.0 at judge line — straight trapezoid edges
+    return 0.3 + 0.7 * t;
   }
 
   /**
@@ -542,8 +542,8 @@ export default class NoteRenderer {
     const judgeLineY = this._getJudgeLineY();
     const topY = this._getTopY();
     const t = Math.max(0, Math.min(1, (noteY - topY) / (judgeLineY - topY)));
-    // Quadratic ease matching perspective scale
-    return 0.3 + 0.7 * t * t;
+    // Linear matching perspective scale
+    return 0.3 + 0.7 * t;
   }
 
   _fadeIn(noteY, judgeLineY) {
