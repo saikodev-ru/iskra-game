@@ -21,6 +21,15 @@ export default class BeatMap {
       const maxLane = Math.max(...this.notes.map(n => n.lane));
       this.laneCount = maxLane + 1;
     }
+
+    // Debug: log hold note stats
+    const holdNotes = this.notes.filter(n => n.type === 'hold' && n.duration > 0);
+    if (this.notes.length > 0) {
+      console.log(`[BeatMap] Total notes: ${this.notes.length}, Hold notes: ${holdNotes.length}, Lanes: ${this.laneCount}`);
+      if (holdNotes.length > 0) {
+        console.log(`[BeatMap] Sample hold:`, JSON.stringify(holdNotes[0]));
+      }
+    }
   }
 
   getNotesInWindow(currentTime, lookahead = 3.0) {

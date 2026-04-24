@@ -168,3 +168,26 @@ Stage Summary:
 - Project Sekai-style lane glow effect with gradient + center line + shadow bloom
 - Three.js scene always renders at full resolution (unaffected by resScale)
 - Lint passes clean
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: White transparent effects, fix long notes visibility, lane glow strip + HP bar wider/shorter
+
+Work Log:
+- Effects now drawn BEFORE notes (behind them) in render order: background → effects → lane glows → notes → judge line → HP bar
+- All effects (rings, particles, inner flash) now use WHITE color with lower opacity (0.35 for rings, 0.2 for flash, 0.4 for particles). Shadow/glow color still uses the judgement color for subtle tinting.
+- Hold note body opacity dramatically increased: fill from 0.30 → 0.50 (not holding) / 0.65 (holding). Border from 0.5 → 0.7/0.9. Center glow line from 0.2 → 0.35/0.6 with white color when holding.
+- Added debug console.log in BeatMap constructor to log hold note count and sample data
+- Added debug console.log in NoteRenderer._drawNotes() to log hold notes in render window
+- Lane glow changed from full-height column to a STRIP centered on the judge line (±7.5% of safe area height). Uses gradient that fades at top/bottom edges. Center line drawn at judge line position.
+- HP bar changed: width from 6 → 18 (3x wider), now only covers bottom half of playfield (from 46% of safe height to judge line). Fill opacity increased for better visibility.
+- Removed per-frame _holdNoteDebugLogged reset so it only logs once per game session
+
+Stage Summary:
+- Effects are now white/transparent and drawn behind notes for subtlety
+- Hold notes have much higher opacity (50%+ body fill vs 30% before)
+- Debug logging added to verify hold note data exists in BeatMap and NoteRenderer
+- Lane glow is now a strip near judge line instead of full-height column
+- HP bar is 3x wider and covers only the bottom half of the playfield
+- Lint passes clean

@@ -9,7 +9,7 @@ export default class NoteRenderer {
     this.ctx = canvas.getContext('2d');
     this.scrollSpeed = 400;
     this.noteHeight = 20;
-    this._resScale = 1.0; // resolution scale: 1.0 = native, <1 = blurry, >1 = crisp
+    this._resScale = 1.0;
     this._effectsPool = new Array(48);
     for (let i = 0; i < 48; i++) {
       this._effectsPool[i] = {
@@ -22,9 +22,9 @@ export default class NoteRenderer {
     this._bgLoadAttempted = false;
     this.safeArea = { x: 0, y: 0, w: 0, h: 0 };
     this._safeAreaExplicit = false;
-    this._health = 100; // 0–100
-    // Lane glow system — Project Sekai style
-    this._laneGlows = new Map(); // lane → { color, intensity, decay }
+    this._health = 100;
+    this._laneGlows = new Map();
+    this._holdNoteDebugLogged = false;
     this.resize();
   }
 
@@ -35,7 +35,6 @@ export default class NoteRenderer {
     this._safeAreaExplicit = true;
   }
 
-  /** Set resolution scale — affects canvas pixel count only, not layout size */
   setResScale(scale) {
     this._resScale = Math.max(0.25, Math.min(2.0, scale));
   }
@@ -77,16 +76,14 @@ export default class NoteRenderer {
     this._effectIndex++;
   }
 
-  /** Project Sekai-style lane glow — adds a glowing column effect when a key is pressed */
   addLaneGlow(lane, laneCount, color) {
     this._laneGlows.set(lane, {
       color,
       intensity: 1.0,
-      decay: 0.04 // fade out rate per frame
+      decay: 0.05
     });
   }
 
-  /** Clear all lane glows (used on game end) */
   clearLaneGlows() {
     this._laneGlows.clear();
   }
@@ -101,26 +98,17 @@ export default class NoteRenderer {
   }
 
   resize() {
-    // Canvas STYLE is always full viewport
     const styleW = window.innerWidth;
     const styleH = window.innerHeight;
-
-    // Canvas PIXEL dimensions are scaled by resScale
-    // Low resScale = fewer pixels = blurry, High resScale = more pixels = crisp
     const dpr = window.devicePixelRatio || 1;
     const pixelW = Math.round(styleW * dpr * this._resScale);
     const pixelH = Math.round(styleH * dpr * this._resScale);
-
     this.canvas.width = pixelW;
     this.canvas.height = pixelH;
     this.canvas.style.width = styleW + 'px';
     this.canvas.style.height = styleH + 'px';
-
-    // Scale the context so all drawing commands use CSS pixel coordinates
-    // regardless of the actual pixel count
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0); // reset
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(dpr * this._resScale, dpr * this._resScale);
-
     this.w = styleW;
     this.h = styleH;
     if (!this._safeAreaExplicit) {
@@ -137,11 +125,11 @@ export default class NoteRenderer {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
     this._drawBackground(laneCount);
+    this._drawEffects();         // Effects BEHIND notes (white, transparent)
     this._drawLaneGlows(laneCount);
     this._drawNotes(notes, currentTime, laneCount);
     this._drawJudgeLine(laneCount);
     this._drawHPBar(laneCount);
-    this._drawEffects();
     this._drawBlackBars();
   }
 
@@ -219,12 +207,17 @@ export default class NoteRenderer {
     }
   }
 
-  /* ── Lane Glows — Project Sekai style ──────────────────────────── */
+  /* ── Lane Glows — strip near judge line ────────────────────────── */
 
   _drawLaneGlows(laneCount) {
     const ctx = this.ctx;
-    const topY = this._getTopY();
     const judgeLineY = this._getJudgeLineY();
+    const sa = this.safeArea;
+
+    // Glow strip: centered on judge line, height = 15% of safe area
+    const stripHalfH = sa.h * 0.075;
+    const stripTopY = judgeLineY - stripHalfH;
+    const stripBotY = judgeLineY + stripHalfH;
 
     for (const [lane, glow] of this._laneGlows) {
       if (glow.intensity <= 0.01) {
@@ -232,45 +225,44 @@ export default class NoteRenderer {
         continue;
       }
 
-      const tg = this._getLaneGeometry(lane, topY, laneCount);
-      const bg = this._getLaneGeometry(lane, judgeLineY, laneCount);
+      const tg = this._getLaneGeometry(lane, stripTopY, laneCount);
+      const bg = this._getLaneGeometry(lane, stripBotY, laneCount);
 
       ctx.save();
-      ctx.globalAlpha = glow.intensity * 0.4;
 
-      // Create gradient from top to bottom for the glow
-      const grad = ctx.createLinearGradient(0, topY, 0, judgeLineY);
+      // Glow fill — gradient fading from edges
+      const grad = ctx.createLinearGradient(0, stripTopY, 0, stripBotY);
       grad.addColorStop(0, 'transparent');
-      grad.addColorStop(0.3, glow.color);
-      grad.addColorStop(0.85, glow.color);
-      grad.addColorStop(1, glow.color);
+      grad.addColorStop(0.2, glow.color);
+      grad.addColorStop(0.5, glow.color);
+      grad.addColorStop(0.8, glow.color);
+      grad.addColorStop(1, 'transparent');
 
-      // Fill the lane trapezoid with the glow gradient
+      ctx.globalAlpha = glow.intensity * 0.35;
       ctx.beginPath();
-      ctx.moveTo(tg.x, topY);
-      ctx.lineTo(tg.x + tg.width, topY);
-      ctx.lineTo(bg.x + bg.width, judgeLineY);
-      ctx.lineTo(bg.x, judgeLineY);
+      ctx.moveTo(tg.x, stripTopY);
+      ctx.lineTo(tg.x + tg.width, stripTopY);
+      ctx.lineTo(bg.x + bg.width, stripBotY);
+      ctx.lineTo(bg.x, stripBotY);
       ctx.closePath();
       ctx.fillStyle = grad;
-      ctx.shadowBlur = 30 * glow.intensity;
+      ctx.shadowBlur = 25 * glow.intensity;
       ctx.shadowColor = glow.color;
       ctx.fill();
 
-      // Bright center line
-      ctx.globalAlpha = glow.intensity * 0.6;
-      ctx.shadowBlur = 20 * glow.intensity;
+      // Bright center line at judge line
+      const midGeom = this._getLaneGeometry(lane, judgeLineY, laneCount);
+      ctx.globalAlpha = glow.intensity * 0.7;
+      ctx.shadowBlur = 15 * glow.intensity;
       ctx.shadowColor = glow.color;
       ctx.strokeStyle = glow.color;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(tg.centerX, topY);
-      ctx.lineTo(bg.centerX, judgeLineY);
+      ctx.moveTo(midGeom.x + 3, judgeLineY);
+      ctx.lineTo(midGeom.x + midGeom.width - 3, judgeLineY);
       ctx.stroke();
 
       ctx.restore();
-
-      // Decay
       glow.intensity -= glow.decay;
     }
   }
@@ -295,7 +287,20 @@ export default class NoteRenderer {
     const judgeLineY = this._getJudgeLineY();
     const topY = this._getTopY();
 
-    // Separate hold and tap notes so we draw hold bodies first (behind caps)
+    // Debug: log hold note presence once
+    if (!this._holdNoteDebugLogged) {
+      const holdCount = notes.filter(n => n.type === 'hold' && n.duration > 0).length;
+      const totalCount = notes.length;
+      if (totalCount > 0) {
+        console.log(`[NoteRenderer] Notes in window: ${totalCount}, hold notes: ${holdCount}`);
+        if (holdCount > 0) {
+          const sample = notes.find(n => n.type === 'hold' && n.duration > 0);
+          console.log(`[NoteRenderer] Sample hold note:`, JSON.stringify({ lane: sample.lane, time: sample.time, duration: sample.duration, type: sample.type, hit: sample.hit, released: sample.released }));
+        }
+        this._holdNoteDebugLogged = true;
+      }
+    }
+
     const holdNotes = [];
     const tapNotes = [];
 
@@ -307,7 +312,7 @@ export default class NoteRenderer {
       }
     }
 
-    // Draw hold note bodies first (so caps and tap notes render on top)
+    // Draw hold note bodies first
     for (const note of holdNotes) {
       this._drawHoldNote(note, currentTime, laneCount, judgeLineY, topY);
     }
@@ -327,7 +332,6 @@ export default class NoteRenderer {
     }
   }
 
-  /** Convert note time to screen Y. Notes above judge line are < judgeLineY. */
   _noteY(time, currentTime, judgeLineY) {
     return judgeLineY - (time - currentTime) * this.scrollSpeed;
   }
@@ -378,41 +382,39 @@ export default class NoteRenderer {
     const isHolding = note.hit && note.judgement !== 'miss' && !note.released;
     const isMissed = note.judgement === 'miss';
 
-    // Skip fully faded misses
     if (isMissed && currentTime - headTime > 0.5) return;
-    // Released notes — just disappear like osu!mania
     if (note.released && !isMissed) return;
 
     const alpha = isMissed ? 0.3 : 1;
 
-    // ── Calculate Y positions ─────────────────────────────────────
+    // ── Calculate Y positions ──
     const rawHeadY = this._noteY(headTime, currentTime, judgeLineY);
     const headY = isHolding ? judgeLineY : rawHeadY;
     const tailY = this._noteY(tailTime, currentTime, judgeLineY);
 
-    // ── Clip the body to visible bounds ───────────────────────────
+    // ── Clip to visible bounds ──
     const clipTop = topY - 40;
     const clipBottom = judgeLineY;
 
     const bodyTop = Math.max(tailY, clipTop);
     const bodyBottom = Math.min(headY, clipBottom);
 
-    // ── Draw body (trapezoid with perspective) ────────────────────
+    // ── Draw body ──
     if (bodyTop < bodyBottom && bodyBottom > clipTop && bodyTop < clipBottom) {
       this._drawHoldBody(note, laneCount, color, bodyTop, bodyBottom, alpha, isHolding);
     }
 
-    // ── Draw tail cap (always visible if on screen) ───────────────
+    // ── Draw tail cap ──
     if (tailY >= clipTop && tailY <= clipBottom) {
       this._drawHoldCap(note.lane, tailY, laneCount, color, alpha);
     }
 
-    // ── Draw head cap (only if NOT holding and within visible bounds) ──
+    // ── Draw head cap (only if NOT holding) ──
     if (!isHolding && headY >= clipTop && headY <= clipBottom) {
       this._drawHoldCap(note.lane, headY, laneCount, color, alpha);
     }
 
-    // ── Holding indicator at judge line ───────────────────────────
+    // ── Holding glow at judge line ──
     if (isHolding) {
       this._drawHoldGlow(note.lane, judgeLineY, laneCount, color);
     }
@@ -424,23 +426,29 @@ export default class NoteRenderer {
     const botGeom = this._getLaneGeometry(note.lane, bottomY, laneCount);
     const topScale = this._getPerspectiveScale(topY);
     const botScale = this._getPerspectiveScale(bottomY);
-    const topPad = 4 * topScale;
-    const botPad = 4 * botScale;
+    const topPad = 3 * topScale;
+    const botPad = 3 * botScale;
 
     ctx.save();
-    ctx.globalAlpha = alpha * (isHolding ? 0.95 : 0.85);
+    ctx.globalAlpha = alpha;
 
-    // Body fill — trapezoid
+    // Body fill — trapezoid with MUCH higher opacity
     ctx.beginPath();
     ctx.moveTo(topGeom.x + topPad, topY);
     ctx.lineTo(topGeom.x + topGeom.width - topPad, topY);
     ctx.lineTo(botGeom.x + botGeom.width - botPad, bottomY);
     ctx.lineTo(botGeom.x + botPad, bottomY);
     ctx.closePath();
-    ctx.fillStyle = isHolding ? this._withAlpha(color, 0.45) : this._withAlpha(color, 0.30);
+
+    // Fill: solid lane color with strong alpha
+    ctx.fillStyle = isHolding ? this._withAlpha(color, 0.65) : this._withAlpha(color, 0.50);
+    ctx.shadowBlur = isHolding ? 20 : 8;
+    ctx.shadowColor = color;
     ctx.fill();
-    ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.7) : this._withAlpha(color, 0.5);
-    ctx.lineWidth = isHolding ? 2 : 1.5;
+
+    // Border: bright and visible
+    ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.9) : this._withAlpha(color, 0.7);
+    ctx.lineWidth = isHolding ? 2.5 : 2;
     ctx.stroke();
     ctx.restore();
 
@@ -448,11 +456,11 @@ export default class NoteRenderer {
     const topCX = topGeom.x + topGeom.width / 2;
     const botCX = botGeom.x + botGeom.width / 2;
     ctx.save();
-    ctx.globalAlpha = alpha * (isHolding ? 0.4 : 0.2);
-    ctx.shadowBlur = isHolding ? 16 : 10;
+    ctx.globalAlpha = alpha * (isHolding ? 0.6 : 0.35);
+    ctx.shadowBlur = isHolding ? 20 : 12;
     ctx.shadowColor = color;
-    ctx.strokeStyle = this._withAlpha(color, 0.5);
-    ctx.lineWidth = isHolding ? 5 : 3;
+    ctx.strokeStyle = isHolding ? '#ffffff' : this._withAlpha(color, 0.8);
+    ctx.lineWidth = isHolding ? 4 : 2;
     ctx.beginPath();
     ctx.moveTo(topCX, topY);
     ctx.lineTo(botCX, bottomY);
@@ -472,7 +480,7 @@ export default class NoteRenderer {
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur = 10 * scale;
+    ctx.shadowBlur = 12 * scale;
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     this._roundRect(ctx, x, y - h / 2, w, h, r);
@@ -481,16 +489,15 @@ export default class NoteRenderer {
     ctx.shadowBlur = 0;
     ctx.shadowColor = 'transparent';
     const grad = ctx.createLinearGradient(x, y - h / 2, x, y + h / 2);
-    grad.addColorStop(0, 'rgba(255,255,255,0.3)');
+    grad.addColorStop(0, 'rgba(255,255,255,0.4)');
     grad.addColorStop(0.35, 'rgba(255,255,255,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.15)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.2)');
     ctx.fillStyle = grad;
     this._roundRect(ctx, x, y - h / 2, w, h, r);
     ctx.fill();
     ctx.restore();
   }
 
-  /** Glowing indicator at judge line when holding a note */
   _drawHoldGlow(laneIndex, judgeLineY, laneCount, color) {
     const ctx = this.ctx;
     const scale = this._getPerspectiveScale(judgeLineY);
@@ -501,61 +508,64 @@ export default class NoteRenderer {
     const h = 6 * scale;
 
     ctx.save();
-    ctx.globalAlpha = 0.8;
-    ctx.shadowBlur = 20 * scale;
+    ctx.globalAlpha = 0.9;
+    ctx.shadowBlur = 25 * scale;
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     ctx.fillRect(x, judgeLineY - h / 2, w, h);
 
-    // Bright inner line
     ctx.shadowBlur = 0;
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.6;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 2, judgeLineY - 1, w - 4, 2);
     ctx.restore();
   }
 
-  /* ── HP Bar — vertical, right of playfield with perspective ────── */
+  /* ── HP Bar — vertical, right of playfield, 3x wider, half height ─ */
 
   _drawHPBar(laneCount) {
     const ctx = this.ctx;
-    const topY = this._getTopY();
+    const sa = this.safeArea;
     const judgeLineY = this._getJudgeLineY();
     const health = this._health;
 
-    // HP bar dimensions — thin strip to the right of the playfield
+    // HP bar: 3x wider than before, only bottom half of playfield height
     const barGap = 6;
-    const barWidth = 6;
+    const barWidth = 18; // was 6, now 3x
 
-    const topRightGeom = this._getLaneGeometry(laneCount - 1, topY, laneCount);
-    const botRightGeom = this._getLaneGeometry(laneCount - 1, judgeLineY, laneCount);
+    // Only render in the bottom half of the playfield
+    const barTopY = sa.y + sa.h * 0.46; // center of playfield
+    const barBotY = judgeLineY;
 
-    const topBarX = topRightGeom.x + topRightGeom.width + barGap * this._getPerspectiveScale(topY);
-    const botBarX = botRightGeom.x + botRightGeom.width + barGap * this._getPerspectiveScale(judgeLineY);
+    const topRightGeom = this._getLaneGeometry(laneCount - 1, barTopY, laneCount);
+    const botRightGeom = this._getLaneGeometry(laneCount - 1, barBotY, laneCount);
 
-    const topScale = this._getPerspectiveScale(topY);
-    const botScale = this._getPerspectiveScale(judgeLineY);
+    const topBarX = topRightGeom.x + topRightGeom.width + barGap * this._getPerspectiveScale(barTopY);
+    const botBarX = botRightGeom.x + botRightGeom.width + barGap * this._getPerspectiveScale(barBotY);
+
+    const topScale = this._getPerspectiveScale(barTopY);
+    const botScale = this._getPerspectiveScale(barBotY);
     const topW = barWidth * topScale;
     const botW = barWidth * botScale;
 
     // Background bar (empty)
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(topBarX, topY);
-    ctx.lineTo(topBarX + topW, topY);
-    ctx.lineTo(botBarX + botW, judgeLineY);
-    ctx.lineTo(botBarX, judgeLineY);
+    ctx.moveTo(topBarX, barTopY);
+    ctx.lineTo(topBarX + topW, barTopY);
+    ctx.lineTo(botBarX + botW, barBotY);
+    ctx.lineTo(botBarX, barBotY);
     ctx.closePath();
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.fill();
 
-    // Health fill — drawn from bottom up
+    // Health fill — from bottom up
     const fillRatio = health / 100;
     if (fillRatio > 0) {
-      const fillHeight = (judgeLineY - topY) * fillRatio;
-      const fillTopY = judgeLineY - fillHeight;
+      const fillHeight = (barBotY - barTopY) * fillRatio;
+      const fillTopY = barBotY - fillHeight;
 
-      const fillTopT = (fillTopY - topY) / (judgeLineY - topY);
+      const fillTopT = (fillTopY - barTopY) / (barBotY - barTopY);
       const fillTopScale = topScale + (botScale - topScale) * fillTopT;
       const fillTopBarX = topBarX + (botBarX - topBarX) * fillTopT;
       const fillTopW = topW + (botW - topW) * fillTopT;
@@ -563,36 +573,36 @@ export default class NoteRenderer {
       ctx.beginPath();
       ctx.moveTo(fillTopBarX, fillTopY);
       ctx.lineTo(fillTopBarX + fillTopW, fillTopY);
-      ctx.lineTo(botBarX + botW, judgeLineY);
-      ctx.lineTo(botBarX, judgeLineY);
+      ctx.lineTo(botBarX + botW, barBotY);
+      ctx.lineTo(botBarX, barBotY);
       ctx.closePath();
 
       let fillColor, glowColor;
       if (health < 25) {
-        fillColor = 'rgba(255,61,61,0.7)';
+        fillColor = 'rgba(255,61,61,0.8)';
         glowColor = '#FF3D3D';
       } else if (health < 50) {
-        fillColor = 'rgba(245,197,24,0.6)';
+        fillColor = 'rgba(245,197,24,0.7)';
         glowColor = '#F5C518';
       } else {
-        fillColor = 'rgba(170,255,0,0.5)';
+        fillColor = 'rgba(170,255,0,0.6)';
         glowColor = '#AAFF00';
       }
 
       ctx.fillStyle = fillColor;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 16;
       ctx.shadowColor = glowColor;
       ctx.fill();
     }
 
-    // Subtle border
+    // Border
     ctx.beginPath();
-    ctx.moveTo(topBarX, topY);
-    ctx.lineTo(topBarX + topW, topY);
-    ctx.lineTo(botBarX + botW, judgeLineY);
-    ctx.lineTo(botBarX, judgeLineY);
+    ctx.moveTo(topBarX, barTopY);
+    ctx.lineTo(topBarX + topW, barTopY);
+    ctx.lineTo(botBarX + botW, barBotY);
+    ctx.lineTo(botBarX, barBotY);
     ctx.closePath();
-    ctx.strokeStyle = 'rgba(170,255,0,0.1)';
+    ctx.strokeStyle = 'rgba(170,255,0,0.12)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
@@ -630,7 +640,7 @@ export default class NoteRenderer {
     ctx.restore();
   }
 
-  /* ── Effects ────────────────────────────────────────────────────── */
+  /* ── Effects — white, transparent, drawn BEHIND notes ─────────── */
 
   _drawEffects() {
     const ctx = this.ctx;
@@ -643,42 +653,42 @@ export default class NoteRenderer {
       e.radius = e.maxRadius * p;
       e.opacity = 1 - p;
 
-      // Ring
+      // White ring — more transparent
       ctx.save();
-      ctx.strokeStyle = e.color;
-      ctx.globalAlpha = e.opacity * 0.8;
-      ctx.lineWidth = 3 * (1 - p);
-      ctx.shadowBlur = 12;
+      ctx.strokeStyle = '#ffffff';
+      ctx.globalAlpha = e.opacity * 0.35;
+      ctx.lineWidth = 2 * (1 - p);
+      ctx.shadowBlur = 15;
       ctx.shadowColor = e.color;
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
-      // Inner flash
-      if (p < 0.3) {
+      // Inner flash — white
+      if (p < 0.25) {
         ctx.save();
-        ctx.globalAlpha = (0.3 - p) / 0.3 * 0.4;
-        ctx.fillStyle = e.color;
-        ctx.shadowBlur = 10;
+        ctx.globalAlpha = (0.25 - p) / 0.25 * 0.2;
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 12;
         ctx.shadowColor = e.color;
         ctx.beginPath();
-        ctx.arc(e.x, e.y, 20 * (1 - p), 0, Math.PI * 2);
+        ctx.arc(e.x, e.y, 18 * (1 - p), 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
 
-      // Particles
+      // Particles — white
       if (e.particles.length > 0) {
         ctx.save();
-        ctx.globalAlpha = e.opacity * 0.8;
+        ctx.globalAlpha = e.opacity * 0.4;
         for (const pt of e.particles) {
           const d = pt.speed * p;
           const px = e.x + Math.cos(pt.angle) * d;
           const py = e.y + Math.sin(pt.angle) * d;
-          const sz = 3 * (1 - p);
-          ctx.fillStyle = e.color;
-          ctx.shadowBlur = 6;
+          const sz = 2.5 * (1 - p);
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowBlur = 4;
           ctx.shadowColor = e.color;
           ctx.beginPath();
           ctx.arc(px, py, sz, 0, Math.PI * 2);
