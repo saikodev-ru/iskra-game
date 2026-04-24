@@ -318,7 +318,7 @@ export default class ThreeScene {
           if (uCrtIntensity > 0.01) {
             vec2 d = uv - 0.5;
             float r2 = dot(d, d);
-            float barrel = 1.0 + uCrtIntensity * 0.18 * r2;
+            float barrel = 1.0 + uCrtIntensity * 0.35 * r2;
             uv = 0.5 + d * barrel;
           }
 
@@ -613,7 +613,7 @@ export default class ThreeScene {
           if (uCrtIntensity > 0.01) {
             vec2 d = uv - 0.5;
             float r2 = dot(d, d);
-            float barrel = 1.0 + uCrtIntensity * 0.18 * r2;
+            float barrel = 1.0 + uCrtIntensity * 0.35 * r2;
             uv = 0.5 + d * barrel;
           }
 

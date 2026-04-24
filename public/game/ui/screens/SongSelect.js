@@ -242,16 +242,16 @@ export default class SongSelect {
       const diffRow = document.createElement('div');
       diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
       diffRow.style.cssText = `
-        display:flex;align-items:center;gap:8px;
-        padding:7px 12px;border-radius:20px;cursor:pointer;
+        display:flex;align-items:center;gap:10px;
+        padding:8px 14px;border-radius:20px;cursor:pointer;
         transition:all 0.15s cubic-bezier(0.4,0,0.2,1);
-        background:${isActive ? 'rgba(170,255,0,0.08)' : 'rgba(0,0,0,0.6)'};
+        background:${isActive ? 'rgba(20,20,20,0.92)' : 'rgba(0,0,0,0.6)'};
         border:2px solid ${isActive ? 'var(--zzz-lime)' : 'transparent'};
-        ${isActive ? 'box-shadow:0 0 12px rgba(170,255,0,0.12),inset 0 0 20px rgba(170,255,0,0.03);' : ''}
+        ${isActive ? 'box-shadow:0 0 14px rgba(170,255,0,0.15),inset 0 0 24px rgba(170,255,0,0.04);' : ''}
       `;
       diffRow.innerHTML = `
-        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
-          <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(diff.version || 'NORMAL')}</span>
+        <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;">
+          <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;flex-shrink:0;">${this._escHtml(diff.version || 'NORMAL')}</span>
           ${starSpectrumHtml}
         </div>
         ${recordHtml}
@@ -316,9 +316,9 @@ export default class SongSelect {
   /** Build a 10-star spectrum bar HTML string */
   _buildStarSpectrum(stars, color, large = false) {
     const partial = stars - Math.floor(stars); // e.g. 0.7 for ★3.7
-    const starSize = large ? 16 : 10;
-    const numSize = large ? 14 : 10;
-    const gap = large ? 2 : 1;
+    const starSize = large ? 16 : 8;
+    const numSize = large ? 14 : 9;
+    const gap = large ? 2 : 0;
     let html = `<div class="star-spectrum" style="gap:${gap}px;">`;
     for (let i = 1; i <= 10; i++) {
       if (i <= Math.floor(stars)) {
@@ -463,9 +463,9 @@ export default class SongSelect {
         const c = DifficultyAnalyzer.getStarColor(s);
 
         item.classList.toggle('active', isActive);
-        item.style.background = isActive ? 'rgba(170,255,0,0.08)' : 'rgba(0,0,0,0.6)';
+        item.style.background = isActive ? 'rgba(20,20,20,0.92)' : 'rgba(0,0,0,0.6)';
         item.style.borderColor = isActive ? 'var(--zzz-lime)' : 'transparent';
-        item.style.boxShadow = isActive ? '0 0 12px rgba(170,255,0,0.12),inset 0 0 20px rgba(170,255,0,0.03)' : 'none';
+        item.style.boxShadow = isActive ? '0 0 14px rgba(170,255,0,0.15),inset 0 0 24px rgba(170,255,0,0.04)' : 'none';
 
         // Update version name color
         const nameSpan = item.querySelector('span[style*="font-weight:700"]');
