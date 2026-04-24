@@ -331,7 +331,9 @@ export default class NoteRenderer {
     const distFromJudge = (time - currentTime) * this.scrollSpeed;
     if (distFromJudge <= 0) return judgeLineY - distFromJudge; // past judge line — no curve
     const t = Math.min(1, distFromJudge / travelH);
-    const curvedT = Math.pow(t, 1.35); // perspective acceleration toward judge line
+    // Exponent < 1 creates proper perspective: notes accelerate toward judge line
+    // (spend more screen time at top where they're small, rush past near bottom)
+    const curvedT = Math.pow(t, 0.65);
     return judgeLineY - curvedT * travelH;
   }
 
