@@ -22,7 +22,7 @@ export default class GameLoop {
     const delta = Math.min((timestamp - this._last) / 1000, 0.05);
     this._last = timestamp;
     this.update(delta);
-    this.render();
+    this.render(delta);
     this._rAF = requestAnimationFrame(this._tick);
   }
 }

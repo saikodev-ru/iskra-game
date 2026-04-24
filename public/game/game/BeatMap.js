@@ -49,13 +49,16 @@ export default class BeatMap {
   findClosestNote(lane, currentTime, window = 0.25) {
     const laneNotes = this._byLane[lane] || [];
     let closest = null;
-    let closestDelta = Infinity;
+    let closestAbsDelta = Infinity;
+    let closestDelta = 0;
     for (const note of laneNotes) {
       if (note.hit) continue;
-      const delta = Math.abs(note.time - currentTime);
-      if (delta < closestDelta && delta <= window) {
+      const delta = note.time - currentTime; // Signed: positive = hit early, negative = hit late
+      const absDelta = Math.abs(delta);
+      if (absDelta < closestAbsDelta && absDelta <= window) {
         closest = note;
         closestDelta = delta;
+        closestAbsDelta = absDelta;
       }
     }
     return closest ? { note: closest, delta: closestDelta } : null;

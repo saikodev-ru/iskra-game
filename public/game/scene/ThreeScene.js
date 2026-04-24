@@ -969,10 +969,21 @@ export default class ThreeScene {
       if (this._audioEngineRef && this._audioEngineRef.isPlaying) {
         const audioTime = this._audioEngineRef.currentTime;
         const videoTime = this._videoElement.currentTime;
-        const drift = Math.abs(audioTime - videoTime);
-        // Only resync if drift is significant (>0.3s) to avoid stutter
-        if (drift > 0.3) {
+        const drift = audioTime - videoTime;
+        const absDrift = Math.abs(drift);
+
+        if (absDrift > 0.5) {
+          // Large drift: hard seek to correct position
           this._videoElement.currentTime = audioTime;
+          this._videoElement.playbackRate = 1.0;
+        } else if (absDrift > 0.05) {
+          // Moderate drift: gradual correction via playback rate adjustment
+          // Speed up or slow down slightly to re-sync over ~0.5s
+          const rate = drift > 0 ? 1.05 : 0.95;
+          this._videoElement.playbackRate = rate;
+        } else {
+          // In sync: normal playback
+          this._videoElement.playbackRate = 1.0;
         }
         // Ensure playing
         if (this._videoElement.paused) {

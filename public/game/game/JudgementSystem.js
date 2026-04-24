@@ -24,6 +24,7 @@ export default class JudgementSystem {
     this._activeHoldNotes = new Map(); // lane → note
     this._totalJudgements = 0; // total judgement slots (tap=1, hold=2)
     this._judgementsProcessed = 0; // how many judgements have been resolved so far
+    this._missCheckIndex = 0; // pointer for O(n) miss check optimization
   }
 
   reset() {
@@ -32,6 +33,7 @@ export default class JudgementSystem {
     this._activeHoldNotes.clear();
     this._totalJudgements = 0;
     this._judgementsProcessed = 0;
+    this._missCheckIndex = 0;
     for (const note of this.map.notes) {
       note.hit = false;
       note.judgement = null;
@@ -60,6 +62,10 @@ export default class JudgementSystem {
     else if (absDelta <= WINDOWS.bad) judgement = 'bad';
     else return null; // Outside all windows
 
+    // Determine early/late: delta > 0 means player hit BEFORE note time (early)
+    // delta < 0 means player hit AFTER note time (late)
+    const timing = delta > 0.005 ? 'early' : delta < -0.005 ? 'late' : null;
+
     note.hit = true;
     note.judgement = judgement;
     note.hitTime = hitTime;
@@ -70,8 +76,8 @@ export default class JudgementSystem {
       this._activeHoldNotes.set(lane, note);
     }
 
-    EventBus.emit('note:hit', { note, judgement, delta: Math.round(delta * 1000) });
-    return { note, judgement, delta };
+    EventBus.emit('note:hit', { note, judgement, delta: Math.round(delta * 1000), timing });
+    return { note, judgement, delta, timing };
   }
 
   judgeRelease(lane, releaseTime) {
@@ -116,8 +122,15 @@ export default class JudgementSystem {
   }
 
   checkMisses(currentTime) {
-    for (const note of this.map.notes) {
-      if (note.hit && note.judgement === 'miss') continue;
+    // O(n) optimization: use pointer since notes are time-sorted.
+    // We only need to check from _missCheckIndex forward.
+    const notes = this.map.notes;
+
+    while (this._missCheckIndex < notes.length) {
+      const note = notes[this._missCheckIndex];
+
+      // If note is far enough in the future, stop checking
+      if (note.time - currentTime > WINDOWS.bad) break;
 
       // Check if the head was missed
       if (!note.hit) {
@@ -136,7 +149,7 @@ export default class JudgementSystem {
         }
       }
 
-      // Check if a held note's release was missed (key held past end + window)
+      // Check if a held note's release was missed
       if (note.type === 'hold' && note.duration > 0 && note.hit && note.judgement !== 'miss' && !note.released) {
         const holdEnd = note.time + note.duration;
         if (currentTime - holdEnd > WINDOWS.bad) {
@@ -146,6 +159,14 @@ export default class JudgementSystem {
           this._applyJudgement('miss');
           EventBus.emit('note:miss', { note });
         }
+      }
+
+      // Advance pointer if this note is fully resolved (hit + no pending hold release)
+      const isFullyResolved = note.hit && (note.type !== 'hold' || note.duration <= 0 || note.released);
+      if (isFullyResolved) {
+        this._missCheckIndex++;
+      } else {
+        break; // Can't skip past unresolved notes
       }
     }
   }

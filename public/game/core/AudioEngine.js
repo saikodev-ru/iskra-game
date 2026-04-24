@@ -69,12 +69,15 @@ export default class AudioEngine {
 
   pause() {
     if (!this._playing) return;
-    this._pausedAt = this.currentTime;
+    // Save raw audio position WITHOUT offset, so resume doesn't double-count it.
+    // currentTime includes offset, but the audio buffer position should not.
+    this._pausedAt = (this._ctx.currentTime - this._startedAt) + this._playOffset;
     this.stop();
   }
 
   resume() {
     if (this._currentBuffer && this._pausedAt > 0) {
+      // _pausedAt is raw audio position (no offset), so play() sets _playOffset correctly
       this.play(this._currentBuffer, this._pausedAt);
     }
   }
@@ -91,7 +94,7 @@ export default class AudioEngine {
 
   get currentTime() {
     if (!this._ctx) return 0;
-    if (!this._playing) return this._pausedAt;
+    if (!this._playing) return this._pausedAt + this._offset;
     return (this._ctx.currentTime - this._startedAt) + this._playOffset + this._offset;
   }
 
@@ -157,9 +160,17 @@ export default class AudioEngine {
     const schedule = () => {
       if (!this._playing) return;
       const currentBeat = Math.floor(this.currentTime / interval);
-      while (this._beatIndex <= currentBeat) {
+      // Limit burst emission: only emit up to 4 beats per frame to prevent
+      // visual glitch stacks after tab switch
+      let emitted = 0;
+      while (this._beatIndex <= currentBeat && emitted < 4) {
         EventBus.emit('beat:pulse', { bpm, index: this._beatIndex });
         this._beatIndex++;
+        emitted++;
+      }
+      // If we fell behind, skip to current beat instead of queuing all
+      if (this._beatIndex < currentBeat) {
+        this._beatIndex = currentBeat;
       }
       this._beatTimer = requestAnimationFrame(schedule);
     };

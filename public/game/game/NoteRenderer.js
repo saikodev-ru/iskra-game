@@ -147,14 +147,17 @@ export default class NoteRenderer {
     this._drawBlackBars();
   }
 
-  render({ notes, currentTime, laneCount }) {
+  render({ notes, currentTime, laneCount, delta = 0.016 }) {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
 
-    // Smooth HP animation
+    // Store delta for frame-rate independent effects
+    this._frameDelta = delta;
+
+    // Smooth HP animation (frame-rate independent)
     const healthDiff = this._health - this._displayHealth;
     if (Math.abs(healthDiff) > 0.1) {
-      this._displayHealth += healthDiff * 0.12;
+      this._displayHealth += healthDiff * Math.min(1, delta * 7); // ~0.12 at 60fps
     } else {
       this._displayHealth = this._health;
     }
@@ -418,7 +421,9 @@ export default class NoteRenderer {
       ctx.stroke();
 
       ctx.restore();
-      glow.intensity -= glow.decay;
+      // Frame-rate independent decay: normalize to 60fps baseline
+      const delta = this._frameDelta || 0.016;
+      glow.intensity -= glow.decay * (delta / 0.016);
     }
   }
 
@@ -853,9 +858,10 @@ export default class NoteRenderer {
     if (this._graphicsPreset === 'low') return; // no effects on low
     const ctx = this.ctx;
     const gfx = this._gfx();
+    const delta = this._frameDelta || 0.016;
     for (const e of this._effectsPool) {
       if (!e.active) continue;
-      e.age += 0.016;
+      e.age += delta; // Frame-rate independent aging
       const dur = 0.3;
       const p = e.age / dur;
       if (p >= 1) { e.active = false; continue; }

@@ -260,11 +260,11 @@ async function boot() {
     gameLoop = new GameLoop({
       update(delta) {
         if (!gameActive) return;
-        const ct = audio.currentTime; // Game time = audio time (notes are already shifted by LEAD_IN)
+        const ct = audio.currentTime; // Single source of truth: game time = audio time
         // During countdown (after resume), keep rendering but skip judgement processing
         if (_inCountdown) {
           // Only render — don't check misses or update state
-          noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount });
+          noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount, delta });
           three.update(performance.now());
           return;
         }
@@ -290,10 +290,12 @@ async function boot() {
           }
         }
       },
-      render() {
+      render(delta) {
         if (!gameActive) return;
-        const ct = audio.currentTime; // Game time = audio time (notes are already shifted by LEAD_IN)
-        noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount });
+        // Reuse the same time as update — but in practice, rAF calls update then render
+        // in the same tick, so the difference is negligible. We still read fresh for visual accuracy.
+        const ct = audio.currentTime;
+        noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount, delta });
         three.update(performance.now());
       }
     });
