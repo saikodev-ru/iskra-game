@@ -333,18 +333,18 @@ body.zzz-active::before {
 .song-card {
   display: flex; align-items: center; gap: 0;
   border-radius: 24px; overflow: hidden;
-  background: rgba(0,0,0,0.65); border: none; cursor: pointer;
+  background: rgba(0,0,0,0.82); border: none; cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative; height: 64px;
   backdrop-filter: blur(12px);
   max-width: 100%; box-sizing: border-box;
 }
 .song-card:hover {
-  background: rgba(20,20,20,0.9);
+  background: rgba(20,20,20,0.95);
   box-shadow: 0 2px 16px rgba(0,0,0,0.3);
 }
 .song-card.active {
-  background: rgba(10,10,10,0.9);
+  background: rgba(10,10,10,0.95);
   box-shadow: 0 0 16px rgba(0,0,0,0.3), 0 0 8px rgba(170,255,0,0.08);
 }
 
@@ -479,7 +479,7 @@ body.zzz-active::before {
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   border: 2px solid transparent;
 }
-.diff-dropdown-item:hover { background: rgba(30,30,30,0.8) !important; }
+.diff-dropdown-item:hover { background: rgba(30,30,30,0.9) !important; }
 .diff-dropdown-item.active {
   border-color: var(--zzz-lime);
   box-shadow: 0 0 12px rgba(170,255,0,0.12), inset 0 0 20px rgba(170,255,0,0.03);
@@ -518,27 +518,6 @@ body.zzz-active::before {
 /* SONG LIST COLUMN */
 .song-list-column { overflow: hidden; }
 .song-list-column * { max-width: 100%; box-sizing: border-box; }
-/* Right panel gradient — fades to black on the left side */
-.song-list-column::before {
-  content: '';
-  position: absolute;
-  top: -20px; left: -40px; bottom: -20px;
-  width: 60%;
-  background: linear-gradient(90deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.15) 40%, transparent 100%);
-  z-index: -1;
-  pointer-events: none;
-  border-radius: 0 0 0 24px;
-}
-/* Subtle top fade on the list area */
-.song-list-column::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 50px;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.25), transparent);
-  z-index: -1;
-  pointer-events: none;
-}
 
 /* Song list fade — controlled dynamically via JS mask-image */
 
@@ -584,6 +563,30 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 0 8px rgba(170,255,0,0.4); transition: transform 0.15s, box-shadow 0.15s;
 }
 input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-shadow: 0 0 16px rgba(170,255,0,0.6); }
+
+/* NUMBER INPUT — scroll speed */
+.zzz-num-input {
+  -webkit-appearance: none; appearance: none;
+  width: 72px; padding: 8px 10px;
+  background: var(--zzz-graphite); border: 2px solid rgba(255,255,255,0.08);
+  border-radius: 10px; color: var(--zzz-text);
+  font-family: var(--zzz-mono); font-weight: 700; font-size: 14px;
+  text-align: center; outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  -moz-appearance: textfield;
+}
+.zzz-num-input::-webkit-inner-spin-button,
+.zzz-num-input::-webkit-outer-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+.zzz-num-input:focus {
+  border-color: var(--zzz-lime);
+  box-shadow: 0 0 12px rgba(170,255,0,0.15);
+}
+.scroll-speed-control {
+  background: rgba(0,0,0,0.3); border-radius: 12px; padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.04);
+}
 
 /* ── RESULT SCREEN ────────────────────────────────── */
 @keyframes result-fade-up {

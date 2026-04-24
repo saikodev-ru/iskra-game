@@ -72,7 +72,9 @@ export default class SongSelect {
 
         <!-- Right column: back + search + list -->
         <div id="ss-right-column" class="parallax-layer" data-parallax="2" style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:16px 24px 0 0;z-index:2;position:relative;">
-          <div class="song-list-column" style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden;position:relative;">
+          <!-- Gradient behind the entire right column — fades to black going right -->
+          <div style="position:absolute;top:-40px;left:-80px;right:0;bottom:-40px;background:linear-gradient(90deg,transparent 0%,rgba(0,0,0,0.25) 30%,rgba(0,0,0,0.6) 70%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:-1;"></div>
+          <div class="song-list-column" style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden;">
             <!-- Top bar -->
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
               <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
@@ -368,7 +370,7 @@ export default class SongSelect {
         display:flex;align-items:center;gap:10px;
         padding:8px 14px;border-radius:20px;cursor:pointer;
         transition:all 0.15s cubic-bezier(0.4,0,0.2,1);
-        background:${isActive ? 'rgba(20,20,20,0.92)' : 'rgba(0,0,0,0.6)'};
+        background:${isActive ? 'rgba(20,20,20,0.95)' : 'rgba(0,0,0,0.75)'};
         border:2px solid ${isActive ? 'var(--zzz-lime)' : 'transparent'};
         ${isActive ? 'box-shadow:0 0 14px rgba(170,255,0,0.15),inset 0 0 24px rgba(170,255,0,0.04);' : ''}
       `;
@@ -385,10 +387,10 @@ export default class SongSelect {
         this._selectDifficulty(diffIdx);
       });
       diffRow.addEventListener('mouseenter', () => {
-        if (!diffRow.classList.contains('active')) diffRow.style.background = 'rgba(30,30,30,0.8)';
+        if (!diffRow.classList.contains('active')) diffRow.style.background = 'rgba(30,30,30,0.9)';
       });
       diffRow.addEventListener('mouseleave', () => {
-        if (!diffRow.classList.contains('active')) diffRow.style.background = 'rgba(0,0,0,0.6)';
+        if (!diffRow.classList.contains('active')) diffRow.style.background = 'rgba(0,0,0,0.75)';
       });
 
       diffList.appendChild(diffRow);
@@ -692,7 +694,7 @@ export default class SongSelect {
         const c = DifficultyAnalyzer.getStarColor(s);
 
         item.classList.toggle('active', isActive);
-        item.style.background = isActive ? 'rgba(20,20,20,0.92)' : 'rgba(0,0,0,0.6)';
+        item.style.background = isActive ? 'rgba(20,20,20,0.95)' : 'rgba(0,0,0,0.75)';
         item.style.borderColor = isActive ? 'var(--zzz-lime)' : 'transparent';
         item.style.boxShadow = isActive ? '0 0 14px rgba(170,255,0,0.15),inset 0 0 24px rgba(170,255,0,0.04)' : 'none';
 

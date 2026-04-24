@@ -9,6 +9,7 @@ export default class Settings {
     this._keyHandler = null;
     this._rebinding = null;
     this._resizeObserver = null;
+    this._onClose = null; // Set by caller for pause-specific cleanup
   }
 
   build() {
@@ -37,6 +38,7 @@ export default class Settings {
       { id: 'standard', label: 'STANDARD', desc: 'Moderate effects' },
       { id: 'disco', label: 'DISCO', desc: 'Full effects' },
     ];
+    const scrollSpeed = parseInt(localStorage.getItem('rhythm-os-scroll-speed') || '400');
     return `
       <div style="margin-bottom:20px;">
         <div class="zzz-label" style="margin-bottom:8px;">GRAPHICS</div>
@@ -60,9 +62,15 @@ export default class Settings {
       </div>
       <div style="margin-bottom:20px;">
         <div class="zzz-label" style="margin-bottom:8px;">SCROLL SPEED</div>
-        <div style="display:flex;gap:10px;align-items:center;">
-          <input type="range" id="settings-scroll" min="200" max="800" value="${this._getSavedScrollSpeed()}" step="50" style="flex:1;" />
-          <span id="settings-scroll-val" class="zzz-value" style="min-width:50px;text-align:center;">${this._getSavedScrollSpeed()}</span>
+        <div class="scroll-speed-control">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="number" id="settings-scroll-input" class="zzz-num-input" min="50" max="2000" step="25" value="${scrollSpeed}" />
+            <input type="range" id="settings-scroll" min="50" max="2000" value="${scrollSpeed}" step="25" style="flex:1;" />
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;">
+            <span style="font-size:9px;color:var(--zzz-muted);font-family:var(--zzz-mono);">50</span>
+            <span style="font-size:9px;color:var(--zzz-muted);font-family:var(--zzz-mono);">2000</span>
+          </div>
         </div>
       </div>
       <div style="margin-bottom:20px;">
@@ -90,8 +98,24 @@ export default class Settings {
     if (oi) oi.addEventListener('input', () => { const v = parseInt(oi.value); ov.textContent = v; localStorage.setItem('rhythm-os-audio-offset', v.toString()); if (this.audio) this.audio.setOffset(v / 1000); });
     const vi = document.getElementById('settings-volume'), vv = document.getElementById('settings-volume-val');
     if (vi) vi.addEventListener('input', () => { const v = parseInt(vi.value); vv.textContent = v + '%'; localStorage.setItem('rhythm-os-volume', v.toString()); if (this.audio) this.audio.setVolume(v / 100); });
+
+    // Scroll speed — synced number input + slider
     const si = document.getElementById('settings-scroll'), sv = document.getElementById('settings-scroll-val');
-    if (si) si.addEventListener('input', () => { const v = parseInt(si.value); sv.textContent = v; localStorage.setItem('rhythm-os-scroll-speed', v.toString()); EventBus.emit('settings:changed', { key: 'scrollSpeed', value: v }); });
+    const si2 = document.getElementById('settings-scroll-input');
+    const applyScrollSpeed = (v) => {
+      v = Math.max(50, Math.min(2000, v || 400));
+      localStorage.setItem('rhythm-os-scroll-speed', v.toString());
+      EventBus.emit('settings:changed', { key: 'scrollSpeed', value: v });
+      if (si) si.value = v;
+      if (si2) si2.value = v;
+    };
+    if (si) si.addEventListener('input', () => applyScrollSpeed(parseInt(si.value)));
+    if (si2) {
+      si2.addEventListener('input', () => applyScrollSpeed(parseInt(si2.value)));
+      si2.addEventListener('blur', () => { const v = Math.max(50, Math.min(2000, parseInt(si2.value) || 400)); si2.value = v; applyScrollSpeed(v); });
+      si2.addEventListener('keydown', (e) => { if (e.code === 'Enter') { e.preventDefault(); si2.blur(); } });
+    }
+
     const ri = document.getElementById('settings-res-scale'), rv = document.getElementById('settings-res-scale-val');
     if (ri) ri.addEventListener('input', () => { const v = parseInt(ri.value); rv.textContent = v + '%'; localStorage.setItem('rhythm-os-res-scale', v.toString()); EventBus.emit('settings:changed', { key: 'resScale', value: v }); });
 
@@ -123,8 +147,6 @@ export default class Settings {
     if (closeBtn) closeBtn.addEventListener('click', () => this._closeOverlay());
     if (overlayBg) overlayBg.addEventListener('click', () => this._closeOverlay());
 
-
-
     // Watch for safe area changes and adjust panel width
     this._settingsChangedHandler = ({ key }) => {
       if (key === 'aspectRatio') {
@@ -152,7 +174,6 @@ export default class Settings {
     const panel = document.getElementById('settings-panel') || document.getElementById('pause-settings-inner');
     if (!panel) return;
 
-    // Get current safe area
     const sa = this._calcSafeArea();
     const maxWidth = Math.min(380, sa.w * 0.7);
     const minWidth = Math.min(240, sa.w * 0.5);
@@ -184,9 +205,16 @@ export default class Settings {
   }
 
   _closeOverlay() {
-    if (this.screens) {
-      EventBus.emit('settings:close-overlay');
-      if (this.screens._closeOverlay) this.screens._closeOverlay();
+    // If caller provided a close callback (pause context), call it first
+    if (this._onClose) {
+      const cb = this._onClose;
+      this._onClose = null;
+      cb();
+      return; // Callback handles everything including DOM cleanup
+    }
+    // Default: just close via screen manager (main menu context)
+    if (this.screens && this.screens._closeOverlay) {
+      this.screens._closeOverlay();
     }
   }
 
@@ -194,10 +222,8 @@ export default class Settings {
     const c = document.getElementById('keybinds'); if (!c) return;
     const km = this.input ? this.input.getKeyMap() : { KeyD: 0, KeyF: 1, KeyJ: 2, KeyK: 3 };
     const labels = ['Lane 1', 'Lane 2', 'Lane 3', 'Lane 4'];
-    // Always show 4 lanes for a 4-key game
     const laneCount = 4;
     c.innerHTML = '';
-    // Build a reverse map: lane → key code
     const laneToKey = {};
     for (const [code, lane] of Object.entries(km)) {
       if (lane >= 0 && lane < laneCount) {
@@ -225,22 +251,16 @@ export default class Settings {
     const targetLane = this._rebinding.lane;
     const km = this.input ? this.input.getKeyMap() : {};
 
-    // Step 1: Remove the new key from ANY lane it's currently bound to
-    // This prevents the same key being bound to multiple lanes
     delete km[code];
 
-    // Step 2: Remove ALL keys currently bound to the target lane
-    // This prevents multiple keys bound to the same lane
     const keysToRemove = [];
     for (const [k, v] of Object.entries(km)) {
       if (v === targetLane) keysToRemove.push(k);
     }
     for (const k of keysToRemove) delete km[k];
 
-    // Step 3: Assign the new key to the target lane
     km[code] = targetLane;
 
-    // Step 4: Persist the new keymap
     if (this.input) this.input.setKeyMap(4, km);
 
     this._rebinding = null;

@@ -436,3 +436,70 @@ Stage Summary:
 - Song select screen now has stronger vignette for depth
 - Right song list panel has a subtle gradient background transitioning to black
 - Top-left song info area has a proper dark backdrop for readability
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix aspect ratio breaking when settings menu closes
+
+Work Log:
+- Root cause: `settings:close-overlay` event was handled globally and called `_closePauseSettings()` even when settings was opened from main menu
+- Refactored Settings class to use `_onClose` callback pattern instead of global EventBus for close
+- Pause settings: `_onClose = _closePauseSettings` — close calls callback which handles pause-specific cleanup
+- Main menu settings: no `_onClose` — close calls `screens._closeOverlay()` directly
+- Removed global `EventBus.on('settings:close-overlay')` handler
+- Updated pause settings button handlers to delegate to `settings._closeOverlay()`
+- Updated ESC key handler to call `_pauseSettingsInstance._closeOverlay()`
+
+Stage Summary:
+- Settings close no longer leaks pause-specific logic into main menu context
+- Aspect ratio remains stable when closing settings from any context
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Make scroll speed apply immediately from pause menu
+
+Work Log:
+- Added `scrollSpeed` case to `EventBus.on('settings:changed')` handler in main.js
+- Handler sets `noteRenderer.scrollSpeed = value` immediately on change
+- No restart needed — speed changes take effect in real-time
+
+Stage Summary:
+- Scroll speed now applies instantly when changed in pause settings or main menu settings
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Redesign scroll speed with numeric input (osu!mania style)
+
+Work Log:
+- Replaced single range slider with synced number input + range slider combo
+- Range expanded from 200-800 to 50-2000 (step 25)
+- Number input (`zzz-num-input`) allows typing exact values, validated on blur
+- Both inputs stay synced — changing one updates the other
+- Added CSS for number input (`.zzz-num-input`) with lime focus glow
+- Added `.scroll-speed-control` wrapper with subtle background
+
+Stage Summary:
+- Scroll speed can now be set precisely by typing numbers (range: 50-2000)
+- Slider and input stay synchronized
+- Wider range supports both slow and fast play styles
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Song select visual improvements — less transparent cards, gradient behind list
+
+Work Log:
+- Increased song card background opacity: `rgba(0,0,0,0.65)` → `rgba(0,0,0,0.82)`
+- Increased song card hover/active opacity: `0.9` → `0.95`
+- Increased difficulty dropdown item opacity: `rgba(0,0,0,0.6)` → `rgba(0,0,0,0.75)`
+- Removed old `.song-list-column::before` and `::after` CSS pseudo-elements
+- Added gradient div behind the entire right column (not inside the list)
+- Gradient goes from transparent on the left → 25% opacity → 60% → 85% black on the right edge
+- Positioned with negative offsets to extend beyond column bounds for full coverage
+
+Stage Summary:
+- Song cards and difficulty panels are now more opaque and easier to read
+- Gradient is now properly positioned behind the song list, fading to black across the right side of the screen

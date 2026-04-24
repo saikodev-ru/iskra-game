@@ -145,6 +145,9 @@ async function boot() {
       noteRenderer.setGraphicsPreset(value);
       three.setGraphicsPreset(value);
       if (!gameActive) noteRenderer.clear();
+    } else if (key === 'scrollSpeed') {
+      // Apply scroll speed immediately (works mid-game from pause settings)
+      noteRenderer.scrollSpeed = value;
     }
   });
 
@@ -458,6 +461,8 @@ async function boot() {
 
     // Build settings into the panel
     const settings = new Settings({ audio, input, screens, overlayMode: true });
+    // Set close callback so Settings._closeOverlay knows to use pause cleanup
+    settings._onClose = _closePauseSettings;
     const inner = document.getElementById('pause-settings-inner');
     inner.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
@@ -475,8 +480,11 @@ async function boot() {
     settings.init();
     _pauseSettingsInstance = settings;
 
-    document.getElementById('pause-settings-close').addEventListener('click', _closePauseSettings);
-    document.getElementById('pause-settings-bg').addEventListener('click', _closePauseSettings);
+    // Close handlers — delegate to Settings._closeOverlay which uses _onClose callback
+    const closeBtn = document.getElementById('pause-settings-close');
+    const bgBtn = document.getElementById('pause-settings-bg');
+    if (closeBtn) closeBtn.addEventListener('click', () => settings._closeOverlay());
+    if (bgBtn) bgBtn.addEventListener('click', () => settings._closeOverlay());
   };
 
   const _closePauseSettings = () => {
@@ -488,10 +496,9 @@ async function boot() {
     updateSafeArea();
   };
 
-  EventBus.on('settings:close-overlay', () => { _closePauseSettings(); });
-
   EventBus.on('settings:open-overlay', () => {
     const settings = new Settings({ audio, input, screens, overlayMode: true });
+    // No _onClose — Settings._closeOverlay will use screens._closeOverlay (main menu context)
     screens._showOverlay(settings);
   });
 
@@ -549,7 +556,7 @@ async function boot() {
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape') {
       e.preventDefault();
-      if (_pauseSettingsInstance) { _closePauseSettings(); return; }
+      if (_pauseSettingsInstance) { _pauseSettingsInstance._closeOverlay(); return; }
       if (_pauseOverlay) { _closePause(); resumeGame(); return; }
       if (_inCountdown) {
         // During countdown after resume — re-pause
