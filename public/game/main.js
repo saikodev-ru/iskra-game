@@ -56,7 +56,6 @@ async function boot() {
   if (window.__rhythmOsBooted) {
     console.warn('[RHYTHM::OS] Previous instance detected, cleaning up...');
     try {
-      // Dispose any old ThreeScene instances to free WebGL contexts
       if (window.__threeSceneInstances) {
         for (const inst of window.__threeSceneInstances) {
           try { inst.dispose(); } catch (_) {}
@@ -79,6 +78,9 @@ async function boot() {
   const threeCanvas = document.getElementById('three');
   const three = new ThreeScene(threeCanvas);
 
+  // Connect audio engine to ThreeScene for reactive glow
+  three.setAudioEngine(audio);
+
   // Apply saved aspect ratio to 3D scene
   const savedAR = localStorage.getItem('rhythm-os-aspect-ratio') || '16:9';
   const savedResScale = parseInt(localStorage.getItem('rhythm-os-res-scale') || '100') / 100;
@@ -99,7 +101,6 @@ async function boot() {
   // Apply initial safe area to all containers
   const initialSA = calcSafeArea();
   noteRenderer.setSafeArea(initialSA.x, initialSA.y, initialSA.w, initialSA.h);
-  // Apply safe area to all overlay containers for aspect ratio clipping
   const applySafeAreaToContainers = (sa) => {
     screenContainer.style.left = sa.x + 'px';
     screenContainer.style.top = sa.y + 'px';
@@ -190,7 +191,6 @@ async function boot() {
       const pos = noteRenderer.getLaneHitPosition(lane, currentBeatMap.laneCount);
       const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };
       noteRenderer.addEffect(pos.x, pos.y, effectColors[result.judgement] || '#AAFF00', result.judgement);
-      noteRenderer.flashLane(lane);
 
       if (hitSounds) { if (result.judgement === 'perfect') hitSounds.perfect(); else if (result.judgement !== 'miss') hitSounds.hit(); }
 
@@ -224,19 +224,14 @@ async function boot() {
     input.enable();
     gameActive = true;
 
-    // Play audio and RESTORE volume (was faded to 0 by preview stop)
+    // Play audio
     if (map.audioBuffer) {
       audio.play(map.audioBuffer);
-      // Restore volume to saved setting
       const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
       audio.fadeTo(vol, 0.1);
     }
 
     audio.startBeatScheduler(currentBeatMap.metadata.bpm);
-
-    // Forward beat pulses to NoteRenderer for sound-reactive field
-    const beatHandler = () => { noteRenderer.beatPulse(); };
-    EventBus.on('beat:pulse', beatHandler);
 
     let health = 100;
     gameLoop = new GameLoop({
@@ -272,7 +267,6 @@ async function boot() {
       EventBus.off('input:release', releaseHandler);
       EventBus.off('note:miss', missHandler);
       EventBus.off('combo:break', comboBreakHandler);
-      EventBus.off('beat:pulse', beatHandler);
     };
   };
 
@@ -285,6 +279,9 @@ async function boot() {
     hud.hide();
     noteRenderer.clearBackground();
     noteRenderer.clear(); // Clear the game canvas completely
+    // Also explicitly hide the game canvas content
+    const gameCtx = gameCanvas.getContext('2d');
+    if (gameCtx) gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
     EventBus.emit('game:over', stats);
@@ -309,7 +306,6 @@ async function boot() {
   const resumeGame = () => {
     gameActive = true;
     audio.resume();
-    // Restore volume on resume too
     const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
     audio.fadeTo(vol, 0.1);
     if (gameLoop) gameLoop.start();

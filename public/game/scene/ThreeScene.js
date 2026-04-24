@@ -11,7 +11,8 @@ export default class ThreeScene {
   constructor(canvas) {
     this.canvas = canvas;
     this._beatIntensity = 0;
-    this._bloomTarget = 0.5;
+    this._bloomBase = 0.4;
+    this._bloomTarget = 0.4;
     this._shakeFrames = [];
     this._tvGroup = null;
     this._tvScreen = null;
@@ -25,13 +26,24 @@ export default class ThreeScene {
     this._disposed = false;
     this._contextLost = false;
     this._resizeHandler = null;
+    // Audio levels for reactive glow
+    this._audioLevels = { intensity: 0, bass: 0, mid: 0, high: 0 };
+    this._audioEngine = null;
+    // Camera animation state
+    this._baseFOV = 70;
+    this._fovPulse = 0;
+    this._glowHue = 0; // animated hue shift
 
     this._init();
     this._setupListeners();
   }
 
+  /** Set the audio engine reference for reactive analysis */
+  setAudioEngine(audioEngine) {
+    this._audioEngine = audioEngine;
+  }
+
   _init() {
-    // Dispose any previous instances to free WebGL contexts
     this._disposePreviousInstances();
 
     this.renderer = new THREE.WebGLRenderer({
@@ -44,22 +56,20 @@ export default class ThreeScene {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
+    this.renderer.setClearColor(0x000000, 1);
 
-    // Handle context loss
     this.canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       this._contextLost = true;
-      console.warn('[ThreeScene] WebGL context lost');
     });
     this.canvas.addEventListener('webglcontextrestored', () => {
       this._contextLost = false;
-      console.log('[ThreeScene] WebGL context restored');
       this._rebuildScene();
     });
 
     this.scene = new THREE.Scene();
 
-    this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(this._baseFOV, window.innerWidth / window.innerHeight, 0.1, 100);
     this.camera.position.set(0, 0, 5);
 
     // Lighting
@@ -73,19 +83,23 @@ export default class ThreeScene {
     this._accentLight.position.set(3, -2, 3);
     this.scene.add(this._accentLight);
 
+    // Secondary glow light for bass reactivity
+    this._bassLight = new THREE.PointLight(0xAAFF00, 0, 20);
+    this._bassLight.position.set(0, 1, 6);
+    this.scene.add(this._bassLight);
+
     this._createBackground();
     this._createParticles();
 
     // Post-processing
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.3, 0.4);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.4, 0.5);
     this.composer.addPass(this.bloomPass);
 
     this._resizeHandler = () => this.resize();
     window.addEventListener('resize', this._resizeHandler);
 
-    // Register this instance
     window.__threeSceneInstances.push(this);
   }
 
@@ -99,7 +113,6 @@ export default class ThreeScene {
 
   _rebuildScene() {
     if (this._disposed) return;
-    // Re-initialize renderer state after context restore
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.composer.setSize(window.innerWidth, window.innerHeight);
   }
@@ -112,22 +125,43 @@ export default class ThreeScene {
     const fragmentShader = `
       uniform float uTime;
       uniform float uBeatIntensity;
+      uniform float uBassIntensity;
+      uniform float uAudioIntensity;
       varying vec2 vUv;
       void main() {
         vec2 uv = vUv;
         float pulse = uBeatIntensity * 0.3;
-        vec3 baseColor = vec3(0.03, 0.03, 0.05);
+        float bassPulse = uBassIntensity * 0.4;
+
+        // Base dark color
+        vec3 baseColor = vec3(0.02, 0.02, 0.04);
         float vig = distance(vUv, vec2(0.5));
         baseColor *= smoothstep(0.9, 0.3, vig);
+
+        // Beat-reactive green glow from center
         vec3 beatColor = vec3(0.4, 0.7, 0.0) * pulse * smoothstep(0.7, 0.0, vig);
+
+        // Bass-reactive deep glow
+        vec3 bassColor = vec3(0.15, 0.3, 0.0) * bassPulse * smoothstep(0.8, 0.0, vig);
+
+        // Subtle shimmer
         float shimmer = fract(sin(dot(uv * 100.0 + uTime * 0.1, vec2(12.9898, 78.233))) * 43758.5453);
-        baseColor += vec3(0.01) * shimmer;
-        vec3 color = baseColor + beatColor;
+        baseColor += vec3(0.008) * shimmer;
+
+        // Audio-reactive overall brightness
+        float audioBright = uAudioIntensity * 0.05 * smoothstep(0.6, 0.0, vig);
+
+        vec3 color = baseColor + beatColor + bassColor + vec3(audioBright);
         gl_FragColor = vec4(color, 1.0);
       }
     `;
     this._bgMaterial = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uBeatIntensity: { value: 0 } },
+      uniforms: {
+        uTime: { value: 0 },
+        uBeatIntensity: { value: 0 },
+        uBassIntensity: { value: 0 },
+        uAudioIntensity: { value: 0 },
+      },
       vertexShader, fragmentShader, side: THREE.DoubleSide
     });
     const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(30, 20), this._bgMaterial);
@@ -157,23 +191,43 @@ export default class ThreeScene {
     EventBus.on('note:hit', ({ judgement }) => {
       if (this._disposed) return;
       if (judgement === 'perfect') {
-        this._bloomTarget = 1.2;
-        setTimeout(() => this._bloomTarget = 0.5, 200);
-        this.pointLight.intensity = 4;
-        setTimeout(() => { this.pointLight.intensity = 1.5; }, 200);
+        this._bloomTarget = 1.4;
+        this._fovPulse = 2.5;
+        this.pointLight.intensity = 5;
+        this._bassLight.intensity = 3;
+        this._bassLight.color.set(0xAAFF00);
       } else if (judgement === 'great') {
-        this._bloomTarget = 0.9;
-        setTimeout(() => this._bloomTarget = 0.5, 150);
-        this.pointLight.intensity = 3;
-        setTimeout(() => { this.pointLight.intensity = 1.5; }, 150);
+        this._bloomTarget = 1.0;
+        this._fovPulse = 1.5;
+        this.pointLight.intensity = 3.5;
+        this._bassLight.intensity = 2;
+        this._bassLight.color.set(0x88DD00);
+      } else if (judgement === 'good') {
+        this._bloomTarget = 0.7;
+        this._fovPulse = 0.8;
+        this.pointLight.intensity = 2.5;
+        this._bassLight.intensity = 1;
+        this._bassLight.color.set(0x669900);
       } else if (judgement === 'bad') {
         this.pointLight.color.set(0xFF3D3D);
         this.pointLight.intensity = 1.5;
-        setTimeout(() => { this.pointLight.color.set(0xAAFF00); this.pointLight.intensity = 1.5; }, 100);
+        this._bassLight.intensity = 0;
       }
     });
-    EventBus.on('note:miss', () => { if (!this._disposed) this._shakeFrames = [4, -4, 2, -2, 0]; });
-    EventBus.on('beat:pulse', () => { if (!this._disposed) this._beatIntensity = 0.5; });
+    EventBus.on('note:miss', () => {
+      if (!this._disposed) {
+        this._shakeFrames = [4, -4, 2, -2, 0];
+        this.pointLight.color.set(0xFF3D3D);
+        this.pointLight.intensity = 2;
+        this._bloomTarget = 0.3;
+      }
+    });
+    EventBus.on('beat:pulse', () => {
+      if (!this._disposed) {
+        this._beatIntensity = 0.5;
+        this._fovPulse = Math.max(this._fovPulse, 0.8);
+      }
+    });
   }
 
   createTVMonitor() {
@@ -264,33 +318,90 @@ export default class ThreeScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
-    // Set clear color to black so areas not covered by 3D scene are black
     this.renderer.setClearColor(0x000000, 1);
   }
 
   update(time) {
     if (this._disposed || this._contextLost) return;
 
+    // Get audio levels for reactive effects
+    if (this._audioEngine) {
+      this._audioLevels = this._audioEngine.getAudioLevels();
+    }
+
+    const levels = this._audioLevels;
+    const bassPulse = levels.bass;
+    const audioPulse = levels.intensity;
+
+    // ── Background shader ──
     if (this._bgMaterial) {
       this._bgMaterial.uniforms.uTime.value = time * 0.001;
       this._bgMaterial.uniforms.uBeatIntensity.value = this._beatIntensity;
-      this._beatIntensity *= 0.9;
+      this._bgMaterial.uniforms.uBassIntensity.value = bassPulse;
+      this._bgMaterial.uniforms.uAudioIntensity.value = audioPulse;
+      this._beatIntensity *= 0.88;
     }
 
+    // ── Particles — audio-reactive ──
     if (this._particles) {
       const pos = this._particles.geometry.attributes.position.array;
+      const drift = 0.001 + bassPulse * 0.004;
       for (let i = 0; i < pos.length; i += 3) {
-        pos[i + 1] += Math.sin(time * 0.0003 + i) * 0.002;
-        pos[i] += Math.cos(time * 0.0002 + i * 0.5) * 0.001;
+        pos[i + 1] += Math.sin(time * 0.0003 + i) * drift;
+        pos[i] += Math.cos(time * 0.0002 + i * 0.5) * drift * 0.5;
       }
       this._particles.geometry.attributes.position.needsUpdate = true;
-      this._particles.material.opacity = 0.15 + this._beatIntensity * 0.2;
+      this._particles.material.opacity = 0.15 + bassPulse * 0.35 + this._beatIntensity * 0.2;
+      // Subtle size pulse on bass
+      this._particles.material.size = 0.04 + bassPulse * 0.03;
     }
 
-    this.bloomPass.strength += (this._bloomTarget - this.bloomPass.strength) * 0.15;
-    if (this._shakeFrames.length > 0) this.camera.position.x = this._shakeFrames.shift();
-    else this.camera.position.x *= 0.8;
+    // ── Camera FOV pulse — reactive to beats + audio ──
+    if (this._fovPulse > 0.01) {
+      this.camera.fov = this._baseFOV + this._fovPulse;
+      this.camera.updateProjectionMatrix();
+      this._fovPulse *= 0.88; // decay
+    } else {
+      // Subtle continuous bass-reactive FOV
+      const targetFOV = this._baseFOV + bassPulse * 1.5;
+      this.camera.fov += (targetFOV - this.camera.fov) * 0.1;
+      this.camera.updateProjectionMatrix();
+      this._fovPulse = 0;
+    }
 
+    // ── Bloom — reactive to audio + hits ──
+    // Audio-driven base bloom
+    const audioBloom = this._bloomBase + audioPulse * 0.3 + bassPulse * 0.4;
+    this._bloomTarget = Math.max(this._bloomTarget, audioBloom);
+    this.bloomPass.strength += (this._bloomTarget - this.bloomPass.strength) * 0.12;
+    // Decay bloom target back to base
+    this._bloomTarget += (this._bloomBase - this._bloomTarget) * 0.06;
+
+    // ── Point light — reactive glow ──
+    // Return light color and intensity to baseline
+    const targetIntensity = 1.5 + bassPulse * 2.0 + audioPulse * 1.0;
+    this.pointLight.intensity += (targetIntensity - this.pointLight.intensity) * 0.1;
+    // Return color to lime green gradually
+    if (this.pointLight.color.r > 0.67 || this.pointLight.color.b > 0.1) {
+      this.pointLight.color.lerp(new THREE.Color(0xAAFF00), 0.08);
+    }
+
+    // ── Bass light ──
+    const bassLightTarget = bassPulse * 3.0;
+    this._bassLight.intensity += (bassLightTarget - this._bassLight.intensity) * 0.15;
+    this._bassLight.color.lerp(new THREE.Color(0xAAFF00), 0.05);
+
+    // ── Accent light pulse ──
+    this._accentLight.intensity = 0.4 + audioPulse * 0.8;
+
+    // ── Camera shake ──
+    if (this._shakeFrames.length > 0) {
+      this.camera.position.x = this._shakeFrames.shift();
+    } else {
+      this.camera.position.x *= 0.8;
+    }
+
+    // ── TV animation ──
     if (this._tvGroup && !this._tvSpinAnim) {
       this._tvGroup.rotation.y = 0.25 + Math.sin(time * 0.001 * 0.3 * Math.PI) * 0.03;
     }
@@ -313,29 +424,24 @@ export default class ThreeScene {
     if (this._disposed) return;
     this._disposed = true;
 
-    // Remove resize listener
     if (this._resizeHandler) {
       window.removeEventListener('resize', this._resizeHandler);
       this._resizeHandler = null;
     }
 
-    // Dispose TV
     this.removeTVMonitor();
 
-    // Dispose particles
     if (this._particles) {
       this._particles.geometry.dispose();
       this._particles.material.dispose();
       this._particles = null;
     }
 
-    // Dispose background material
     if (this._bgMaterial) {
       this._bgMaterial.dispose();
       this._bgMaterial = null;
     }
 
-    // Dispose scene objects
     this.scene.traverse((obj) => {
       if (obj.geometry) obj.geometry.dispose();
       if (obj.material) {
@@ -344,21 +450,17 @@ export default class ThreeScene {
       }
     });
 
-    // Dispose composer (frees render targets)
     if (this.composer) {
       this.composer.passes.forEach(p => { if (p.dispose) p.dispose(); });
     }
 
-    // Dispose renderer — THIS frees the WebGL context
     if (this.renderer) {
       this.renderer.dispose();
-      // Force context loss to free GPU resources
       const gl = this.renderer.getContext();
       const ext = gl.getExtension('WEBGL_lose_context');
       if (ext) ext.loseContext();
     }
 
-    // Remove from global registry
     const idx = window.__threeSceneInstances.indexOf(this);
     if (idx >= 0) window.__threeSceneInstances.splice(idx, 1);
   }

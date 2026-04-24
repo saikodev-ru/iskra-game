@@ -55,3 +55,38 @@ Stage Summary:
 - SongSelect redesigned: no left panel, top-left info, difficulty dropdown from song cards
 - All screens have self-managed backgrounds, #screen is now transparent
 - Lint passes clean
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix hold note rendering (drawn below judge line / reverse order), remove flash effects, add reactive camera glow
+
+Work Log:
+- Rewrote NoteRenderer.js _drawHoldNote(): Added judge line clipping — `drawBottomY = Math.min(rawBottomY, judgeLineY)` so the hold body never extends below the judge line. The head cap is also clamped: `headY = Math.min(noteY, judgeLineY)`. This fixes the "long notes drawn below judgement line" issue.
+- Removed _drawLaneFlash() and _beatPulse from NoteRenderer — all flash/pulse effects on the 2D canvas are gone. flashLane() is now a no-op.
+- Cleaned up _drawBackground() — removed beat-dependent brightness and separator opacity. Lanes are now static and clean.
+- Added AnalyserNode to AudioEngine.js — `_analyser` with fftSize=256, connected in the audio graph (gain → analyser → destination). Added `getAudioLevels()` method returning `{ intensity, bass, mid, high }` with smoothed values.
+- Rewrote ThreeScene.js with reactive camera glow:
+  - Added `setAudioEngine()` to receive the audio engine reference
+  - Added `_bassLight` (PointLight) for bass-reactive glow at camera-facing position
+  - Background shader now uses `uBassIntensity` and `uAudioIntensity` uniforms for audio-reactive color
+  - Camera FOV pulses on beats (`_fovPulse`) and subtly follows bass intensity continuously
+  - Bloom strength is audio-reactive: base + audioPulse*0.3 + bassPulse*0.4
+  - Point light intensity follows bass + audio levels
+  - Accent light pulses with audio intensity
+  - Hit feedback: perfect=1.4 bloom + 2.5 FOV pulse, great=1.0 bloom + 1.5 FOV pulse, good=0.7 bloom + 0.8 FOV pulse
+  - Miss: red light + camera shake + reduced bloom
+  - All light colors interpolate back to lime green after color flashes
+  - Particles: size pulses with bass, opacity follows bass+beat
+- Updated main.js:
+  - Added `three.setAudioEngine(audio)` to connect audio analysis
+  - Removed `noteRenderer.beatPulse()` forwarding (no longer needed)
+  - Improved endGame() canvas cleanup: explicit clearRect after noteRenderer.clear()
+
+Stage Summary:
+- Hold notes now properly clip at the judge line — body never extends below it
+- All flash/pulse effects removed from the 2D canvas playfield
+- Camera glow is now reactive to audio: bloom, FOV, and light intensity all respond to music
+- Bass frequencies drive the most visible effects (FOV pulse, bloom, bass light)
+- Hit feedback moved entirely to the 3D scene (bloom spikes, FOV pulses, light color changes)
+- Lint passes clean
