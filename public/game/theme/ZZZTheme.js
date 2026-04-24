@@ -29,13 +29,11 @@ body.zzz-active::after {
   pointer-events: none;
 }
 
-/* VIGNETTE — ZZZ stylized */
+/* VIGNETTE — pure black */
 body.zzz-active::before {
   content: '';
   position: fixed; inset: 0; z-index: 9998;
-  background:
-    radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 85%, rgba(0,0,0,0.8) 100%),
-    radial-gradient(ellipse at center, transparent 65%, rgba(170,255,0,0.03) 100%);
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.5) 100%);
   pointer-events: none;
 }
 
@@ -51,9 +49,7 @@ body.zzz-active::before {
 .crt-overlay::before {
   content: '';
   position: absolute; inset: 0;
-  background:
-    radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.6) 80%, rgba(0,0,0,0.85) 100%),
-    radial-gradient(ellipse at center, transparent 60%, rgba(170,255,0,0.025) 100%);
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%);
 }
 .crt-overlay::after {
   content: '';
