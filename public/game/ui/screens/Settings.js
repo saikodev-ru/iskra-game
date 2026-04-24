@@ -43,7 +43,19 @@ export default class Settings {
   }
 
   _buildSettingsContent(aspectRatios, savedAspect, savedResScale) {
+    const savedGraphics = localStorage.getItem('rhythm-os-graphics') || 'disco';
+    const graphicsPresets = [
+      { id: 'low', label: 'LOW', desc: 'No effects, no glow' },
+      { id: 'standard', label: 'STANDARD', desc: 'Moderate effects' },
+      { id: 'disco', label: 'DISCO', desc: 'Full effects' },
+    ];
     return `
+      <div style="margin-bottom:20px;">
+        <div class="zzz-label" style="margin-bottom:8px;">GRAPHICS</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="graphics-btns">
+          ${graphicsPresets.map(p => `<button class="zzz-btn zzz-btn--sm ${p.id === savedGraphics ? 'zzz-btn--primary' : ''}" data-graphics="${p.id}" style="flex:1;min-width:70px;font-size:11px;padding:6px 8px;flex-direction:column;line-height:1.3;"><span style="font-weight:700;">${p.label}</span><br><span style="font-size:9px;opacity:0.6;">${p.desc}</span></button>`).join('')}
+        </div>
+      </div>
       <div style="margin-bottom:20px;">
         <div class="zzz-label" style="margin-bottom:8px;">AUDIO OFFSET (ms)</div>
         <div style="display:flex;gap:10px;align-items:center;">
@@ -102,6 +114,16 @@ export default class Settings {
         document.querySelectorAll('[data-aspect]').forEach(b => b.classList.remove('zzz-btn--primary'));
         e.currentTarget.classList.add('zzz-btn--primary');
         EventBus.emit('settings:changed', { key: 'aspectRatio', value: ar });
+      });
+    });
+
+    document.querySelectorAll('[data-graphics]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const preset = e.currentTarget.dataset.graphics;
+        localStorage.setItem('rhythm-os-graphics', preset);
+        document.querySelectorAll('[data-graphics]').forEach(b => b.classList.remove('zzz-btn--primary'));
+        e.currentTarget.classList.add('zzz-btn--primary');
+        EventBus.emit('settings:changed', { key: 'graphics', value: preset });
       });
     });
 

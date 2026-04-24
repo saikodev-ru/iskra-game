@@ -25,6 +25,7 @@ export default class NoteRenderer {
     this._health = 100;
     this._laneGlows = new Map();
     this._holdNoteDebugLogged = false;
+    this._graphicsPreset = 'disco'; // 'low' | 'standard' | 'disco'
     this.resize();
   }
 
@@ -37,6 +38,17 @@ export default class NoteRenderer {
 
   setResScale(scale) {
     this._resScale = Math.max(0.25, Math.min(2.0, scale));
+  }
+
+  setGraphicsPreset(preset) {
+    this._graphicsPreset = preset;
+  }
+
+  /** Returns a multiplier for shadow/glow effects based on preset */
+  _gfx() {
+    if (this._graphicsPreset === 'low') return 0;
+    if (this._graphicsPreset === 'standard') return 0.5;
+    return 1; // disco
   }
 
   setHealth(pct) {
@@ -58,6 +70,7 @@ export default class NoteRenderer {
   }
 
   addEffect(x, y, color, type = 'ring') {
+    if (this._graphicsPreset === 'low') return; // no effects on low
     const effect = this._effectsPool[this._effectIndex % 48];
     effect.active = true;
     effect.x = x; effect.y = y;
@@ -77,6 +90,7 @@ export default class NoteRenderer {
   }
 
   addLaneGlow(lane, laneCount, color) {
+    if (this._graphicsPreset === 'low') return; // no lane glow on low
     this._laneGlows.set(lane, {
       color,
       intensity: 1.0,
@@ -212,6 +226,7 @@ export default class NoteRenderer {
   _drawLaneGlows(laneCount) {
     const ctx = this.ctx;
     const judgeLineY = this._getJudgeLineY();
+    const gfx = this._gfx();
 
     for (const [lane, glow] of this._laneGlows) {
       if (glow.intensity <= 0.01) {
@@ -224,22 +239,24 @@ export default class NoteRenderer {
       const hw = geom.width / 2;
 
       // Flash expands outward from center over time
-      const expandProgress = 1 - glow.intensity; // 0→1 as glow fades
-      const halfW = hw * 0.7 * (1 + expandProgress * 0.3); // narrower
-      const barH = 20 + expandProgress * 28; // taller (20-48px)
+      const expandProgress = 1 - glow.intensity;
+      const halfW = hw * 0.7 * (1 + expandProgress * 0.3);
+      const barH = 20 + expandProgress * 28;
 
       ctx.save();
 
-      // ── Outer glow: wide, soft ──
-      const outerGrad = ctx.createRadialGradient(cx, judgeLineY, 0, cx, judgeLineY, halfW * 1.8);
-      outerGrad.addColorStop(0, this._withAlpha(glow.color, 0.5 * glow.intensity));
-      outerGrad.addColorStop(0.4, this._withAlpha(glow.color, 0.2 * glow.intensity));
-      outerGrad.addColorStop(1, 'transparent');
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = outerGrad;
-      ctx.shadowBlur = 40 * glow.intensity;
-      ctx.shadowColor = glow.color;
-      ctx.fillRect(cx - halfW * 1.8, judgeLineY - barH * 2, halfW * 3.6, barH * 4);
+      // ── Outer glow: wide, soft (disco only) ──
+      if (this._graphicsPreset === 'disco') {
+        const outerGrad = ctx.createRadialGradient(cx, judgeLineY, 0, cx, judgeLineY, halfW * 1.8);
+        outerGrad.addColorStop(0, this._withAlpha(glow.color, 0.5 * glow.intensity));
+        outerGrad.addColorStop(0.4, this._withAlpha(glow.color, 0.2 * glow.intensity));
+        outerGrad.addColorStop(1, 'transparent');
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = outerGrad;
+        ctx.shadowBlur = 40 * glow.intensity * gfx;
+        ctx.shadowColor = glow.color;
+        ctx.fillRect(cx - halfW * 1.8, judgeLineY - barH * 2, halfW * 3.6, barH * 4);
+      }
 
       // ── Core bar: bright horizontal flash ──
       const coreGrad = ctx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
@@ -249,14 +266,14 @@ export default class NoteRenderer {
       coreGrad.addColorStop(0.85, glow.color);
       coreGrad.addColorStop(1, 'transparent');
       ctx.globalAlpha = glow.intensity * 0.8;
-      ctx.shadowBlur = 20 * glow.intensity;
+      ctx.shadowBlur = 20 * glow.intensity * gfx;
       ctx.shadowColor = glow.color;
       ctx.fillStyle = coreGrad;
       ctx.fillRect(cx - halfW, judgeLineY - barH / 2, halfW * 2, barH);
 
       // ── White hot center line ──
       ctx.globalAlpha = glow.intensity * 0.9;
-      ctx.shadowBlur = 12 * glow.intensity;
+      ctx.shadowBlur = 12 * glow.intensity * gfx;
       ctx.shadowColor = '#ffffff';
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2 * glow.intensity;
@@ -355,7 +372,7 @@ export default class NoteRenderer {
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur = 14 * scale;
+    ctx.shadowBlur = 14 * scale * this._gfx();
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     this._roundRect(ctx, x, noteY - h / 2, w, h, r);
@@ -416,7 +433,7 @@ export default class NoteRenderer {
     }
 
     // ── Holding glow at judge line ──
-    if (isHolding) {
+    if (isHolding && this._graphicsPreset !== 'low') {
       this._drawHoldGlow(note.lane, judgeLineY, laneCount, color);
     }
   }
@@ -434,6 +451,8 @@ export default class NoteRenderer {
       points.push({ lx: geom.x + pad, rx: geom.x + geom.width - pad, cx: geom.x + geom.width / 2, y });
     }
 
+    const gfx = this._gfx();
+
     ctx.save();
     ctx.globalAlpha = alpha;
 
@@ -445,7 +464,7 @@ export default class NoteRenderer {
     ctx.closePath();
 
     ctx.fillStyle = isHolding ? this._withAlpha(color, 0.30) : this._withAlpha(color, 0.18);
-    ctx.shadowBlur = isHolding ? 20 : 8;
+    ctx.shadowBlur = (isHolding ? 20 : 8) * gfx;
     ctx.shadowColor = color;
     ctx.fill();
 
@@ -457,7 +476,7 @@ export default class NoteRenderer {
     // Center glow line
     ctx.save();
     ctx.globalAlpha = alpha * (isHolding ? 0.4 : 0.2);
-    ctx.shadowBlur = isHolding ? 20 : 12;
+    ctx.shadowBlur = (isHolding ? 20 : 12) * gfx;
     ctx.shadowColor = color;
     ctx.strokeStyle = isHolding ? '#ffffff' : this._withAlpha(color, 0.8);
     ctx.lineWidth = isHolding ? 4 : 2;
@@ -480,7 +499,7 @@ export default class NoteRenderer {
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur = 12 * scale;
+    ctx.shadowBlur = 12 * scale * this._gfx();
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     this._roundRect(ctx, x, y - h / 2, w, h, r);
@@ -505,6 +524,7 @@ export default class NoteRenderer {
     const pad = 4 * scale;
     const x = geom.x + pad;
     const w = geom.width - pad * 2;
+    const gfx = this._gfx();
 
     // Tall vertical glow column while holding
     const columnH = 140 * scale;
@@ -514,14 +534,14 @@ export default class NoteRenderer {
     grad.addColorStop(0.4, this._withAlpha(color, 0.12));
     grad.addColorStop(1, this._withAlpha(color, 0.45));
     ctx.fillStyle = grad;
-    ctx.shadowBlur = 30 * scale;
+    ctx.shadowBlur = 30 * scale * gfx;
     ctx.shadowColor = color;
     ctx.fillRect(x - 3, judgeLineY - columnH, w + 6, columnH);
 
     // Bright bar at judge line
     const barH = 10 * scale;
     ctx.globalAlpha = 0.95;
-    ctx.shadowBlur = 30 * scale;
+    ctx.shadowBlur = 30 * scale * gfx;
     ctx.fillStyle = color;
     ctx.fillRect(x, judgeLineY - barH / 2, w, barH);
 
@@ -540,13 +560,14 @@ export default class NoteRenderer {
     const sa = this.safeArea;
     const judgeLineY = this._getJudgeLineY();
     const health = this._health;
+    const gfx = this._gfx();
 
     // HP bar: 3x wider than before, only bottom half of playfield height
     const barGap = 6;
-    const barWidth = 18; // was 6, now 3x
+    const barWidth = 18;
 
     // Only render in the bottom half of the playfield
-    const barTopY = sa.y + sa.h * 0.46; // center of playfield
+    const barTopY = sa.y + sa.h * 0.46;
     const barBotY = judgeLineY;
 
     const topRightGeom = this._getLaneGeometry(laneCount - 1, barTopY, laneCount);
@@ -602,7 +623,7 @@ export default class NoteRenderer {
       }
 
       ctx.fillStyle = fillColor;
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = 16 * gfx;
       ctx.shadowColor = glowColor;
       ctx.fill();
     }
@@ -629,9 +650,10 @@ export default class NoteRenderer {
     const fullGeom = this._getLaneGeometry(0, judgeLineY, laneCount);
     const startX = fullGeom.x;
     const totalWidth = laneCount * fullGeom.width;
+    const gfx = this._gfx();
 
     ctx.save();
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 20 * gfx;
     ctx.shadowColor = '#AAFF00';
     const grad = ctx.createLinearGradient(startX, judgeLineY, startX + totalWidth, judgeLineY);
     grad.addColorStop(0, 'rgba(170,255,0,0)');
@@ -645,7 +667,7 @@ export default class NoteRenderer {
 
     ctx.save();
     ctx.globalAlpha = 0.25;
-    ctx.shadowBlur = 35;
+    ctx.shadowBlur = 35 * gfx;
     ctx.shadowColor = '#AAFF00';
     ctx.fillStyle = '#AAFF00';
     ctx.fillRect(startX, judgeLineY - 1, totalWidth, 2);
@@ -655,7 +677,9 @@ export default class NoteRenderer {
   /* ── Effects — white, transparent, drawn BEHIND notes ─────────── */
 
   _drawEffects() {
+    if (this._graphicsPreset === 'low') return; // no effects on low
     const ctx = this.ctx;
+    const gfx = this._gfx();
     for (const e of this._effectsPool) {
       if (!e.active) continue;
       e.age += 0.016;
@@ -665,24 +689,24 @@ export default class NoteRenderer {
       e.radius = e.maxRadius * p;
       e.opacity = 1 - p;
 
-      // White ring — more transparent
+      // White ring
       ctx.save();
       ctx.strokeStyle = '#ffffff';
       ctx.globalAlpha = e.opacity * 0.35;
       ctx.lineWidth = 2 * (1 - p);
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 15 * gfx;
       ctx.shadowColor = e.color;
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
-      // Inner flash — white
-      if (p < 0.25) {
+      // Inner flash — white (disco only)
+      if (p < 0.25 && this._graphicsPreset === 'disco') {
         ctx.save();
         ctx.globalAlpha = (0.25 - p) / 0.25 * 0.2;
         ctx.fillStyle = '#ffffff';
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 12 * gfx;
         ctx.shadowColor = e.color;
         ctx.beginPath();
         ctx.arc(e.x, e.y, 18 * (1 - p), 0, Math.PI * 2);
@@ -690,8 +714,8 @@ export default class NoteRenderer {
         ctx.restore();
       }
 
-      // Particles — white
-      if (e.particles.length > 0) {
+      // Particles — white (disco only)
+      if (e.particles.length > 0 && this._graphicsPreset === 'disco') {
         ctx.save();
         ctx.globalAlpha = e.opacity * 0.4;
         for (const pt of e.particles) {
@@ -700,7 +724,7 @@ export default class NoteRenderer {
           const py = e.y + Math.sin(pt.angle) * d;
           const sz = 2.5 * (1 - p);
           ctx.fillStyle = '#ffffff';
-          ctx.shadowBlur = 4;
+          ctx.shadowBlur = 4 * gfx;
           ctx.shadowColor = e.color;
           ctx.beginPath();
           ctx.arc(px, py, sz, 0, Math.PI * 2);

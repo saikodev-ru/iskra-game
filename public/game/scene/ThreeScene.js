@@ -38,6 +38,7 @@ export default class ThreeScene {
     this._bgImageMaterial = null;
     this._bgImageTexture = null;
     this._safeArea = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+    this._graphicsPreset = 'disco'; // 'low' | 'standard' | 'disco'
 
     this._init();
     this._setupListeners();
@@ -46,6 +47,30 @@ export default class ThreeScene {
   /** Set the audio engine reference for reactive analysis */
   setAudioEngine(audioEngine) {
     this._audioEngine = audioEngine;
+  }
+
+  /** Set graphics quality preset */
+  setGraphicsPreset(preset) {
+    this._graphicsPreset = preset;
+    if (preset === 'low') {
+      this._bloomBase = 0;
+      this.bloomPass.strength = 0;
+    } else if (preset === 'standard') {
+      this._bloomBase = 0.15;
+    } else {
+      this._bloomBase = 0.4;
+    }
+    // Toggle particles visibility based on preset
+    if (this._particles) {
+      this._particles.visible = this._particlesVisible && preset === 'disco';
+    }
+  }
+
+  /** Returns a multiplier for effects intensity based on preset */
+  _gfx() {
+    if (this._graphicsPreset === 'low') return 0;
+    if (this._graphicsPreset === 'standard') return 0.4;
+    return 1; // disco
   }
 
   /** Set the safe area for background image positioning */
@@ -498,14 +523,15 @@ export default class ThreeScene {
       this._audioLevels = this._audioEngine.getAudioLevels();
     }
 
+    const gfx = this._gfx();
     const levels = this._audioLevels;
-    const bassPulse = levels.bass;
-    const audioPulse = levels.intensity;
+    const bassPulse = levels.bass * gfx;
+    const audioPulse = levels.intensity * gfx;
 
     // ── Background shader ──
     if (this._bgMaterial) {
       this._bgMaterial.uniforms.uTime.value = time * 0.001;
-      this._bgMaterial.uniforms.uBeatIntensity.value = this._beatIntensity;
+      this._bgMaterial.uniforms.uBeatIntensity.value = this._beatIntensity * gfx;
       this._bgMaterial.uniforms.uBassIntensity.value = bassPulse;
       this._bgMaterial.uniforms.uAudioIntensity.value = audioPulse;
       this._beatIntensity *= 0.88;
@@ -517,20 +543,21 @@ export default class ThreeScene {
       this._bgImageMaterial.uniforms.uAudioIntensity.value = audioPulse;
     }
 
-    // ── Particles — audio-reactive (only when visible) ──
-    if (this._particles && this._particlesVisible) {
+    // ── Particles — audio-reactive (only on disco + visible) ──
+    if (this._particles && this._particlesVisible && this._graphicsPreset === 'disco') {
       const pos = this._particles.geometry.attributes.position.array;
-      const drift = 0.001 + bassPulse * 0.004;
+      const rawBass = this._audioLevels.bass;
+      const drift = 0.001 + rawBass * 0.004;
       for (let i = 0; i < pos.length; i += 3) {
         pos[i + 1] += Math.sin(time * 0.0003 + i) * drift;
         pos[i] += Math.cos(time * 0.0002 + i * 0.5) * drift * 0.5;
       }
       this._particles.geometry.attributes.position.needsUpdate = true;
-      this._particles.material.opacity = 0.15 + bassPulse * 0.35 + this._beatIntensity * 0.2;
-      this._particles.material.size = 0.04 + bassPulse * 0.03;
+      this._particles.material.opacity = 0.15 + rawBass * 0.35 + this._beatIntensity * 0.2;
+      this._particles.material.size = 0.04 + rawBass * 0.03;
     }
 
-    // ── Camera FOV — smooth audio-reactive, NO hit-driven FOV pulse ──
+    // ── Camera FOV — smooth audio-reactive ──
     {
       const targetFOV = this._baseFOV + bassPulse * 1.5;
       this.camera.fov += (targetFOV - this.camera.fov) * 0.1;
@@ -559,7 +586,7 @@ export default class ThreeScene {
     // ── Accent light pulse ──
     this._accentLight.intensity = 0.4 + audioPulse * 0.8;
 
-    // ── Camera shake ──
+    // ── Camera shake (all presets — gameplay feedback) ──
     if (this._shakeFrames.length > 0) {
       this.camera.position.x = this._shakeFrames.shift();
     } else {

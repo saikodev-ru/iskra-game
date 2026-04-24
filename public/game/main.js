@@ -81,6 +81,9 @@ async function boot() {
   const savedAR = localStorage.getItem('rhythm-os-aspect-ratio') || '16:9';
   three.setAspectRatio(savedAR);
 
+  const savedGraphics = localStorage.getItem('rhythm-os-graphics') || 'disco';
+  three.setGraphicsPreset(savedGraphics);
+
   const gameCanvas = document.getElementById('game');
   const noteRenderer = new NoteRenderer(gameCanvas);
   const input = new InputManager(audio);
@@ -95,6 +98,7 @@ async function boot() {
   const initialSA = calcSafeArea();
   noteRenderer.setSafeArea(initialSA.x, initialSA.y, initialSA.w, initialSA.h);
   noteRenderer.setResScale(getResScale());
+  noteRenderer.setGraphicsPreset(savedGraphics);
   three.setSafeArea(initialSA.x, initialSA.y, initialSA.w, initialSA.h);
   const applySafeAreaToContainers = (sa) => {
     [screenContainer, hudContainer, judgementContainer].forEach(c => {
@@ -129,6 +133,10 @@ async function boot() {
       // Only affects canvas resolution, not layout
       noteRenderer.setResScale(getResScale());
       noteRenderer.resize();
+      if (!gameActive) noteRenderer.clear();
+    } else if (key === 'graphics') {
+      noteRenderer.setGraphicsPreset(value);
+      three.setGraphicsPreset(value);
       if (!gameActive) noteRenderer.clear();
     }
   });
