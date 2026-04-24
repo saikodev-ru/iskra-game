@@ -79,23 +79,39 @@ export default class SongSelect {
         <!-- PLAY button (bottom-left) with parallax -->
         <div id="ss-play-area" class="parallax-layer" data-parallax="5" style="position:absolute;bottom:28px;left:24px;z-index:3;pointer-events:auto;"></div>
 
-        <!-- Right column: back + search + list -->
+        <!-- Right column: toolbar + search + list + actions -->
         <div id="ss-right-column" class="parallax-layer" data-parallax="2" style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:16px 24px 0 0;z-index:2;position:relative;">
           <!-- Gradient behind the entire right column — fades to black going right -->
           <div style="position:absolute;top:-40px;left:-80px;right:0;bottom:-40px;background:linear-gradient(90deg,transparent 0%,rgba(0,0,0,0.25) 30%,rgba(0,0,0,0.6) 70%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:-1;"></div>
-          <div class="song-list-column" style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden;">
-            <!-- Top bar -->
-            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-              <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
-              <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." style="flex:1;min-width:0;font-size:13px;padding:8px 16px;" />
+          <div class="song-list-column" style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden;">
+
+            <!-- Top toolbar: glass panel -->
+            <div class="ss-toolbar">
+              <button id="back-btn" class="ss-toolbar-btn" data-crt-click>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                <span>BACK</span>
+              </button>
+              <div class="ss-search-wrap">
+                <svg class="ss-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" class="ss-search" id="song-search" placeholder="SEARCH SONGS..." />
+              </div>
+              <span class="ss-beatmap-count" id="ss-map-count"></span>
             </div>
+
             <!-- Song list with dynamic fade edges -->
-            <div id="song-list" class="zzz-scroll" style="flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:4px;padding-right:4px;min-height:0;"></div>
-            <!-- Action buttons -->
-            <div style="flex-shrink:0;padding:4px 0 6px;display:flex;gap:6px;">
-              <label class="zzz-btn zzz-btn--primary zzz-btn--sm zzz-import-btn" style="cursor:pointer;display:block;flex:1;text-align:center;" for="osz-input">IMPORT .OSZ</label>
+            <div id="song-list" class="zzz-scroll ss-list" style="flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:4px;padding-right:4px;min-height:0;"></div>
+
+            <!-- Bottom action bar: glass panel -->
+            <div class="ss-action-bar">
+              <label class="ss-action-btn ss-action-btn--primary" style="cursor:pointer;" for="osz-input" data-crt-click>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>IMPORT</span>
+              </label>
               <input type="file" id="osz-input" accept=".osz" style="display:none;" multiple />
-              <button id="create-playlist-btn" class="zzz-btn zzz-btn--sm zzz-import-btn" style="flex:1;text-align:center;border-color:var(--zzz-purple);color:var(--zzz-purple);">CREATE PLAYLIST</button>
+              <button id="create-playlist-btn" class="ss-action-btn ss-action-btn--accent" data-crt-click>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                <span>PLAYLIST</span>
+              </button>
             </div>
           </div>
         </div>
