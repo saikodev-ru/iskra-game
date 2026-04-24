@@ -314,6 +314,14 @@ export default class ThreeScene {
           float zoom = 1.0 + uBass * 0.06;
           uv = (uv - 0.5) / zoom + 0.5;
 
+          // CRT: barrel distortion (TV edge warp)
+          if (uCrtIntensity > 0.01) {
+            vec2 d = uv - 0.5;
+            float r2 = dot(d, d);
+            float barrel = 1.0 + uCrtIntensity * 0.18 * r2;
+            uv = 0.5 + d * barrel;
+          }
+
           // Glitch: horizontal offset per scanline
           if (uGlitchIntensity > 0.01) {
             float lineHash = hash(floor(uv.y * 80.0) + uGlitchSeed);
@@ -325,8 +333,8 @@ export default class ThreeScene {
 
           uv = clamp(uv, 0.0, 1.0);
 
-          // CRT: chromatic aberration
-          float ca = uCrtIntensity * 0.003;
+          // CRT: chromatic aberration (stronger at edges)
+          float ca = uCrtIntensity * 0.003 * (1.0 + 2.0 * length(vUv - 0.5));
           vec4 texR = texture2D(uTexture, vec2(uv.x + ca, uv.y));
           vec4 texG = texture2D(uTexture, uv);
           vec4 texB = texture2D(uTexture, vec2(uv.x - ca, uv.y));
@@ -339,7 +347,7 @@ export default class ThreeScene {
           float vig = distance(vUv, vec2(0.5));
           color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
 
-          // CRT: scanlines
+          // CRT: scanlines + phosphor flicker
           if (uCrtIntensity > 0.01) {
             float scanline = sin(vUv.y * 800.0 + uTime * 2.0) * 0.5 + 0.5;
             float scanDark = 1.0 - scanline * 0.08 * uCrtIntensity;
@@ -592,6 +600,14 @@ export default class ThreeScene {
           float zoom = 1.0 + uBass * 0.06;
           uv = (uv - 0.5) / zoom + 0.5;
 
+          // CRT: barrel distortion (TV edge warp)
+          if (uCrtIntensity > 0.01) {
+            vec2 d = uv - 0.5;
+            float r2 = dot(d, d);
+            float barrel = 1.0 + uCrtIntensity * 0.18 * r2;
+            uv = 0.5 + d * barrel;
+          }
+
           // Glitch: horizontal offset per scanline
           if (uGlitchIntensity > 0.01) {
             float lineHash = hash(floor(uv.y * 80.0) + uGlitchSeed);
@@ -604,8 +620,8 @@ export default class ThreeScene {
           // Clamp UVs to prevent wrapping
           uv = clamp(uv, 0.0, 1.0);
 
-          // CRT: chromatic aberration
-          float ca = uCrtIntensity * 0.003;
+          // CRT: chromatic aberration (stronger at edges)
+          float ca = uCrtIntensity * 0.003 * (1.0 + 2.0 * length(vUv - 0.5));
           vec4 texR = texture2D(uTexture, vec2(uv.x + ca, uv.y));
           vec4 texG = texture2D(uTexture, uv);
           vec4 texB = texture2D(uTexture, vec2(uv.x - ca, uv.y));
@@ -618,12 +634,11 @@ export default class ThreeScene {
           float vig = distance(vUv, vec2(0.5));
           color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
 
-          // CRT: scanlines
+          // CRT: scanlines + phosphor flicker
           if (uCrtIntensity > 0.01) {
             float scanline = sin(vUv.y * 800.0 + uTime * 2.0) * 0.5 + 0.5;
             float scanDark = 1.0 - scanline * 0.08 * uCrtIntensity;
             color *= scanDark;
-            // CRT phosphor flicker
             float flicker = 1.0 - 0.02 * uCrtIntensity * hash(uTime * 60.0);
             color *= flicker;
           }

@@ -48,6 +48,9 @@ export default class SongSelect {
         <!-- Song info (top-left) with parallax -->
         <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:16px;left:24px;z-index:2;max-width:45%;pointer-events:none;"></div>
 
+        <!-- PLAY button (bottom-left) with parallax -->
+        <div id="ss-play-area" class="parallax-layer" data-parallax="5" style="position:absolute;bottom:24px;left:24px;z-index:2;pointer-events:auto;"></div>
+
         <!-- Right column: back + search + list -->
         <div id="ss-right-column" class="parallax-layer" data-parallax="2" style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:16px 24px 0 0;">
           <div class="song-list-column" style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden;">
@@ -107,8 +110,10 @@ export default class SongSelect {
 
     // Add parallax
     const info = document.getElementById('ss-song-info');
+    const playArea = document.getElementById('ss-play-area');
     const right = document.getElementById('ss-right-column');
     if (info) { ZZZTheme.addParallax(info, 5); this._parallaxEls.push(info); }
+    if (playArea) { ZZZTheme.addParallax(playArea, 5); this._parallaxEls.push(playArea); }
     if (right) { ZZZTheme.addParallax(right, 2); this._parallaxEls.push(right); }
   }
 
@@ -394,8 +399,29 @@ export default class SongSelect {
     this.selectedDiffIndex = diffIndex;
     this._updateSelection();
     this._renderSongInfo(set);
-    // Don't restart preview when just switching difficulty on same song
-    // — just update the info, preview keeps playing
+    this._renderPlayButton(set);
+
+    // Effectful difficulty switch — brief glitch + RGB flash
+    if (this.three) {
+      this.three.triggerGlitch(0.35);
+    }
+    ZZZTheme.glitchTransition(this.three?.canvas);
+
+    // Flash the diff row with a color pulse
+    const wrapper = document.querySelector(`.song-card-wrapper[data-index="${this.selectedIndex}"]`);
+    if (wrapper) {
+      const items = wrapper.querySelectorAll('.diff-dropdown-item');
+      const activeItem = items[diffIndex];
+      if (activeItem) {
+        const c = DifficultyAnalyzer.getStarColor(set.difficulties[diffIndex]?.difficulty?.stars || 0);
+        activeItem.style.boxShadow = `0 0 24px ${c}60, inset 0 0 30px ${c}20`;
+        setTimeout(() => {
+          if (activeItem.classList.contains('active')) {
+            activeItem.style.boxShadow = '0 0 12px rgba(170,255,0,0.12), inset 0 0 20px rgba(170,255,0,0.03)';
+          }
+        }, 300);
+      }
+    }
   }
 
   /** Update selection/diff highlight in-place without full re-render */
@@ -471,6 +497,7 @@ export default class SongSelect {
     // Star spectrum for the info panel (larger stars)
     const infoStarSpectrum = this._buildStarSpectrum(stars, starColor, true);
 
+    // Remove PLAY button from info panel (moved to bottom-left)
     info.innerHTML = `
       <div style="font-family:var(--zzz-font);font-weight:900;font-size:40px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.05;word-break:break-word;text-shadow:0 2px 20px rgba(0,0,0,0.9);">${this._escHtml(set.title)}</div>
       <div style="font-family:var(--zzz-font);font-weight:500;font-size:15px;color:var(--zzz-muted);margin-top:4px;text-shadow:0 1px 10px rgba(0,0,0,0.9);">${this._escHtml(set.artist)}</div>
@@ -479,7 +506,23 @@ export default class SongSelect {
         <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${bpm} BPM · ${durationStr}</span>
       </div>
       <div style="margin-top:8px;display:flex;align-items:baseline;gap:4px;">${recordHtml}</div>
-      <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="margin-top:16px;pointer-events:auto;font-size:28px;padding:20px 56px;letter-spacing:0.12em;border-radius:16px;">▶ PLAY</button>
+    `;
+
+    // Update the PLAY button in bottom-left
+    this._renderPlayButton(set);
+  }
+
+  /** Render/update the PLAY button in the bottom-left corner */
+  _renderPlayButton(set) {
+    const area = document.getElementById('ss-play-area');
+    if (!area) return;
+
+    const diff = set.difficulties[this.selectedDiffIndex] || set.difficulties[0];
+    const stars = diff?.difficulty?.stars || 0;
+    const starColor = DifficultyAnalyzer.getStarColor(stars);
+
+    area.innerHTML = `
+      <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="font-size:22px;padding:16px 48px;letter-spacing:0.12em;border-radius:24px;box-shadow:0 0 30px ${starColor}30;">▶ PLAY</button>
     `;
     document.getElementById('song-play-btn')?.addEventListener('click', () => this._confirmSong());
   }
@@ -487,6 +530,8 @@ export default class SongSelect {
   _renderEmptyState() {
     const info = document.getElementById('ss-song-info');
     if (info) info.innerHTML = '';
+    const playArea = document.getElementById('ss-play-area');
+    if (playArea) playArea.innerHTML = '';
 
     const list = document.getElementById('song-list');
     if (!list) return;
