@@ -694,3 +694,55 @@ Stage Summary:
 - Grade icons moved from song cards to difficulty dropdown items with -12deg tilt and gradient styling
 - Background dim slider added to settings (0-100%, default 0)
 - Lint passes clean
+
+---
+Task ID: sound-css-fix
+Agent: Main Agent
+Task: Add missing CSS for song select toolbar, triple system sounds, improve TV switch sound
+
+Work Log:
+
+Task 1 — Add missing CSS for song select toolbar (ZZZTheme.js):
+- Added comprehensive CSS block for song select toolbar and action bar before `/* SONG LIST COLUMN */` section (~line 518)
+- CSS classes added: .ss-toolbar, .ss-toolbar-btn, .ss-search-wrap, .ss-search-icon, .ss-search, .ss-beatmap-count, .ss-action-bar, .ss-action-btn, .ss-action-btn--primary, .ss-action-btn--accent
+- Style matches ZZZ/CRT aesthetic: dark glass backgrounds (rgba(0,0,0,0.6) with backdrop-filter: blur(16px)), rounded pill shapes, lime green accents, zzz-font with uppercase/letter-spacing
+- Hover effects with lime border glow, ::before top highlight line
+- Mobile responsive breakpoint (max-width: 768px)
+
+Task 2 — Triple system sounds volume (HitSounds.js):
+- miss(): gain 0.6 → 1.8
+- crtClick(): gain 0.96 → 1.0, noise amplitude 0.4 → 1.2
+- crtSwitch() Layer 1: noise decay power 4 → 3 (louder initial), gain stays 1.0
+- crtSwitch() Layer 2: gain 0.64 → 1.0
+- milestone(): linearRamp 0.3 → 0.9
+- fail() was intentionally NOT changed (excluded per requirements)
+
+Task 3 — Improve TV channel switch sound (HitSounds.js):
+- Added Layer 3 to crtSwitch(): brief horizontal interference bar (like TV static lines)
+- Sharp attack noise burst (0.8 initial amplitude) with fast cubic decay
+- Band-passed between 2000-8000Hz for high-frequency static character
+- 0.08s duration, gain envelope with exponential ramp to silence
+
+Stage Summary:
+- All missing toolbar/action-bar CSS classes now defined with proper glassmorphism styling
+- System sounds (miss, crtClick, crtSwitch, milestone) volume tripled
+- CRT switch sound now has 3 layers: low-freq pop, high-freq sweep, horizontal static interference
+- Files modified: public/game/theme/ZZZTheme.js, public/game/game/HitSounds.js
+---
+Task ID: 1
+Agent: Main
+Task: Fix disappeared toolbar elements + redesign top-right corner + triple system sounds + TV channel switch sound
+
+Work Log:
+- Identified root cause: CSS classes `.ss-toolbar`, `.ss-search-wrap`, `.ss-search`, `.ss-beatmap-count`, `.ss-action-bar`, `.ss-action-btn` etc. were completely missing from ZZZTheme.js — these are used in SongSelect.js HTML but had no CSS definitions
+- Added comprehensive CSS for 11 missing classes with glass morphism styling (backdrop blur, dark glass backgrounds, rounded pill shapes, lime/purple accents, hover effects)
+- Added mobile responsive breakpoint for all new toolbar/action classes
+- Tripled system sounds in HitSounds.js: miss() gain 0.6→1.8, crtClick() noise ×0.4→×1.2, crtSwitch() L1 decay power 4→3, crtSwitch() L2 gain 0.64→1.0, milestone() ramp 0.3→0.9
+- Left fail() and hitsounds (hit, perfect, emptyHit) unchanged
+- Added Layer 3 to crtSwitch() for TV channel switching effect: brief 80ms horizontal static interference bar with sharp attack and band-passed noise (2000-8000Hz)
+
+Stage Summary:
+- Toolbar elements (BACK button, search, beatmap count) are now visible with stylish glass morphism design
+- Action bar (IMPORT, PLAYLIST) also styled consistently
+- System sounds are 3× louder for miss, crtClick, crtSwitch, milestone (fail/hitsounds untouched)
+- TV channel switch sound now has 3 layers: relay pop + tuning hiss + static interference

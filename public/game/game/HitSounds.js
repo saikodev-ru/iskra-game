@@ -146,7 +146,7 @@ export default class HitSounds {
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'lowpass'; filt.frequency.value = 180;
       src.buffer = buf; src.connect(filt); filt.connect(g);
-      g.gain.value = 0.6; src.start(); src.stop(this._ctx.currentTime + 0.1);
+      g.gain.value = 1.8; src.start(); src.stop(this._ctx.currentTime + 0.1);
     });
   }
 
@@ -180,14 +180,14 @@ export default class HitSounds {
       const data = buf.getChannelData(0);
       for (let i = 0; i < data.length; i++) {
         const t = i / data.length;
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3) * 0.4;
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3) * 1.2;
       }
       const src = this._ctx.createBufferSource();
       src.buffer = buf;
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'highpass'; filt.frequency.value = 3000;
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.96, this._ctx.currentTime);
+      g.gain.setValueAtTime(1.0, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start();
       src.stop(this._ctx.currentTime + dur);
@@ -204,7 +204,7 @@ export default class HitSounds {
       for (let i = 0; i < data.length; i++) {
         const t = i / data.length;
         // Quick attack, smooth decay — mimics CRT relay snap
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 4);
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3);
       }
       const src = this._ctx.createBufferSource();
       src.buffer = buf;
@@ -235,7 +235,30 @@ export default class HitSounds {
       filt.frequency.setValueAtTime(5000, this._ctx.currentTime);
       filt.frequency.exponentialRampToValueAtTime(1500, this._ctx.currentTime + dur);
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.64, this._ctx.currentTime);
+      g.gain.setValueAtTime(1.0, this._ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
+      src.start();
+      src.stop(this._ctx.currentTime + dur);
+    });
+
+    // Layer 3: Brief horizontal interference bar (like TV static lines)
+    this._play(g => {
+      const dur = 0.08;
+      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const t = i / data.length;
+        // Sharp attack, quick noise burst
+        data[i] = (Math.random() * 2 - 1) * (t < 0.1 ? 0.8 : Math.pow(1 - (t - 0.1) / 0.9, 3) * 0.4);
+      }
+      const src = this._ctx.createBufferSource();
+      src.buffer = buf;
+      const hp = this._ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 2000;
+      const lp = this._ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 8000;
+      src.connect(hp); hp.connect(lp); lp.connect(g);
+      g.gain.setValueAtTime(0.7, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start();
       src.stop(this._ctx.currentTime + dur);
@@ -251,7 +274,7 @@ export default class HitSounds {
         o.type = 'sine'; o.connect(env); env.connect(g);
         o.frequency.value = pitch + i * 200;
         env.gain.setValueAtTime(0, this._ctx.currentTime + delay);
-        env.gain.linearRampToValueAtTime(0.3, this._ctx.currentTime + delay + 0.02);
+        env.gain.linearRampToValueAtTime(0.9, this._ctx.currentTime + delay + 0.02);
         env.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + delay + 0.1);
         o.start(this._ctx.currentTime + delay); o.stop(this._ctx.currentTime + delay + 0.1);
       });

@@ -515,6 +515,138 @@ body.zzz-active::before {
 /* IMPORT BUTTON */
 .zzz-import-btn { border-radius: 12px !important; font-weight: 900 !important; letter-spacing: 0.08em !important; }
 
+/* ── SONG SELECT TOOLBAR & ACTION BAR ────────────────────────── */
+.ss-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(16px);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.06);
+  position: relative; overflow: hidden;
+  flex-shrink: 0;
+}
+.ss-toolbar::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+}
+.ss-toolbar-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  color: var(--zzz-muted);
+  font-family: var(--zzz-font); font-weight: 700; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  cursor: pointer; transition: all 0.15s ease;
+  white-space: nowrap; outline: none;
+}
+.ss-toolbar-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--zzz-text);
+  border-color: rgba(255,255,255,0.14);
+}
+.ss-toolbar-btn:active {
+  transform: scale(0.96);
+}
+.ss-search-wrap {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1; min-width: 0;
+  padding: 0 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  transition: border-color 0.2s;
+}
+.ss-search-wrap:focus-within {
+  border-color: rgba(170,255,0,0.3);
+  box-shadow: 0 0 8px rgba(170,255,0,0.08);
+}
+.ss-search-icon {
+  flex-shrink: 0; opacity: 0.4;
+}
+.ss-search-wrap:focus-within .ss-search-icon { opacity: 0.7; }
+.ss-search {
+  flex: 1; min-width: 0;
+  background: transparent; border: none; outline: none;
+  font-family: var(--zzz-font); font-weight: 500; font-size: 12px;
+  color: var(--zzz-text); letter-spacing: 0.03em;
+}
+.ss-search::placeholder { color: rgba(255,255,255,0.25); }
+.ss-beatmap-count {
+  font-family: var(--zzz-mono); font-weight: 700; font-size: 10px;
+  color: var(--zzz-lime); opacity: 0.5;
+  white-space: nowrap; flex-shrink: 0;
+  padding: 4px 8px;
+  background: rgba(170,255,0,0.08);
+  border-radius: 8px;
+}
+
+.ss-action-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(16px);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.06);
+  position: relative; overflow: hidden;
+  flex-shrink: 0;
+}
+.ss-action-bar::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+}
+.ss-action-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  color: var(--zzz-muted);
+  font-family: var(--zzz-font); font-weight: 700; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  cursor: pointer; transition: all 0.15s ease;
+  white-space: nowrap; outline: none;
+}
+.ss-action-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--zzz-text);
+  border-color: rgba(255,255,255,0.14);
+}
+.ss-action-btn:active {
+  transform: scale(0.96);
+}
+.ss-action-btn--primary {
+  background: rgba(170,255,0,0.1);
+  border-color: rgba(170,255,0,0.2);
+  color: var(--zzz-lime);
+}
+.ss-action-btn--primary:hover {
+  background: rgba(170,255,0,0.18);
+  border-color: rgba(170,255,0,0.35);
+  box-shadow: 0 0 12px rgba(170,255,0,0.1);
+}
+.ss-action-btn--accent {
+  background: rgba(168,85,247,0.1);
+  border-color: rgba(168,85,247,0.2);
+  color: var(--zzz-purple);
+}
+.ss-action-btn--accent:hover {
+  background: rgba(168,85,247,0.18);
+  border-color: rgba(168,85,247,0.35);
+  box-shadow: 0 0 12px rgba(168,85,247,0.1);
+}
+
+@media (max-width: 768px) {
+  .ss-toolbar { padding: 6px 8px; gap: 6px; }
+  .ss-toolbar-btn { padding: 6px 10px; font-size: 10px; }
+  .ss-search-wrap { padding: 0 8px; }
+  .ss-search { font-size: 11px; }
+  .ss-action-bar { padding: 6px 8px; gap: 6px; }
+  .ss-action-btn { padding: 6px 10px; font-size: 10px; }
+}
+
 /* SONG LIST COLUMN */
 .song-list-column { overflow: hidden; }
 .song-list-column * { max-width: 100%; box-sizing: border-box; }
