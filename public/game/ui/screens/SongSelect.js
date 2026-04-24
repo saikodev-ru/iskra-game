@@ -330,7 +330,7 @@ export default class SongSelect {
     this._expandedCard = setIndex;
     const set = this.beatmapSets[setIndex];
 
-    this._renderSongList();
+    this._updateSelection();
 
     const activeCard = document.querySelector(`.song-card-wrapper[data-index="${setIndex}"]`);
     if (activeCard) activeCard.scrollIntoView({ behavior: fromDiffSwitch ? 'auto' : 'smooth', block: 'nearest' });
@@ -361,10 +361,92 @@ export default class SongSelect {
     const set = this.beatmapSets[this.selectedIndex];
     if (!set || diffIndex < 0 || diffIndex >= set.difficulties.length) return;
     this.selectedDiffIndex = diffIndex;
-    this._renderSongList(); // re-render to update diff highlight
+    this._updateSelection();
     this._renderSongInfo(set);
     // Don't restart preview when just switching difficulty on same song
     // — just update the info, preview keeps playing
+  }
+
+  /** Update selection/diff highlight in-place without full re-render */
+  _updateSelection() {
+    const list = document.getElementById('song-list');
+    if (!list) return;
+
+    // Update active class on song cards
+    const wrappers = list.querySelectorAll('.song-card-wrapper');
+    wrappers.forEach((wrapper) => {
+      const idx = parseInt(wrapper.dataset.index);
+      const card = wrapper.querySelector('.song-card');
+      if (!card) return;
+
+      const isSelected = idx === this.selectedIndex;
+      const isExpanded = idx === this._expandedCard;
+      const set = this.beatmapSets[idx];
+
+      // Toggle active class
+      card.classList.toggle('active', isSelected);
+
+      // Update diff count arrow
+      const diffCount = card.querySelector('.song-card-diff-count');
+      if (diffCount && set.difficulties.length > 1) {
+        diffCount.textContent = `${isExpanded ? '▲' : '▼'} ${set.difficulties.length}`;
+      }
+
+      // Rebuild diff dropdown only for the relevant wrappers
+      const existingDropdown = wrapper.querySelector('.diff-dropdown');
+      if (existingDropdown) existingDropdown.remove();
+
+      if (isExpanded && set.difficulties.length > 1) {
+        const diffList = document.createElement('div');
+        diffList.className = 'diff-dropdown';
+        diffList.style.cssText = `display:flex;flex-direction:column;gap:4px;padding:4px 8px 6px;`;
+
+        set.difficulties.forEach((diff, diffIdx) => {
+          const s = diff.difficulty?.stars || 0;
+          const c = DifficultyAnalyzer.getStarColor(s);
+          const isActive = isSelected && diffIdx === this.selectedDiffIndex;
+
+          const starSpectrumHtml = this._buildStarSpectrum(s, c);
+
+          const record = this._getRecord(set.id, diff.version);
+          const recordHtml = record
+            ? `<span class="diff-record diff-record--has">${record.score.toLocaleString()}</span>`
+            : `<span class="diff-record diff-record--none">?</span>`;
+
+          const diffRow = document.createElement('div');
+          diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
+          diffRow.style.cssText = `
+            display:flex;align-items:center;gap:8px;
+            padding:7px 12px;border-radius:16px;cursor:pointer;
+            transition:all 0.15s cubic-bezier(0.4,0,0.2,1);
+            background:${isActive ? 'rgba(170,255,0,0.08)' : 'rgba(0,0,0,0.6)'};
+            border:2px solid ${isActive ? 'var(--zzz-lime)' : 'transparent'};
+            ${isActive ? 'box-shadow:0 0 12px rgba(170,255,0,0.12),inset 0 0 20px rgba(170,255,0,0.03);' : ''}
+          `;
+          diffRow.innerHTML = `
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
+              <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(diff.version || 'NORMAL')}</span>
+              ${starSpectrumHtml}
+            </div>
+            ${recordHtml}
+          `;
+
+          diffRow.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._selectDifficulty(diffIdx);
+          });
+          diffRow.addEventListener('mouseenter', () => {
+            if (!isActive) diffRow.style.background = 'rgba(30,30,30,0.8)';
+          });
+          diffRow.addEventListener('mouseleave', () => {
+            if (!diffRow.classList.contains('active')) diffRow.style.background = 'rgba(0,0,0,0.6)';
+          });
+
+          diffList.appendChild(diffRow);
+        });
+        wrapper.appendChild(diffList);
+      }
+    });
   }
 
   _renderSongInfo(set) {
