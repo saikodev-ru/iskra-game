@@ -52,6 +52,21 @@ function calcSafeArea() {
 async function boot() {
   console.log('[RHYTHM::OS] Booting...');
 
+  // ── Cleanup any previous instance (HMR safety) ──
+  if (window.__rhythmOsBooted) {
+    console.warn('[RHYTHM::OS] Previous instance detected, cleaning up...');
+    try {
+      // Dispose any old ThreeScene instances to free WebGL contexts
+      if (window.__threeSceneInstances) {
+        for (const inst of window.__threeSceneInstances) {
+          try { inst.dispose(); } catch (_) {}
+        }
+        window.__threeSceneInstances.length = 0;
+      }
+    } catch (_) {}
+  }
+  window.__rhythmOsBooted = true;
+
   const audio = new AudioEngine();
   let hitSounds = null;
   const initAudio = () => { audio._ensureCtx(); if (!hitSounds && audio.ctx) hitSounds = new HitSounds(audio.ctx); return hitSounds; };

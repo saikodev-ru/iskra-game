@@ -4,8 +4,16 @@ import { useEffect } from 'react'
 
 export default function Home() {
   useEffect(() => {
-    if ((window as unknown as Record<string, boolean>).__rhythmOsLoaded) return;
-    (window as unknown as Record<string, boolean>).__rhythmOsLoaded = true;
+    // Robust HMR guard — dispose old game if it exists
+    if ((window as unknown as Record<string, any>).__rhythmOsLoaded) {
+      // Check if the old instance has a dispose method
+      const old = (window as unknown as Record<string, any>).__rhythmOsLoaded;
+      if (typeof old.dispose === 'function') {
+        try { old.dispose(); } catch (_) {}
+      }
+      // If already loaded and no dispose, skip
+      if (old === true) return;
+    }
 
     const importMap = document.createElement('script');
     importMap.type = 'importmap';
@@ -22,21 +30,18 @@ export default function Home() {
     gameScript.type = 'module';
     gameScript.src = '/game/main.js';
     document.body.appendChild(gameScript);
+
+    // Mark as loaded (simple boolean — can't easily pass dispose across module boundaries)
+    (window as unknown as Record<string, boolean>).__rhythmOsLoaded = true;
   }, []);
 
   return (
     <div style={{ margin: 0, overflow: 'hidden', background: '#111111', width: '100vw', height: '100vh', position: 'relative' }}>
-      {/* 3D scene — bottom layer, always visible */}
       <canvas id="three" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0 }} />
-      {/* Game canvas — transparent background, notes only */}
       <canvas id="game" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }} />
-      {/* Judgement overlay */}
       <div id="judgement-overlay" style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none' }} />
-      {/* HUD */}
       <div id="hud" style={{ position: 'fixed', inset: 0, zIndex: 3, pointerEvents: 'none' }} />
-      {/* Screen UI — transparent so 3D shows through; each screen handles its own background */}
       <div id="screen" style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
-      {/* Modal */}
       <div id="modal" style={{ position: 'fixed', inset: 0, zIndex: 10, pointerEvents: 'none' }} />
     </div>
   );
