@@ -59,8 +59,12 @@ export default class SongSelect {
               <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
               <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." style="flex:1;min-width:0;font-size:13px;padding:8px 16px;" />
             </div>
-            <!-- Song list with fade edges via CSS mask -->
-            <div id="song-list" class="zzz-scroll song-list-fade" style="flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:4px;padding-right:4px;min-height:0;"></div>
+            <!-- Song list with dynamic fade edges -->
+            <div style="flex:1;min-height:0;position:relative;">
+              <div id="song-list-fade-top" class="song-list-fade-edge song-list-fade-top"></div>
+              <div id="song-list" class="zzz-scroll" style="height:100%;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:4px;padding-right:4px;"></div>
+              <div id="song-list-fade-bottom" class="song-list-fade-edge song-list-fade-bottom"></div>
+            </div>
             <!-- Action buttons -->
             <div style="flex-shrink:0;padding:4px 0 6px;display:flex;gap:6px;">
               <label class="zzz-btn zzz-btn--primary zzz-btn--sm zzz-import-btn" style="cursor:pointer;display:block;flex:1;text-align:center;" for="osz-input">IMPORT .OSZ</label>
@@ -90,6 +94,14 @@ export default class SongSelect {
     document.getElementById('osz-input').addEventListener('change', (e) => this._handleOszFiles(e.target.files));
     document.getElementById('song-search').addEventListener('input', (e) => this._filterSongs(e.target.value));
 
+    // Dynamic fade edges on song list scroll
+    const songList = document.getElementById('song-list');
+    if (songList) {
+      songList.addEventListener('scroll', () => this._updateFadeEdges());
+      // Initial update after render
+      requestAnimationFrame(() => this._updateFadeEdges());
+    }
+
     this._keyHandler = (e) => {
       if (e.target.tagName === 'INPUT') return;
       if (e.code === 'ArrowUp') { e.preventDefault(); this._navigateUp(); }
@@ -116,6 +128,25 @@ export default class SongSelect {
     if (info) { ZZZTheme.addParallax(info, 5); this._parallaxEls.push(info); }
     if (playArea) { ZZZTheme.addParallax(playArea, 5); this._parallaxEls.push(playArea); }
     if (right) { ZZZTheme.addParallax(right, 2); this._parallaxEls.push(right); }
+  }
+
+  /** Update fade edge opacity based on scroll position */
+  _updateFadeEdges() {
+    const list = document.getElementById('song-list');
+    const fadeTop = document.getElementById('song-list-fade-top');
+    const fadeBottom = document.getElementById('song-list-fade-bottom');
+    if (!list || !fadeTop || !fadeBottom) return;
+
+    const threshold = 24;
+    // Top: fade out overlay when scrolled near top
+    const topOpacity = list.scrollTop < threshold ? list.scrollTop / threshold : 1;
+    fadeTop.style.opacity = topOpacity;
+
+    // Bottom: fade out overlay when scrolled near bottom
+    const maxScroll = list.scrollHeight - list.clientHeight;
+    const bottomDist = maxScroll - list.scrollTop;
+    const bottomOpacity = bottomDist < threshold ? bottomDist / threshold : 1;
+    fadeBottom.style.opacity = Math.max(0, bottomOpacity);
   }
 
   _buildFilteredIndices() {
@@ -174,6 +205,9 @@ export default class SongSelect {
       const isExpanded = setIndex === this._expandedCard;
       list.appendChild(this._createSongCard(set, setIndex, isSelected, isExpanded));
     });
+
+    // Update fade edges after content changes
+    requestAnimationFrame(() => this._updateFadeEdges());
   }
 
   _createSongCard(set, setIndex, isSelected, isExpanded) {
@@ -203,7 +237,7 @@ export default class SongSelect {
       }
       const now = Date.now();
       if (this.selectedIndex === setIndex && now - this._lastSelectTime < 400) this._confirmSong();
-      else this._selectSong(setIndex);
+      else if (this.selectedIndex !== setIndex) this._selectSong(setIndex);
       this._lastSelectTime = now;
     });
 
