@@ -149,6 +149,10 @@ async function boot() {
     if (map.backgroundUrl) noteRenderer.setBackgroundImage(map.backgroundUrl);
     else noteRenderer.clearBackground();
 
+    // Use the same Three.js background system for gameplay
+    if (map.backgroundUrl) three.setBackgroundImage(map.backgroundUrl);
+    else three._clearBackgroundImage();
+
     _showCountdown(() => _actuallyStartGame(map));
   };
 
@@ -278,6 +282,7 @@ async function boot() {
     noteRenderer.clearBackground();
     noteRenderer.clear();
     noteRenderer.clearLaneGlows();
+    three._clearBackgroundImage();
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
     EventBus.emit('game:over', stats);

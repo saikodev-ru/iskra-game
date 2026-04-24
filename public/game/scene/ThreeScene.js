@@ -206,7 +206,7 @@ export default class ThreeScene {
     }
   }
 
-  /** Set a background image for song select — full-screen cover, audio-reactive glow + zoom */
+  /** Set a background image — full-screen cover, audio-reactive glow + zoom, smooth crossfade transition */
   setBackgroundImage(url) {
     if (!url) {
       this._clearBackgroundImage();
@@ -219,7 +219,6 @@ export default class ThreeScene {
       const imgAspect = texture.image ? texture.image.width / texture.image.height : 16 / 9;
 
       // ── Crossfade transition: keep old image, create new one on top ──
-      // Save reference to old mesh for fade-out
       const oldMesh = this._bgImageMesh;
       const oldMaterial = this._bgImageMaterial;
       const oldTexture = this._bgImageTexture;
@@ -238,6 +237,8 @@ export default class ThreeScene {
           uAudioIntensity: { value: 0 },
           uCoverScale: { value: imgAspect },
           uPlaneAspect: { value: 1.0 },
+          uTransition: { value: 0 }, // 0 = old/dark, 1 = fully visible
+          uBrightness: { value: 0 }, // flash during transition
         },
         vertexShader: `
           varying vec2 vUv;
@@ -249,6 +250,8 @@ export default class ThreeScene {
           uniform float uAudioIntensity;
           uniform float uCoverScale;
           uniform float uPlaneAspect;
+          uniform float uTransition;
+          uniform float uBrightness;
           varying vec2 vUv;
           void main() {
             vec2 uv = vUv;
@@ -277,6 +280,9 @@ export default class ThreeScene {
             float glow = uBass * 0.2 + uAudioIntensity * 0.08;
             color += tex.rgb * glow;
 
+            // ── Transition brightness flash ──
+            color += vec3(uBrightness * 0.15);
+
             // ── Subtle vignette overlay for depth ──
             float vig = distance(vUv, vec2(0.5));
             color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
@@ -286,6 +292,8 @@ export default class ThreeScene {
         `,
         side: THREE.DoubleSide,
         depthWrite: false,
+        transparent: true,
+        opacity: 0,
       });
 
       // Create a plane — oversized by 10% so edges never show through
@@ -293,36 +301,49 @@ export default class ThreeScene {
       const meshZ = -4;
       const dist = cam.position.z - meshZ;
       const vFov = cam.fov * Math.PI / 180;
-      const planeH = 2 * Math.tan(vFov / 2) * dist * 1.1; // 10% oversized
+      const planeH = 2 * Math.tan(vFov / 2) * dist * 1.1;
       const planeW = planeH * cam.aspect;
       this._bgImageMaterial.uniforms.uPlaneAspect.value = (planeW / planeH);
 
       this._bgImageMesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), this._bgImageMaterial);
       this._bgImageMesh.position.z = meshZ;
-      // Start fully transparent for crossfade
-      this._bgImageMesh.material.opacity = 0;
-      this._bgImageMesh.material.transparent = true;
+      // Start slightly scaled up for zoom-in effect
+      this._bgImageMesh.scale.set(1.08, 1.08, 1.0);
       this.scene.add(this._bgImageMesh);
 
-      // ── Animate crossfade ──
-      const fadeDuration = 600; // ms
+      // ── Animate crossfade with zoom + brightness flash ──
+      const fadeDuration = 800; // ms
       const startTime = performance.now();
       const animateFade = () => {
         if (this._disposed) return;
         const elapsed = performance.now() - startTime;
         const t = Math.min(1, elapsed / fadeDuration);
-        // Ease out cubic
-        const ease = 1 - Math.pow(1 - t, 3);
 
-        // New image fades in
+        // Ease: smooth step with slight overshoot feel
+        const ease = t < 0.5
+          ? 4 * t * t * t
+          : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+        // New image fades in + scales from 1.08 → 1.0
         if (this._bgImageMesh && this._bgImageMesh.material) {
           this._bgImageMesh.material.opacity = ease;
+          const s = 1.0 + 0.08 * (1 - ease);
+          this._bgImageMesh.scale.set(s, s, 1.0);
         }
 
-        // Old image fades out
+        // Old image fades out + scales up slightly (1.0 → 1.05)
         if (oldMesh && oldMesh.material) {
-          oldMesh.material.opacity = 1 - ease;
+          oldMesh.material.opacity = Math.max(0, 1 - ease * 1.3); // fades slightly faster
           oldMesh.material.transparent = true;
+          const os = 1.0 + 0.05 * ease;
+          oldMesh.scale.set(os, os, 1.0);
+        }
+
+        // Brightness flash peaks at t=0.3 then fades
+        const flashT = t < 0.3 ? t / 0.3 : 1 - (t - 0.3) / 0.7;
+        const flash = Math.max(0, flashT) * (1 - t);
+        if (this._bgImageMesh && this._bgImageMesh.material && this._bgImageMesh.material.uniforms) {
+          this._bgImageMesh.material.uniforms.uBrightness.value = flash;
         }
 
         if (t < 1) {
@@ -339,6 +360,8 @@ export default class ThreeScene {
           if (this._bgImageMesh && this._bgImageMesh.material) {
             this._bgImageMesh.material.opacity = 1;
             this._bgImageMesh.material.transparent = false;
+            this._bgImageMesh.material.uniforms.uBrightness.value = 0;
+            this._bgImageMesh.scale.set(1, 1, 1);
           }
         }
       };
