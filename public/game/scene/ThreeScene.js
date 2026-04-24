@@ -264,6 +264,8 @@ export default class ThreeScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
+    // Set clear color to black so areas not covered by 3D scene are black
+    this.renderer.setClearColor(0x000000, 1);
   }
 
   update(time) {

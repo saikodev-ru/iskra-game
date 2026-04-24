@@ -109,10 +109,11 @@ export default class NoteRenderer {
     }
   }
 
-  /** Clear the entire canvas */
+  /** Clear the entire canvas and draw black bars outside safe area */
   clear() {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
+    this._drawBlackBars();
   }
 
   render({ notes, currentTime, laneCount, combo }) {
@@ -124,6 +125,25 @@ export default class NoteRenderer {
     this._drawNotes(notes, currentTime, laneCount);
     this._drawJudgeLine(laneCount);
     this._drawEffects();
+    this._drawBlackBars();
+  }
+
+  /** Draw black bars outside the safe area (letterbox/pillarbox) */
+  _drawBlackBars() {
+    const ctx = this.ctx;
+    const sa = this.safeArea;
+    // Only draw bars if safe area doesn't cover the full canvas
+    if (sa.x > 0 || sa.y > 0 || sa.x + sa.w < this.w || sa.y + sa.h < this.h) {
+      ctx.fillStyle = '#000000';
+      // Left bar
+      if (sa.x > 0) ctx.fillRect(0, 0, sa.x, this.h);
+      // Right bar
+      if (sa.x + sa.w < this.w) ctx.fillRect(sa.x + sa.w, 0, this.w - sa.x - sa.w, this.h);
+      // Top bar
+      if (sa.y > 0) ctx.fillRect(sa.x, 0, sa.w, sa.y);
+      // Bottom bar
+      if (sa.y + sa.h < this.h) ctx.fillRect(sa.x, sa.y + sa.h, sa.w, this.h - sa.y - sa.h);
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -284,33 +304,39 @@ export default class NoteRenderer {
     const ctx = this.ctx;
     const sa = this.safeArea;
     const judgeLineY = sa.y + sa.h * 0.92;
+    const topBound = sa.y - 40; // clip above the visible playfield
 
     for (const note of notes) {
       if (note.type !== 'hold') {
         if (note.hit && note.judgement !== 'miss') continue;
         if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
       } else {
+        // Hold note: skip only if head was missed long ago, or fully released long ago
         if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
-        if (note.released && currentTime - (note.time + note.duration) > 0.5) continue;
+        if (note.released && note.hit && note.judgement !== 'miss' && currentTime - (note.time + note.duration) > 0.5) continue;
       }
 
       const color = LANE_COLORS[note.lane % LANE_COLORS.length];
 
       if (note.type === 'hold' && note.duration > 0) {
+        // noteY = position of the hold note HEAD (start)
         const noteY = note.hit && note.judgement !== 'miss'
-          ? judgeLineY
+          ? judgeLineY // head was hit, clamp to judge line
           : judgeLineY - (note.time - currentTime) * this.scrollSpeed;
 
-        if (noteY > this.h + 50 && !note.hit) continue;
-
+        // holdEndY = position of the hold note TAIL (end)
         const holdEndY = judgeLineY - ((note.time + note.duration) - currentTime) * this.scrollSpeed;
-        if (holdEndY < -80 && note.released) continue;
+
+        // Skip if both head and tail are below the screen
+        if (noteY > this.h + 50 && holdEndY > this.h + 50 && !note.hit) continue;
+        // Skip if both head and tail are way above the screen and note is done
+        if (holdEndY < -200 && noteY < -200 && note.released) continue;
 
         const isHolding = note.hit && note.judgement !== 'miss' && !note.released;
-        const fadeIn = note.hit ? 1 : Math.min(1, (judgeLineY - noteY) / (this.scrollSpeed * 0.3));
+        const fadeIn = note.hit ? 1 : Math.min(1, Math.max(0, (judgeLineY - noteY)) / (this.scrollSpeed * 0.3));
         const alpha = note.judgement === 'miss' ? 0.3 : 1;
 
-        this._drawHoldNote(ctx, note, noteY, holdEndY, note.lane, laneCount, color, fadeIn * alpha, currentTime, isHolding);
+        this._drawHoldNote(ctx, note, noteY, holdEndY, note.lane, laneCount, color, fadeIn * alpha, currentTime, isHolding, topBound);
       } else {
         const noteY = judgeLineY - (note.time - currentTime) * this.scrollSpeed;
         if (noteY < -80 || noteY > this.h + 50) continue;
@@ -359,73 +385,90 @@ export default class NoteRenderer {
     ctx.restore();
   }
 
-  _drawHoldNote(ctx, note, noteY, holdEndY, laneIndex, laneCount, color, alpha, currentTime, isHolding) {
+  _drawHoldNote(ctx, note, noteY, holdEndY, laneIndex, laneCount, color, alpha, currentTime, isHolding, topBound) {
     const sa = this.safeArea;
     const judgeLineY = sa.y + sa.h * 0.92;
 
-    const topY = Math.min(noteY, holdEndY);
+    // holdEndY is ABOVE noteY (smaller Y value) because the tail is further in the future
+    // We clamp the top to topBound so we don't draw into the void
+    const rawTopY = Math.min(noteY, holdEndY);
     const bottomY = Math.max(noteY, holdEndY);
+    const drawTopY = Math.max(rawTopY, topBound); // clip at top bound
 
-    if (topY > judgeLineY + 10 && !isHolding) return;
+    // If the entire visible area is below the judge line and not being held, skip
+    if (drawTopY > judgeLineY + 10 && !isHolding) return;
+    // If nothing visible
+    if (drawTopY >= bottomY) return;
 
-    const topScale = this._getPerspectiveScale(topY);
+    // Calculate geometry at draw points — use multiple segments for smooth perspective
+    const topScale = this._getPerspectiveScale(drawTopY);
     const bottomScale = this._getPerspectiveScale(bottomY);
-    const topGeom = this._getLaneGeometry(laneIndex, topY, laneCount);
+    const topGeom = this._getLaneGeometry(laneIndex, drawTopY, laneCount);
     const bottomGeom = this._getLaneGeometry(laneIndex, bottomY, laneCount);
 
-    const topPad = 5 * topScale;
-    const bottomPad = 5 * bottomScale;
+    const topPad = 4 * topScale;
+    const bottomPad = 4 * bottomScale;
 
     ctx.save();
-    ctx.globalAlpha = alpha * (isHolding ? 0.85 : 0.7);
+    ctx.globalAlpha = alpha * (isHolding ? 0.95 : 0.85);
 
-    /* Hold body — trapezoid */
+    /* Hold body — trapezoid with brighter fill */
     ctx.beginPath();
-    ctx.moveTo(topGeom.x + topPad, topY);
-    ctx.lineTo(topGeom.x + topGeom.width - topPad, topY);
+    ctx.moveTo(topGeom.x + topPad, drawTopY);
+    ctx.lineTo(topGeom.x + topGeom.width - topPad, drawTopY);
     ctx.lineTo(bottomGeom.x + bottomGeom.width - bottomPad, bottomY);
     ctx.lineTo(bottomGeom.x + bottomPad, bottomY);
     ctx.closePath();
 
-    ctx.fillStyle = isHolding ? this._withAlpha(color, 0.30) : this._withAlpha(color, 0.18);
+    // Much brighter fill for visibility
+    ctx.fillStyle = isHolding ? this._withAlpha(color, 0.45) : this._withAlpha(color, 0.30);
     ctx.fill();
 
-    ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.55) : this._withAlpha(color, 0.35);
-    ctx.lineWidth = isHolding ? 2 : 1;
-    ctx.stroke();
-
-    if (isHolding) {
-      ctx.save();
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = color;
-      ctx.strokeStyle = this._withAlpha(color, 0.2);
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(topGeom.x + topGeom.width / 2, topY);
-      ctx.lineTo(bottomGeom.x + bottomGeom.width / 2, bottomY);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    /* Center guide line */
-    const topCenterX = topGeom.x + topGeom.width / 2;
-    const bottomCenterX = bottomGeom.x + bottomGeom.width / 2;
-    ctx.strokeStyle = this._withAlpha(color, isHolding ? 0.25 : 0.12);
-    ctx.lineWidth = isHolding ? 3 : 2;
-    ctx.beginPath();
-    ctx.moveTo(topCenterX, topY);
-    ctx.lineTo(bottomCenterX, bottomY);
+    // Bright border
+    ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.7) : this._withAlpha(color, 0.5);
+    ctx.lineWidth = isHolding ? 2 : 1.5;
     ctx.stroke();
 
     ctx.restore();
 
+    // Glow along the body
+    ctx.save();
+    ctx.globalAlpha = alpha * (isHolding ? 0.4 : 0.2);
+    ctx.shadowBlur = isHolding ? 16 : 10;
+    ctx.shadowColor = color;
+    const topCenterX = topGeom.x + topGeom.width / 2;
+    const bottomCenterX = bottomGeom.x + bottomGeom.width / 2;
+    ctx.strokeStyle = this._withAlpha(color, 0.5);
+    ctx.lineWidth = isHolding ? 5 : 3;
+    ctx.beginPath();
+    ctx.moveTo(topCenterX, drawTopY);
+    ctx.lineTo(bottomCenterX, bottomY);
+    ctx.stroke();
+    ctx.restore();
+
+    /* Center guide line */
+    ctx.save();
+    ctx.globalAlpha = alpha * (isHolding ? 0.4 : 0.25);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isHolding ? 2 : 1;
+    ctx.beginPath();
+    ctx.moveTo(topCenterX, drawTopY);
+    ctx.lineTo(bottomCenterX, bottomY);
+    ctx.stroke();
+    ctx.restore();
+
     /* Start cap — only if head not hit yet */
     if (!note.hit || note.judgement === 'miss') {
-      this._drawHoldCap(ctx, laneIndex, noteY, laneCount, color, alpha);
+      // Only draw if the head is within visible bounds
+      if (noteY >= topBound && noteY <= judgeLineY + 20) {
+        this._drawHoldCap(ctx, laneIndex, noteY, laneCount, color, alpha);
+      }
     }
 
-    /* End cap */
-    this._drawHoldCap(ctx, laneIndex, holdEndY, laneCount, color, alpha);
+    /* End cap — draw only if within visible bounds */
+    if (holdEndY >= topBound && holdEndY <= judgeLineY + 20) {
+      this._drawHoldCap(ctx, laneIndex, holdEndY, laneCount, color, alpha);
+    }
   }
 
   _drawHoldCap(ctx, laneIndex, y, laneCount, color, alpha) {

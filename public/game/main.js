@@ -99,10 +99,22 @@ async function boot() {
   // Apply initial safe area to all containers
   const initialSA = calcSafeArea();
   noteRenderer.setSafeArea(initialSA.x, initialSA.y, initialSA.w, initialSA.h);
-  screenContainer.style.left = initialSA.x + 'px';
-  screenContainer.style.top = initialSA.y + 'px';
-  screenContainer.style.width = initialSA.w + 'px';
-  screenContainer.style.height = initialSA.h + 'px';
+  // Apply safe area to all overlay containers for aspect ratio clipping
+  const applySafeAreaToContainers = (sa) => {
+    screenContainer.style.left = sa.x + 'px';
+    screenContainer.style.top = sa.y + 'px';
+    screenContainer.style.width = sa.w + 'px';
+    screenContainer.style.height = sa.h + 'px';
+    hudContainer.style.left = sa.x + 'px';
+    hudContainer.style.top = sa.y + 'px';
+    hudContainer.style.width = sa.w + 'px';
+    hudContainer.style.height = sa.h + 'px';
+    judgementContainer.style.left = sa.x + 'px';
+    judgementContainer.style.top = sa.y + 'px';
+    judgementContainer.style.width = sa.w + 'px';
+    judgementContainer.style.height = sa.h + 'px';
+  };
+  applySafeAreaToContainers(initialSA);
 
   let gameLoop = null, currentBeatMap = null, currentJudgement = null, gameActive = false;
   let currentMapData = null;
@@ -117,20 +129,18 @@ async function boot() {
     const sa = calcSafeArea();
     noteRenderer.setSafeArea(sa.x, sa.y, sa.w, sa.h);
     noteRenderer.resize();
-    // Apply aspect ratio to screen container
-    screenContainer.style.left = sa.x + 'px';
-    screenContainer.style.top = sa.y + 'px';
-    screenContainer.style.width = sa.w + 'px';
-    screenContainer.style.height = sa.h + 'px';
+    applySafeAreaToContainers(sa);
   };
 
   EventBus.on('settings:changed', ({ key, value }) => {
     if (key === 'aspectRatio') {
       updateSafeArea();
       three.setAspectRatio(value);
+      if (!gameActive) noteRenderer.clear();
     } else if (key === 'resScale') {
       updateSafeArea();
       three.setResScale(parseInt(value) / 100);
+      if (!gameActive) noteRenderer.clear();
     }
   });
 
@@ -315,14 +325,23 @@ async function boot() {
   screens.register('result', (data) => { const rs = new ResultScreen({ screens }); if (data && data.stats) rs.setStats(data.stats, data.map); return rs; });
   screens.register('game', (data) => { if (data && data.map) startGame(data.map); return { build: () => '', init: () => {}, destroy: () => {} }; });
 
+  screens.show('main-menu');
+
+  // Background loop: update 3D scene when not playing
+  const bgLoop = () => {
+    if (!gameActive) three.update(performance.now());
+    requestAnimationFrame(bgLoop);
+  };
+  bgLoop();
+
+  // Draw black bars on game canvas initially
+  noteRenderer.clear();
+  // Redraw bars on resize
   window.addEventListener('resize', () => {
     updateSafeArea();
     three.resize();
+    if (!gameActive) noteRenderer.clear();
   });
-  screens.show('main-menu');
-
-  const bgLoop = () => { if (!gameActive) three.update(performance.now()); requestAnimationFrame(bgLoop); };
-  bgLoop();
 
   console.log('[RHYTHM::OS] Ready!');
 }
