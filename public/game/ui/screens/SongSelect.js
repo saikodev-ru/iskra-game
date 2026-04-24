@@ -79,8 +79,10 @@ export default class SongSelect {
     window.addEventListener('keydown', this._keyHandler);
 
     if (this.three) {
-      // Don't create TV — use background image instead
-      // three.createTVMonitor();
+      // Enable CRT effect on song select
+      this.three.setCrtIntensity(0.7);
+      // Create CRT overlay for additional scanline effect
+      ZZZTheme.createCrtOverlay();
     }
 
     // Add parallax
@@ -272,6 +274,7 @@ export default class SongSelect {
 
   _selectSong(setIndex, fromDiffSwitch = false) {
     if (setIndex < 0 || setIndex >= this.beatmapSets.length) return;
+    const isSongChange = setIndex !== this.selectedIndex;
     this.selectedIndex = setIndex;
     if (!fromDiffSwitch) this.selectedDiffIndex = 0;
     this._expandedCard = setIndex;
@@ -283,6 +286,12 @@ export default class SongSelect {
     if (activeCard) activeCard.scrollIntoView({ behavior: fromDiffSwitch ? 'auto' : 'smooth', block: 'nearest' });
 
     if (this.three) {
+      // Trigger glitch transition when switching to a different song
+      if (isSongChange) {
+        this.three.triggerGlitch(0.8);
+        ZZZTheme.glitchTransition(this.three.canvas);
+      }
+
       // Use video if available, otherwise use image background
       if (set.videoUrl) {
         this.three.setBackgroundVideo(set.videoUrl, this.audio);
@@ -393,9 +402,12 @@ export default class SongSelect {
       this.audio.play(set.audioBuffer, Math.max(0, previewTime));
       this.audio.fadeTo(previewVolume, 0.4);
       // Sync video to preview time if video is playing
-      if (this.three && set.videoUrl && this.three._videoElement) {
-        this.three._videoElement.currentTime = Math.max(0, previewTime);
-        this.three._videoElement.play().catch(() => {});
+      // Note: video may not be ready yet (async load), ThreeScene.update() handles sync once it's ready
+      if (this.three && set.videoUrl && this.three._videoActive && this.three._videoElement) {
+        try {
+          this.three._videoElement.currentTime = Math.max(0, previewTime);
+          this.three._videoElement.play().catch(() => {});
+        } catch (_) { /* video not seekable yet */ }
       }
     }, 250);
   }
@@ -445,7 +457,11 @@ export default class SongSelect {
       this.three.removeTVMonitor(); // no-op but safe
       this.three._clearBackgroundVideo();
       this.three._clearBackgroundImage();
+      // Disable CRT effect when leaving song select
+      this.three.setCrtIntensity(0);
     }
+    // Remove CRT overlay
+    ZZZTheme.removeCrtOverlay();
     // Clean up parallax
     for (const el of this._parallaxEls) ZZZTheme.removeParallax(el);
     this._parallaxEls = [];

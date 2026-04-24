@@ -48,6 +48,12 @@ export default class ThreeScene {
     this._videoMaterial = null;  // shader material for the video plane
     this._videoActive = false;   // whether video is currently playing as bg
     this._audioEngineRef = null; // for syncing video to audio time
+    this._videoLoadId = 0;      // generation counter to prevent stale video loads
+
+    // CRT / Glitch state
+    this._crtIntensity = 0;     // 0-1, CRT overlay intensity (scanlines, chromatic aberration)
+    this._glitchIntensity = 0;  // 0-1, glitch effect intensity (RGB split, scan disruption)
+    this._glitchSeed = 0;       // random seed for glitch patterns
 
     this._init();
     this._setupListeners();
@@ -286,7 +292,14 @@ export default class ThreeScene {
         uniform float uBrightness;
         uniform float uOpacity;
         uniform float uMissFlash;
+        uniform float uCrtIntensity;
+        uniform float uGlitchIntensity;
+        uniform float uGlitchSeed;
+        uniform float uTime;
         varying vec2 vUv;
+
+        float hash(float n) { return fract(sin(n) * 43758.5453); }
+
         void main() {
           vec2 uv = vUv;
           float planeAspect = uPlaneAspect;
@@ -300,13 +313,40 @@ export default class ThreeScene {
           }
           float zoom = 1.0 + uBass * 0.06;
           uv = (uv - 0.5) / zoom + 0.5;
-          vec4 tex = texture2D(uTexture, uv);
-          vec3 color = tex.rgb * 0.25;
+
+          // Glitch: horizontal offset per scanline
+          if (uGlitchIntensity > 0.01) {
+            float lineHash = hash(floor(uv.y * 80.0) + uGlitchSeed);
+            float blockHash = hash(floor(uv.y * 8.0) + uGlitchSeed * 3.7);
+            float offset = (lineHash - 0.5) * uGlitchIntensity * 0.08;
+            offset += (blockHash - 0.5) * uGlitchIntensity * 0.15 * step(0.7, blockHash);
+            uv.x += offset;
+          }
+
+          uv = clamp(uv, 0.0, 1.0);
+
+          // CRT: chromatic aberration
+          float ca = uCrtIntensity * 0.003;
+          vec4 texR = texture2D(uTexture, vec2(uv.x + ca, uv.y));
+          vec4 texG = texture2D(uTexture, uv);
+          vec4 texB = texture2D(uTexture, vec2(uv.x - ca, uv.y));
+          vec3 texRgb = vec3(texR.r, texG.g, texB.b);
+
+          vec3 color = texRgb * 0.25;
           float glow = uBass * 0.2 + uAudioIntensity * 0.08;
-          color += tex.rgb * glow;
+          color += texRgb * glow;
           color += vec3(uBrightness * 0.15);
           float vig = distance(vUv, vec2(0.5));
           color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
+
+          // CRT: scanlines
+          if (uCrtIntensity > 0.01) {
+            float scanline = sin(vUv.y * 800.0 + uTime * 2.0) * 0.5 + 0.5;
+            float scanDark = 1.0 - scanline * 0.08 * uCrtIntensity;
+            color *= scanDark;
+            float flicker = 1.0 - 0.02 * uCrtIntensity * hash(uTime * 60.0);
+            color *= flicker;
+          }
 
           // Miss flash — red overlay
           float missVig = smoothstep(0.2, 0.9, vig);
@@ -326,6 +366,10 @@ export default class ThreeScene {
           uBrightness: { value: 0 },
           uOpacity: { value: 0 },
           uMissFlash: { value: 0 },
+          uCrtIntensity: { value: this._crtIntensity },
+          uGlitchIntensity: { value: 0 },
+          uGlitchSeed: { value: 0 },
+          uTime: { value: 0 },
         },
         vertexShader: `
           varying vec2 vUv;
@@ -468,9 +512,12 @@ export default class ThreeScene {
 
   /** Set a video as the background — synced to audio playback time */
   setBackgroundVideo(url, audioEngine) {
-    this._clearBackgroundVideo();
+    // Increment generation counter to invalidate any pending loads
+    const loadId = ++this._videoLoadId;
+
+    // Don't clear old video yet — keep it visible until new one is ready
     this._clearBackgroundImage(); // remove any image bg
-    if (!url) return;
+    if (!url) { this._clearBackgroundVideo(); return; }
 
     this._audioEngineRef = audioEngine || this._audioEngine;
 
@@ -484,10 +531,23 @@ export default class ThreeScene {
     video.loop = false;
     video.style.display = 'none';
     document.body.appendChild(video);
-    this._videoElement = video;
+
+    // Store as pending video (don't set _videoElement yet — old one stays visible)
+    const pendingVideo = video;
 
     video.addEventListener('loadeddata', () => {
-      if (this._disposed) return;
+      // Stale load — discard
+      if (this._disposed || loadId !== this._videoLoadId) {
+        pendingVideo.pause();
+        pendingVideo.src = '';
+        if (pendingVideo.parentNode) pendingVideo.parentNode.removeChild(pendingVideo);
+        return;
+      }
+
+      // Now clear the old video (after new one is ready)
+      this._clearBackgroundVideo();
+
+      this._videoElement = pendingVideo;
 
       // Create VideoTexture
       const texture = new THREE.VideoTexture(video);
@@ -500,7 +560,7 @@ export default class ThreeScene {
       // Calculate video aspect
       const videoAspect = video.videoWidth / video.videoHeight || 16 / 9;
 
-      // Shader material for video — similar to bg image but using video texture
+      // Shader material for video — with CRT + glitch support
       const fragmentShader = `
         uniform sampler2D uTexture;
         uniform float uBass;
@@ -510,7 +570,14 @@ export default class ThreeScene {
         uniform float uBrightness;
         uniform float uOpacity;
         uniform float uMissFlash;
+        uniform float uCrtIntensity;
+        uniform float uGlitchIntensity;
+        uniform float uGlitchSeed;
+        uniform float uTime;
         varying vec2 vUv;
+
+        float hash(float n) { return fract(sin(n) * 43758.5453); }
+
         void main() {
           vec2 uv = vUv;
           float planeAspect = uPlaneAspect;
@@ -525,16 +592,41 @@ export default class ThreeScene {
           float zoom = 1.0 + uBass * 0.06;
           uv = (uv - 0.5) / zoom + 0.5;
 
+          // Glitch: horizontal offset per scanline
+          if (uGlitchIntensity > 0.01) {
+            float lineHash = hash(floor(uv.y * 80.0) + uGlitchSeed);
+            float blockHash = hash(floor(uv.y * 8.0) + uGlitchSeed * 3.7);
+            float offset = (lineHash - 0.5) * uGlitchIntensity * 0.08;
+            offset += (blockHash - 0.5) * uGlitchIntensity * 0.15 * step(0.7, blockHash);
+            uv.x += offset;
+          }
+
           // Clamp UVs to prevent wrapping
           uv = clamp(uv, 0.0, 1.0);
 
-          vec4 tex = texture2D(uTexture, uv);
-          vec3 color = tex.rgb * 0.3;
+          // CRT: chromatic aberration
+          float ca = uCrtIntensity * 0.003;
+          vec4 texR = texture2D(uTexture, vec2(uv.x + ca, uv.y));
+          vec4 texG = texture2D(uTexture, uv);
+          vec4 texB = texture2D(uTexture, vec2(uv.x - ca, uv.y));
+          vec3 texRgb = vec3(texR.r, texG.g, texB.b);
+
+          vec3 color = texRgb * 0.3;
           float glow = uBass * 0.2 + uAudioIntensity * 0.08;
-          color += tex.rgb * glow;
+          color += texRgb * glow;
           color += vec3(uBrightness * 0.15);
           float vig = distance(vUv, vec2(0.5));
           color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
+
+          // CRT: scanlines
+          if (uCrtIntensity > 0.01) {
+            float scanline = sin(vUv.y * 800.0 + uTime * 2.0) * 0.5 + 0.5;
+            float scanDark = 1.0 - scanline * 0.08 * uCrtIntensity;
+            color *= scanDark;
+            // CRT phosphor flicker
+            float flicker = 1.0 - 0.02 * uCrtIntensity * hash(uTime * 60.0);
+            color *= flicker;
+          }
 
           // Miss flash — red overlay
           float missVig = smoothstep(0.2, 0.9, vig);
@@ -554,6 +646,10 @@ export default class ThreeScene {
           uBrightness: { value: 0 },
           uOpacity: { value: 0 },
           uMissFlash: { value: 0 },
+          uCrtIntensity: { value: this._crtIntensity },
+          uGlitchIntensity: { value: 0 },
+          uGlitchSeed: { value: 0 },
+          uTime: { value: 0 },
         },
         vertexShader: `
           varying vec2 vUv;
@@ -597,6 +693,7 @@ export default class ThreeScene {
     });
 
     video.addEventListener('error', () => {
+      if (loadId !== this._videoLoadId) return; // stale
       console.warn('[ThreeScene] Failed to load video background');
       this._clearBackgroundVideo();
     });
@@ -689,6 +786,18 @@ export default class ThreeScene {
 
   setTVStatic() {
     this._clearBackgroundImage();
+    this._clearBackgroundVideo();
+  }
+
+  /** Set CRT overlay intensity (0-1) — used in song select for that retro TV feel */
+  setCrtIntensity(intensity) {
+    this._crtIntensity = Math.max(0, Math.min(1, intensity));
+  }
+
+  /** Trigger a glitch transition effect */
+  triggerGlitch(intensity = 0.8) {
+    this._glitchIntensity = intensity;
+    this._glitchSeed = Math.random() * 100;
   }
 
   setAspectRatio(ar) { this._aspectRatio = ar; this.resize(); }
@@ -836,6 +945,29 @@ export default class ThreeScene {
       this._videoMaterial.uniforms.uBass.value = bassPulse;
       this._videoMaterial.uniforms.uAudioIntensity.value = audioPulse;
       this._videoMaterial.uniforms.uMissFlash.value = this._missFlash * gfx;
+      // CRT + Glitch uniforms
+      this._videoMaterial.uniforms.uCrtIntensity.value = this._crtIntensity;
+      this._videoMaterial.uniforms.uGlitchIntensity.value = this._glitchIntensity;
+      this._videoMaterial.uniforms.uGlitchSeed.value = this._glitchSeed;
+      this._videoMaterial.uniforms.uTime.value = time * 0.001;
+    }
+
+    // ── Background image — CRT + glitch uniforms ──
+    if (this._bgImageMesh && this._bgImageMaterial && this._bgImageMaterial.uniforms) {
+      this._bgImageMaterial.uniforms.uBass.value = bassPulse;
+      this._bgImageMaterial.uniforms.uAudioIntensity.value = audioPulse;
+      if (this._bgImageMaterial.uniforms.uCrtIntensity) this._bgImageMaterial.uniforms.uCrtIntensity.value = this._crtIntensity;
+      if (this._bgImageMaterial.uniforms.uGlitchIntensity) this._bgImageMaterial.uniforms.uGlitchIntensity.value = this._glitchIntensity;
+      if (this._bgImageMaterial.uniforms.uGlitchSeed) this._bgImageMaterial.uniforms.uGlitchSeed.value = this._glitchSeed;
+      if (this._bgImageMaterial.uniforms.uTime) this._bgImageMaterial.uniforms.uTime.value = time * 0.001;
+    }
+
+    // ── Glitch decay ──
+    if (this._glitchIntensity > 0.01) {
+      this._glitchIntensity *= 0.88;
+      this._glitchSeed = Math.random() * 100;
+    } else {
+      this._glitchIntensity = 0;
     }
 
     // Camera position: always smoothly return to center (no shake)

@@ -4,7 +4,7 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700;900&display=swap');
 
 :root {
-  --zzz-bg:        #111111;
+  --zzz-bg:        #000000;
   --zzz-panel:     #1A1A1A;
   --zzz-panel-2:   #222222;
   --zzz-border:    rgba(170,255,0,0.15);
@@ -35,6 +35,65 @@ body.zzz-active::before {
   position: fixed; inset: 0; z-index: 9998;
   background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.4) 100%);
   pointer-events: none;
+}
+
+/* ── CRT OVERLAY FOR SONG SELECT ────────────────────── */
+.crt-overlay {
+  position: fixed; inset: 0; z-index: 1;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,0,0,0.06) 1px, rgba(0,0,0,0.06) 2px),
+    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.02) 3px, rgba(0,0,0,0.02) 6px);
+  mix-blend-mode: multiply;
+}
+.crt-overlay::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.5) 100%);
+}
+.crt-overlay::after {
+  content: '';
+  position: absolute; inset: 0;
+  animation: crt-flicker 0.15s infinite;
+  opacity: 0.015;
+  background: white;
+}
+@keyframes crt-flicker {
+  0%, 100% { opacity: 0.01; }
+  50% { opacity: 0.025; }
+}
+
+/* ── GLITCH TRANSITION ────────────────────── */
+@keyframes glitch-bg {
+  0%   { transform: translate(0); filter: none; }
+  7%   { transform: translate(-3px, 1px); filter: hue-rotate(90deg) saturate(2); }
+  10%  { transform: translate(2px, -1px); }
+  14%  { transform: translate(-1px, 2px); filter: hue-rotate(-60deg); }
+  17%  { transform: translate(3px, 0px); filter: none; }
+  20%  { transform: translate(0); }
+  40%  { transform: translate(0); }
+  42%  { transform: translate(-2px, 1px) scaleX(1.02); filter: hue-rotate(30deg); }
+  44%  { transform: translate(1px, -1px) scaleX(0.99); }
+  46%  { transform: translate(0) scaleX(1); filter: none; }
+  100% { transform: translate(0); filter: none; }
+}
+.glitch-transition {
+  animation: glitch-bg 0.4s ease-out forwards;
+}
+
+/* RGB split overlay during glitch */
+.glitch-rgb-overlay {
+  position: fixed; inset: 0; z-index: 2;
+  pointer-events: none;
+  animation: glitch-rgb 0.35s ease-out forwards;
+}
+@keyframes glitch-rgb {
+  0%   { opacity: 0; }
+  5%   { opacity: 1; background: linear-gradient(90deg, rgba(255,0,0,0.03), transparent 30%, rgba(0,255,0,0.03) 50%, transparent 70%, rgba(0,0,255,0.03)); }
+  15%  { opacity: 0.8; background: linear-gradient(90deg, transparent, rgba(255,0,0,0.05) 20%, transparent 40%, rgba(0,0,255,0.05) 60%, transparent); }
+  30%  { opacity: 0.3; }
+  50%  { opacity: 0; }
+  100% { opacity: 0; }
 }
 
 /* PANEL */
@@ -187,19 +246,19 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 .song-card {
   display: flex; align-items: stretch; gap: 0;
   border-radius: 12px; overflow: hidden;
-  background: rgba(26,26,26,0.6); border: none; cursor: pointer;
+  background: rgba(0,0,0,0.75); border: none; cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative; min-height: 64px;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
   max-width: 100%; box-sizing: border-box;
 }
 .song-card:hover {
-  background: rgba(42,42,42,0.8);
+  background: rgba(20,20,20,0.85);
   box-shadow: 0 2px 16px rgba(0,0,0,0.3);
   transform: translateX(6px);
 }
 .song-card.active {
-  background: rgba(42,42,42,0.7);
+  background: rgba(15,15,15,0.85);
   box-shadow: 0 0 16px rgba(0,0,0,0.3), 0 2px 12px rgba(0,0,0,0.4);
   transform: translateX(8px) scale(1.015);
 }
@@ -221,7 +280,7 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   border-radius: 12px 0 0 12px;
 }
 .song-card.active .song-card-thumb::after {
-  background: linear-gradient(90deg, transparent 40%, rgba(42,42,42,0.7) 100%);
+  background: linear-gradient(90deg, transparent 40%, rgba(15,15,15,0.8) 100%);
 }
 
 .song-card-info {
@@ -379,7 +438,7 @@ const ZZZTheme = {
     document.body.classList.add('zzz-active');
     document.body.style.margin = '0';
     document.body.style.overflow = 'hidden';
-    document.body.style.background = '#111111';
+    document.body.style.background = '#000000';
     document.body.style.fontFamily = "var(--zzz-font)";
 
     // CRT click delegation
@@ -421,6 +480,45 @@ const ZZZTheme = {
       element.classList.remove('crt-switching');
       if (callback) callback();
     }, { once: true });
+  },
+
+  /** Create a CRT overlay element for the song select screen */
+  createCrtOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = 'crt-overlay';
+    overlay.id = 'crt-overlay';
+    document.body.appendChild(overlay);
+    return overlay;
+  },
+
+  /** Remove the CRT overlay */
+  removeCrtOverlay() {
+    const overlay = document.getElementById('crt-overlay');
+    if (overlay) overlay.remove();
+  },
+
+  /** Trigger a glitch transition on the Three.js canvas */
+  glitchTransition(canvas) {
+    if (!canvas) return;
+    // Remove previous glitch classes
+    canvas.classList.remove('glitch-transition');
+    // Force reflow
+    void canvas.offsetWidth;
+    canvas.classList.add('glitch-transition');
+
+    // Add RGB overlay
+    let rgbOverlay = document.getElementById('glitch-rgb-overlay');
+    if (rgbOverlay) rgbOverlay.remove();
+    rgbOverlay = document.createElement('div');
+    rgbOverlay.className = 'glitch-rgb-overlay';
+    rgbOverlay.id = 'glitch-rgb-overlay';
+    document.body.appendChild(rgbOverlay);
+
+    // Clean up after animation
+    setTimeout(() => {
+      canvas.classList.remove('glitch-transition');
+      if (rgbOverlay.parentNode) rgbOverlay.remove();
+    }, 450);
   }
 };
 

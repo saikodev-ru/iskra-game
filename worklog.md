@@ -191,3 +191,32 @@ Stage Summary:
 - Lane glow is now a strip near judge line instead of full-height column
 - HP bar is 3x wider and covers only the bottom half of the playfield
 - Lint passes clean
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Add CRT effect and glitch transition to song select background, fix video race condition, black bg, reduce panel transparency
+
+Work Log:
+- ThreeScene.js: Added _videoLoadId generation counter to fix race condition when rapidly switching videos. New video loads keep old video visible until the new one fires 'loadeddata'. Stale loads (where loadId != _videoLoadId) are discarded without creating meshes. This prevents blank screen when quickly switching songs with video.
+- ThreeScene.js: Added CRT + glitch shader support. Both background image and video shaders now include uCrtIntensity (scanlines, chromatic aberration, phosphor flicker) and uGlitchIntensity (per-scanline horizontal offset, block disruption) uniforms. Added setCrtIntensity() and triggerGlitch() public methods.
+- ThreeScene.js: Glitch decay: _glitchIntensity *= 0.88 each frame with randomized _glitchSeed for changing patterns.
+- ThreeScene.js: setTVStatic() now also clears video background.
+- ZZZTheme.js: Changed --zzz-bg and body background from #111111 to #000000 (true black).
+- ZZZTheme.js: Added .crt-overlay CSS class for song select — dense scanlines, strong vignette, subtle white flicker animation.
+- ZZZTheme.js: Added @keyframes glitch-bg for CSS glitch transition (horizontal shift + hue-rotate + scale distortion).
+- ZZZTheme.js: Added .glitch-rgb-overlay for RGB split overlay during glitch transition.
+- ZZZTheme.js: Added createCrtOverlay(), removeCrtOverlay(), glitchTransition() methods to ZZZTheme object.
+- ZZZTheme.js: Reduced song panel transparency — .song-card bg from rgba(26,26,26,0.6) to rgba(0,0,0,0.75), active from rgba(42,42,42,0.7) to rgba(15,15,15,0.85), hover from rgba(42,42,42,0.8) to rgba(20,20,20,0.85). backdrop-filter blur increased from 8px to 12px.
+- SongSelect.js: On init, enables CRT effect (setCrtIntensity(0.7)) and creates CRT overlay div.
+- SongSelect.js: On song switch, triggers glitch (three.triggerGlitch(0.8) + ZZZTheme.glitchTransition(canvas)).
+- SongSelect.js: On destroy, disables CRT (setCrtIntensity(0)) and removes CRT overlay.
+- SongSelect.js: Added isSongChange detection so glitch only fires when switching to a different song (not on difficulty change).
+- SongSelect.js: Protected video preview sync with try/catch for videos not yet seekable.
+
+Stage Summary:
+- CRT effect on song select: shader-based scanlines + chromatic aberration + CSS overlay for extra density
+- Glitch transition when switching songs: CSS animation on canvas + RGB split overlay + shader-based scanline disruption
+- Video race condition fixed: generation counter prevents stale loads, old video stays visible until new one is ready
+- Background is now true black (#000000)
+- Song panels are more opaque (0.75 vs 0.6) with stronger blur
