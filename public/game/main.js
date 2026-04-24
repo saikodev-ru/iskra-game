@@ -154,7 +154,17 @@ async function boot() {
     judgementContainer.style.opacity = '';
 
     currentMapData = map;
-    currentBeatMap = new BeatMap(map);
+
+    // Shift all notes by LEAD_IN so the first second of audio has no notes
+    // This gives the player time to prepare without breaking hit detection
+    // (game time stays equal to audio.currentTime)
+    const shiftedMap = {
+      ...map,
+      notes: map.notes.map(n => ({ ...n, time: n.time + LEAD_IN })),
+      bpmChanges: (map.bpmChanges || []).map(b => ({ ...b, time: b.time + LEAD_IN }))
+    };
+
+    currentBeatMap = new BeatMap(shiftedMap);
     currentJudgement = new JudgementSystem(currentBeatMap);
     currentJudgement.reset();
 
@@ -250,7 +260,7 @@ async function boot() {
     gameLoop = new GameLoop({
       update(delta) {
         if (!gameActive) return;
-        const ct = audio.currentTime - LEAD_IN; // Game time: 1s behind audio for lead-in
+        const ct = audio.currentTime; // Game time = audio time (notes are already shifted by LEAD_IN)
         // During countdown (after resume), keep rendering but skip judgement processing
         if (_inCountdown) {
           // Only render — don't check misses or update state
@@ -265,18 +275,16 @@ async function boot() {
         noteRenderer.setHealth(health);
         hud.update(stats);
 
-        // Progress bar: use raw audio position (not game time with lead-in offset)
-        const rawTime = audio.currentTime;
+        // Progress bar
         if (audioDuration > 0) {
-          hud.setProgress(Math.min(1, rawTime / audioDuration));
+          hud.setProgress(Math.min(1, ct / audioDuration));
         }
 
         // End map when audio finishes (or health depleted)
-        // Use raw audio position for reliable end detection
-        const songFinished = !audio.isPlaying || (audioDuration > 0 && rawTime >= audioDuration - 0.1);
+        const songFinished = !audio.isPlaying || (audioDuration > 0 && ct >= audioDuration - 0.1);
         if (songFinished || health <= 0) {
           // Don't end if audio hasn't actually started yet
-          if (rawTime > 0.5 || health <= 0) {
+          if (ct > 0.5 || health <= 0) {
             if (health <= 0 && hitSounds) hitSounds.fail();
             endGame();
           }
@@ -284,7 +292,7 @@ async function boot() {
       },
       render() {
         if (!gameActive) return;
-        const ct = audio.currentTime - LEAD_IN; // Game time: 1s behind audio for lead-in
+        const ct = audio.currentTime; // Game time = audio time (notes are already shifted by LEAD_IN)
         noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount });
         three.update(performance.now());
       }
