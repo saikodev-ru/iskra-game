@@ -159,6 +159,15 @@ body.zzz-active::before {
   white-space: nowrap;
 }
 
+.judgement--perfect {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: var(--gg-grad, linear-gradient(180deg, #67E8F9, #FDA4AF));
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(0 0 8px rgba(103,232,249,0.6)) drop-shadow(0 2px 0 rgba(0,0,0,0.8)) drop-shadow(0 4px 0 rgba(0,0,0,0.4));
+}
 .judgement--great   { color: #00E5FF; }
 .judgement--good    { color: #F5C518; }
 .judgement--bad     { color: #FF8C00; }
@@ -715,14 +724,13 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 /* ── GRADE GRADIENT (two-element approach) ──── */
 .grade-gradient {
   position: relative;
-  color: #000;
-  text-shadow:
-    0 3px 0 rgba(0,0,0,0.8),
-    0 6px 0 rgba(0,0,0,0.4),
-    -2px -2px 0 rgba(0,0,0,0.9),
-    2px -2px 0 rgba(0,0,0,0.9),
-    -2px 2px 0 rgba(0,0,0,0.9),
-    2px 2px 0 rgba(0,0,0,0.9);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: var(--gg-grad, linear-gradient(180deg, #67E8F9, #FDA4AF));
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(0 0 8px rgba(103,232,249,0.6)) drop-shadow(0 2px 0 rgba(0,0,0,0.8)) drop-shadow(0 4px 0 rgba(0,0,0,0.4));
 }
 .grade-gradient > .gg-fill {
   position: absolute;

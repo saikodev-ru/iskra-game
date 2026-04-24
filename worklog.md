@@ -329,3 +329,18 @@ Stage Summary:
 - Hold note rendering ~3× faster (12px segments vs 4px + no shadowBlur per segment)
 - Background geometry cached (no per-frame trig)
 - Total expected performance improvement: 3-5× smoother gameplay
+---
+Task ID: 1
+Agent: main
+Task: Fix PERFECT judgement text — was black and positioned left
+
+Work Log:
+- Diagnosed two issues: (1) No `.judgement--perfect` CSS rule existed — perfect relied on fragile `.grade-gradient` two-element hack which failed, (2) `.gg-fill` overlay with `inset: 0` caused alignment issues
+- Added `.judgement--perfect` CSS rule with direct single-element gradient text (`background-clip: text`) and `filter: drop-shadow()` for outline effect
+- Updated `.grade-gradient` class to also use the same direct gradient approach instead of `color: #000`
+- Simplified `JudgementDisplay.show()` — removed two-element `gg-fill` span creation, now relies purely on CSS `.judgement--perfect` class
+
+Stage Summary:
+- PERFECT text now renders as gradient (cyan→pink) with glow/shadow outline, properly centered via existing `.judgement-text` positioning
+- Files modified: `public/game/theme/ZZZTheme.js`, `public/game/ui/JudgementDisplay.js`
+

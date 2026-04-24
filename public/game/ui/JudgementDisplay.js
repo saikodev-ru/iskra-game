@@ -22,18 +22,7 @@ export default class JudgementDisplay {
     if (this._timingEl) this._timingEl.remove();
     const el = document.createElement('div');
     el.className = `judgement-text judgement--${judgement} judgement--in`;
-    if (judgement === 'perfect') {
-      el.classList.add('grade-gradient');
-      el.style.setProperty('--gg-grad', 'linear-gradient(180deg, #67E8F9, #FDA4AF)');
-      el.style.setProperty('--gg-stroke', '2px rgba(0,0,0,0.6)');
-      el.textContent = judgement.toUpperCase();
-      const fill = document.createElement('span');
-      fill.className = 'gg-fill';
-      fill.textContent = judgement.toUpperCase();
-      el.appendChild(fill);
-    } else {
-      el.textContent = judgement.toUpperCase();
-    }
+    el.textContent = judgement.toUpperCase();
     this.container.appendChild(el);
     this._currentEl = el;
 
