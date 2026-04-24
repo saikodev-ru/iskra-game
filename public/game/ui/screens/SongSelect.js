@@ -32,13 +32,13 @@ export default class SongSelect {
         <!-- Song info (top-left) -->
         <div id="ss-song-info" style="position:absolute;top:64px;left:24px;z-index:2;max-width:40%;pointer-events:none;"></div>
 
-        <!-- Song list -->
-        <div style="flex:1;display:flex;justify-content:center;overflow:hidden;padding:0 24px;">
-          <div style="width:100%;max-width:640px;display:flex;flex-direction:column;gap:6px;min-height:0;">
-            <div id="song-list" class="zzz-scroll" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px;"></div>
-            <!-- Import button at bottom of list -->
-            <div style="flex-shrink:0;padding:8px 0;text-align:center;">
-              <label class="zzz-btn zzz-btn--primary zzz-btn--sm" style="cursor:pointer;display:inline-block;" for="osz-input">IMPORT .OSZ</label>
+        <!-- Song list (right-aligned) -->
+        <div style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:0 24px 0 0;">
+          <div class="song-list-container" style="width:min(100%, 480px);display:flex;flex-direction:column;gap:8px;min-height:0;">
+            <div id="song-list" class="zzz-scroll" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;"></div>
+            <!-- Import button at bottom of list, full width -->
+            <div style="flex-shrink:0;padding:4px 0;">
+              <label class="zzz-btn zzz-btn--primary zzz-btn--sm zzz-import-btn" style="cursor:pointer;display:block;width:100%;text-align:center;" for="osz-input">IMPORT .OSZ</label>
               <input type="file" id="osz-input" accept=".osz" style="display:none;" multiple />
             </div>
           </div>
@@ -202,7 +202,7 @@ export default class SongSelect {
     if (isExpanded && set.difficulties.length > 1) {
       const diffList = document.createElement('div');
       diffList.className = 'diff-dropdown';
-      diffList.style.cssText = `display:flex;flex-direction:column;gap:2px;padding:4px 8px 8px 80px;border-left:2px solid var(--zzz-graphite);`;
+      diffList.style.cssText = `display:flex;flex-direction:column;gap:3px;padding:4px 8px 8px 72px;`;
 
       set.difficulties.forEach((diff, diffIdx) => {
         const s = diff.difficulty?.stars || 0;
@@ -214,10 +214,10 @@ export default class SongSelect {
         diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
         diffRow.style.cssText = `
           display:flex;align-items:center;gap:10px;
-          padding:7px 12px;border-radius:8px;cursor:pointer;
+          padding:8px 14px;border-radius:12px;cursor:pointer;
           transition:all 0.12s ease;
-          background:${isActive ? 'rgba(170,255,0,0.08)' : 'rgba(26,26,26,0.8)'};
-          border:2px solid ${isActive ? c : 'var(--zzz-graphite)'};
+          background:${isActive ? 'rgba(170,255,0,0.08)' : 'rgba(26,26,26,0.6)'};
+          border:none;
         `;
         diffRow.innerHTML = `
           <span style="color:${c};font-family:var(--zzz-font);font-weight:900;font-size:13px;min-width:48px;">★ ${s.toFixed(1)}</span>
@@ -230,10 +230,10 @@ export default class SongSelect {
           this._selectDifficulty(diffIdx);
         });
         diffRow.addEventListener('mouseenter', () => {
-          if (!isActive) { diffRow.style.background = 'rgba(170,255,0,0.04)'; diffRow.style.borderColor = 'var(--zzz-graphite-2)'; }
+          if (!isActive) { diffRow.style.background = 'rgba(42,42,42,0.7)'; }
         });
         diffRow.addEventListener('mouseleave', () => {
-          if (!isActive) { diffRow.style.background = 'rgba(26,26,26,0.8)'; diffRow.style.borderColor = 'var(--zzz-graphite)'; }
+          if (!isActive) { diffRow.style.background = 'rgba(26,26,26,0.6)'; }
         });
 
         diffList.appendChild(diffRow);
