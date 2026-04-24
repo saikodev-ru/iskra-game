@@ -19,6 +19,12 @@ export default class NoteRenderer {
       };
     }
     this._effectIndex = 0;
+
+    // Pre-rendered glow sprites for performant particle rendering
+    this._glowSprites = new Map(); // color -> canvas
+    this._whiteGlow = null;
+    this._buildGlowSprites();
+
     this._bgImage = null;
     this._bgLoadAttempted = false;
     this.safeArea = { x: 0, y: 0, w: 0, h: 0 };
@@ -29,8 +35,9 @@ export default class NoteRenderer {
     this._holdNoteDebugLogged = false;
     this._graphicsPreset = 'disco';
 
-    // Hold spark effects — continuous particles while holding
-    this._holdSparks = new Map();
+    // Hold spark effects — flat arrays for fast iteration
+    this._holdSparkPool = [];
+    this._holdSparkCount = 0;
 
     // Optimization: cached static background
     this._bgCacheCanvas = null;
@@ -82,76 +89,88 @@ export default class NoteRenderer {
     this.invalidateBackgroundCache();
   }
 
+  /** Pre-render glow sprites — avoids per-frame shadowBlur */
+  _buildGlowSprites() {
+    // White glow — used for center flash and spark dots
+    const sz = 64;
+    const c = document.createElement('canvas');
+    c.width = sz; c.height = sz;
+    const cx = c.getContext('2d');
+    const g = cx.createRadialGradient(sz / 2, sz / 2, 0, sz / 2, sz / 2, sz / 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.15, 'rgba(255,255,255,0.7)');
+    g.addColorStop(0.4, 'rgba(255,255,255,0.15)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    cx.fillStyle = g;
+    cx.fillRect(0, 0, sz, sz);
+    this._whiteGlow = c;
+
+    // Per-lane-color glow sprites
+    for (const color of LANE_COLORS) {
+      const gc = document.createElement('canvas');
+      gc.width = sz; gc.height = sz;
+      const gx = gc.getContext('2d');
+      const rgb = this._hexToRgb(color);
+      const gg = gx.createRadialGradient(sz / 2, sz / 2, 0, sz / 2, sz / 2, sz / 2);
+      gg.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},1)`);
+      gg.addColorStop(0.2, `rgba(${rgb.r},${rgb.g},${rgb.b},0.6)`);
+      gg.addColorStop(0.5, `rgba(${rgb.r},${rgb.g},${rgb.b},0.12)`);
+      gg.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+      gx.fillStyle = gg;
+      gx.fillRect(0, 0, sz, sz);
+      this._glowSprites.set(color, gc);
+    }
+  }
+
   addEffect(x, y, color, type = 'ring') {
     if (this._graphicsPreset === 'low') return;
     const effect = this._effectsPool[this._effectIndex % 64];
     effect.active = true;
     effect.x = x; effect.y = y;
     effect.radius = 5;
-    effect.maxRadius = type === 'perfect' ? 70 : type === 'great' ? 55 : 40;
+    effect.maxRadius = type === 'perfect' ? 80 : type === 'great' ? 60 : 35;
     effect.opacity = 1; effect.color = color; effect.age = 0; effect.type = type;
-    effect.particles = [];
-    effect.sparks = [];
-    effect.rays = [];
+    effect.dots = []; // flat: [angle, speed, size, life, ...]
 
     if (type === 'perfect' || type === 'great') {
-      // Splash particles — colored dots that fly outward
-      const pCount = type === 'perfect' ? 14 : 8;
-      for (let i = 0; i < pCount; i++) {
-        const angle = (Math.PI * 2 / pCount) * i + (Math.random() - 0.5) * 0.5;
-        const speed = 60 + Math.random() * 80;
-        const size = 1.5 + Math.random() * 2.5;
-        effect.particles.push({ angle, speed, size, life: 0.5 + Math.random() * 0.3 });
-      }
-      // Bright sparks — small fast white dots
-      const sCount = type === 'perfect' ? 8 : 4;
-      for (let i = 0; i < sCount; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 120 + Math.random() * 100;
-        effect.sparks.push({ angle, speed, size: 0.8 + Math.random() * 1.2 });
-      }
-      // Rays — thin bright lines radiating outward (perfect only)
-      if (type === 'perfect') {
-        const rCount = 6;
-        for (let i = 0; i < rCount; i++) {
-          const angle = (Math.PI * 2 / rCount) * i + 0.26;
-          const length = 30 + Math.random() * 20;
-          effect.rays.push({ angle, length });
-        }
-      }
-    } else {
-      // Simple ring effect for good/bad
-      const pCount = 4;
-      for (let i = 0; i < pCount; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 40 + Math.random() * 40;
-        effect.particles.push({ angle, speed, size: 1.5, life: 0.3 });
+      // Pre-compute dot params as flat array for zero-alloc rendering
+      const n = type === 'perfect' ? 10 : 6;
+      for (let i = 0; i < n; i++) {
+        effect.dots.push(
+          (Math.PI * 2 / n) * i + (Math.random() - 0.5) * 0.6,
+          80 + Math.random() * 70,
+          2.5 + Math.random() * 2,
+          0.35 + Math.random() * 0.2
+        );
       }
     }
     this._effectIndex++;
   }
 
-  /** Add a hold-note spark — called continuously while holding */
+  /** Get pre-rendered glow sprite for a color */
+  _getGlowSprite(color) {
+    return this._glowSprites.get(color) || this._whiteGlow;
+  }
+
+  /** Add hold-note spark — uses flat pool for performance */
   addHoldSpark(x, y, color) {
     if (this._graphicsPreset === 'low') return;
-    if (!this._holdSparks.has(color)) {
-      this._holdSparks.set(color, []);
-    }
-    const pool = this._holdSparks.get(color);
-    if (pool.length > 24) return; // limit sparks per color
-    // Create 2-3 sparks per call
-    const count = 2 + Math.floor(Math.random() * 2);
-    for (let i = 0; i < count; i++) {
-      pool.push({
-        x: x + (Math.random() - 0.5) * 20,
-        y: y + Math.random() * 6,
-        vx: (Math.random() - 0.5) * 30,
-        vy: -(40 + Math.random() * 80), // rise upward
-        life: 0.3 + Math.random() * 0.4,
-        maxLife: 0.3 + Math.random() * 0.4,
-        size: 1 + Math.random() * 2,
-        color
-      });
+    if (this._holdSparkCount >= 40) return; // hard cap
+    const rgb = this._hexToRgb(color);
+    // 1-2 sparks per call
+    const n = 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < n; i++) {
+      const life = 0.25 + Math.random() * 0.35;
+      this._holdSparkPool.push(
+        x + (Math.random() - 0.5) * 18,
+        y + Math.random() * 4,
+        (Math.random() - 0.5) * 25,
+        -(50 + Math.random() * 70),
+        life, life, // life, maxLife
+        1.5 + Math.random() * 2, // size
+        rgb.r, rgb.g, rgb.b
+      );
+      this._holdSparkCount++;
     }
   }
 
@@ -166,7 +185,8 @@ export default class NoteRenderer {
 
   clearLaneGlows() {
     this._laneGlows.clear();
-    this._holdSparks.clear();
+    this._holdSparkPool.length = 0;
+    this._holdSparkCount = 0;
   }
 
   flashLane() { /* no-op */ }
@@ -934,7 +954,7 @@ export default class NoteRenderer {
     ctx.restore();
   }
 
-  /* ── Hit Effects — modern splash, sparks, and rays ── */
+  /* ── Hit Effects — performant: pre-rendered sprites, batched paths ── */
 
   _drawEffects() {
     if (this._graphicsPreset === 'low') return;
@@ -945,199 +965,152 @@ export default class NoteRenderer {
     for (const e of this._effectsPool) {
       if (!e.active) continue;
       e.age += delta;
-      const dur = 0.4; // slightly longer for more dramatic effect
+      const dur = 0.35;
       const p = e.age / dur;
       if (p >= 1) { e.active = false; continue; }
 
-      // Eased progress
-      const ep = 1 - Math.pow(1 - p, 3); // ease-out cubic
-      e.radius = e.maxRadius * ep;
-      e.opacity = 1 - p * p; // quadratic fade
+      const ep = 1 - (1 - p) * (1 - p); // ease-out quad
+      const r = e.maxRadius * ep;
+      const fade = 1 - p * p;
 
-      // ── Outer ring ──
+      // ── Layer 1: Expanding radial gradient flash (single fillRect) ──
+      const sprite = this._getGlowSprite(e.color);
+      const flashSize = r * 2.2;
       ctx.save();
-      ctx.strokeStyle = '#ffffff';
-      ctx.globalAlpha = e.opacity * 0.3;
-      ctx.lineWidth = Math.max(0.5, 2.5 * (1 - p));
-      ctx.shadowBlur = 15 * gfx;
-      ctx.shadowColor = e.color;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.globalAlpha = fade * 0.6 * gfx;
+      ctx.drawImage(sprite, e.x - flashSize / 2, e.y - flashSize / 2, flashSize, flashSize);
       ctx.restore();
 
-      // ── Inner colored ring ──
-      ctx.save();
-      ctx.strokeStyle = e.color;
-      ctx.globalAlpha = e.opacity * 0.25;
-      ctx.lineWidth = Math.max(0.5, 1.5 * (1 - p));
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius * 0.6, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-
-      // ── Bright center flash ──
-      if (p < 0.2) {
+      // ── Layer 2: White center flash (first 20% only, single drawImage) ──
+      if (p < 0.22 && this._whiteGlow) {
+        const fP = p / 0.22;
+        const fSize = (24 + 30 * (1 - fP)) * 2;
         ctx.save();
-        const flashAlpha = (0.2 - p) / 0.2;
-        ctx.globalAlpha = flashAlpha * 0.35;
+        ctx.globalAlpha = (1 - fP) * 0.7;
+        ctx.drawImage(this._whiteGlow, e.x - fSize / 2, e.y - fSize / 2, fSize, fSize);
+        ctx.restore();
+      }
+
+      // ── Layer 3: Expanding ring (single stroke) ──
+      ctx.save();
+      ctx.globalAlpha = fade * 0.45;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(0.5, 2.5 * (1 - p));
+      if (gfx > 0) { ctx.shadowBlur = 10 * gfx; ctx.shadowColor = e.color; }
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // ── Layer 4: Colored ring (single stroke) ──
+      ctx.save();
+      ctx.globalAlpha = fade * 0.3;
+      ctx.strokeStyle = e.color;
+      ctx.lineWidth = Math.max(0.5, 1.8 * (1 - p));
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, r * 0.55, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // ── Layer 5: Dots — BATCHED: one beginPath, all arcs, single fill ──
+      if (e.dots.length > 0) {
+        ctx.save();
+        ctx.globalAlpha = fade * 0.75;
         ctx.fillStyle = '#ffffff';
-        ctx.shadowBlur = 20 * gfx;
-        ctx.shadowColor = e.color;
+        if (gfx > 0) { ctx.shadowBlur = 8 * gfx; ctx.shadowColor = e.color; }
         ctx.beginPath();
-        ctx.arc(e.x, e.y, 22 * (1 - p * 2), 0, Math.PI * 2);
+        for (let i = 0; i < e.dots.length; i += 4) {
+          const angle = e.dots[i];
+          const speed = e.dots[i + 1];
+          const size = e.dots[i + 2];
+          const life = e.dots[i + 3];
+          const dP = Math.min(1, e.age / life);
+          if (dP >= 1) continue;
+          const d = speed * ep;
+          const dx = e.x + Math.cos(angle) * d;
+          const dy = e.y + Math.sin(angle) * d - 8 * dP;
+          const sz = size * (1 - dP * 0.7);
+          ctx.moveTo(dx + sz, dy);
+          ctx.arc(dx, dy, sz, 0, Math.PI * 2);
+        }
         ctx.fill();
         ctx.restore();
-      }
 
-      // ── Rays (perfect only) ──
-      if (e.rays.length > 0 && this._graphicsPreset === 'disco') {
-        ctx.save();
-        ctx.globalAlpha = e.opacity * 0.5;
-        ctx.strokeStyle = '#ffffff';
-        ctx.shadowBlur = 8 * gfx;
-        ctx.shadowColor = e.color;
-        for (const ray of e.rays) {
-          const rayLen = ray.length * ep;
-          const innerR = 10 * (1 - p);
-          const outerR = innerR + rayLen;
-          ctx.lineWidth = Math.max(0.3, 1.5 * (1 - p));
-          ctx.beginPath();
-          ctx.moveTo(e.x + Math.cos(ray.angle) * innerR, e.y + Math.sin(ray.angle) * innerR);
-          ctx.lineTo(e.x + Math.cos(ray.angle) * outerR, e.y + Math.sin(ray.angle) * outerR);
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
-
-      // ── Splash particles — colored dots ──
-      if (e.particles.length > 0) {
-        ctx.save();
-        for (const pt of e.particles) {
-          const ptLife = pt.life || 0.5;
-          const ptP = Math.min(1, e.age / ptLife);
-          if (ptP >= 1) continue;
-          const ptOp = 1 - ptP * ptP;
-          const d = pt.speed * ep;
-          const px = e.x + Math.cos(pt.angle) * d;
-          const py = e.y + Math.sin(pt.angle) * d - 10 * ptP; // slight upward drift
-          const sz = pt.size * (1 - ptP * 0.6);
-
-          ctx.globalAlpha = ptOp * 0.7;
-          ctx.fillStyle = e.color;
-          ctx.shadowBlur = 6 * gfx;
-          ctx.shadowColor = e.color;
-          ctx.beginPath();
-          ctx.arc(px, py, sz, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-
-      // ── Sparks — fast white dots ──
-      if (e.sparks.length > 0 && this._graphicsPreset === 'disco') {
-        ctx.save();
-        for (const sp of e.sparks) {
-          const spP = Math.min(1, p * 1.5); // sparks die faster
-          if (spP >= 1) continue;
-          const spOp = 1 - spP;
-          const d = sp.speed * ep;
-          const px = e.x + Math.cos(sp.angle) * d;
-          const py = e.y + Math.sin(sp.angle) * d - 15 * spP;
-          const sz = sp.size * (1 - spP);
-
-          ctx.globalAlpha = spOp * 0.9;
-          ctx.fillStyle = '#ffffff';
-          ctx.shadowBlur = 4 * gfx;
-          ctx.shadowColor = e.color;
-          ctx.beginPath();
-          ctx.arc(px, py, sz, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Spark trail
-          if (spOp > 0.3) {
-            const trailD = sp.speed * ep * 0.7;
-            const tx = e.x + Math.cos(sp.angle) * trailD;
-            const ty = e.y + Math.sin(sp.angle) * trailD - 10 * spP;
-            ctx.globalAlpha = spOp * 0.3;
-            ctx.lineWidth = sz * 0.8;
-            ctx.strokeStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.moveTo(px, py);
-            ctx.lineTo(tx, ty);
-            ctx.stroke();
+        // Colored glow halos around each dot (drawImage — no shadowBlur)
+        if (gfx > 0) {
+          ctx.save();
+          ctx.globalAlpha = fade * 0.35;
+          for (let i = 0; i < e.dots.length; i += 4) {
+            const angle = e.dots[i];
+            const speed = e.dots[i + 1];
+            const size = e.dots[i + 2];
+            const life = e.dots[i + 3];
+            const dP = Math.min(1, e.age / life);
+            if (dP >= 1) continue;
+            const d = speed * ep;
+            const dx = e.x + Math.cos(angle) * d;
+            const dy = e.y + Math.sin(angle) * d - 8 * dP;
+            const sz = size * (1 - dP * 0.7);
+            const haloSz = sz * 5;
+            ctx.drawImage(sprite, dx - haloSz / 2, dy - haloSz / 2, haloSz, haloSz);
           }
+          ctx.restore();
         }
-        ctx.restore();
       }
     }
   }
 
-  /* ── Hold Sparks — continuous rising particles while holding ── */
+  /* ── Hold Sparks — performant: drawImage with pre-rendered sprites ── */
 
   _drawHoldSparks() {
     if (this._graphicsPreset === 'low') return;
     const ctx = this.ctx;
     const gfx = this._gfx();
     const delta = this._frameDelta || 0.016;
+    const pool = this._holdSparkPool;
+    // Each spark: [x, y, vx, vy, life, maxLife, size, r, g, b] — 10 elements
+    const STRIDE = 10;
 
-    for (const [color, pool] of this._holdSparks) {
-      if (pool.length === 0) {
-        this._holdSparks.delete(color);
-        continue;
+    // Update + compact in-place
+    let write = 0;
+    for (let i = 0; i < this._holdSparkCount; i++) {
+      const base = i * STRIDE;
+      pool[base + 4] -= delta; // life
+      if (pool[base + 4] <= 0) continue;
+
+      // Update position
+      pool[base] += pool[base + 2] * delta; // x
+      pool[base + 1] += pool[base + 3] * delta; // y
+      pool[base + 3] += 25 * delta; // vy += gravity
+
+      // Compact
+      if (write !== i) {
+        for (let j = 0; j < STRIDE; j++) pool[write * STRIDE + j] = pool[base + j];
       }
+      write++;
+    }
+    this._holdSparkCount = write;
 
-      for (let i = pool.length - 1; i >= 0; i--) {
-        const sp = pool[i];
-        sp.life -= delta;
-        if (sp.life <= 0) {
-          pool.splice(i, 1);
-          continue;
-        }
+    if (write === 0) return;
 
-        // Update position
-        sp.x += sp.vx * delta;
-        sp.y += sp.vy * delta;
-        sp.vy += 30 * delta; // slight gravity
-
-        // Draw spark
-        const lifeRatio = sp.life / sp.maxLife;
-        const alpha = lifeRatio * lifeRatio; // fade out quadratically
-
-        ctx.save();
-        ctx.globalAlpha = alpha * 0.85;
-
-        // Spark dot
-        ctx.fillStyle = '#ffffff';
-        ctx.shadowBlur = 6 * gfx * lifeRatio;
-        ctx.shadowColor = color;
-        ctx.beginPath();
-        ctx.arc(sp.x, sp.y, sp.size * lifeRatio, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Tiny colored glow around the spark
-        if (lifeRatio > 0.4) {
-          ctx.globalAlpha = alpha * 0.3;
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.arc(sp.x, sp.y, sp.size * lifeRatio * 2.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // Short upward trail
-        if (lifeRatio > 0.3) {
-          ctx.globalAlpha = alpha * 0.25;
-          ctx.strokeStyle = color;
-          ctx.lineWidth = sp.size * lifeRatio * 0.6;
-          ctx.beginPath();
-          ctx.moveTo(sp.x, sp.y);
-          ctx.lineTo(sp.x - sp.vx * delta * 3, sp.y - sp.vy * delta * 2);
-          ctx.stroke();
-        }
-
-        ctx.restore();
+    // Draw — batch white dots first, then colored halos
+    ctx.save();
+    // White dots — single batch path
+    if (this._whiteGlow && gfx > 0) {
+      for (let i = 0; i < write; i++) {
+        const base = i * STRIDE;
+        const x = pool[base], y = pool[base + 1];
+        const life = pool[base + 4], maxLife = pool[base + 5];
+        const size = pool[base + 6];
+        const ratio = life / maxLife;
+        const alpha = ratio * ratio;
+        const sz = size * ratio;
+        const imgSz = sz * 6;
+        ctx.globalAlpha = alpha * 0.8;
+        ctx.drawImage(this._whiteGlow, x - imgSz / 2, y - imgSz / 2, imgSz, imgSz);
       }
     }
+    ctx.restore();
   }
 
   _hexToRgb(hex) {
