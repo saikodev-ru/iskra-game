@@ -308,7 +308,14 @@ async function boot() {
           input.disable();
           // Slow music down over 2.5 seconds
           audio.slowDown(2.5);
-          // Create death overlay (red scanlines → black vignette)
+          // Slow note scroll to a crawl
+          noteRenderer.scrollSpeed = 40; // was ~400
+          // Break the game canvases (CSS animation)
+          const gameCanvas = document.getElementById('game');
+          const threeCanvas = document.getElementById('three');
+          if (gameCanvas) gameCanvas.classList.add('dying');
+          if (threeCanvas) threeCanvas.classList.add('dying');
+          // Red scanline overlay
           const deathEl = document.createElement('div');
           deathEl.className = 'death-overlay';
           deathEl.id = 'death-overlay';
@@ -349,6 +356,11 @@ async function boot() {
     if (cdOverlay) cdOverlay.remove();
     const deathOverlay = document.getElementById('death-overlay');
     if (deathOverlay) deathOverlay.remove();
+    // Remove dying classes from canvases
+    const gameCanvas = document.getElementById('game');
+    const threeCanvas = document.getElementById('three');
+    if (gameCanvas) gameCanvas.classList.remove('dying');
+    if (threeCanvas) threeCanvas.classList.remove('dying');
     if (gameLoop) { gameLoop.stop(); gameLoop = null; }
     audio.stop();
     audio.stopBeatScheduler();

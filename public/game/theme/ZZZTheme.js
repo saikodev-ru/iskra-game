@@ -189,10 +189,41 @@ body.zzz-active::before {
 }
 
 /* ── DEATH ANIMATION ──────────────────────────── */
+
+/* Game canvas — splits apart with skew */
+#game.dying {
+  animation: death-canvas-break 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes death-canvas-break {
+  0%   { transform: none; filter: none; opacity: 1; }
+  5%   { filter: brightness(2) saturate(0); }
+  10%  { filter: brightness(1.2) saturate(0.3); }
+  20%  { transform: skewX(1.5deg) translateX(6px); filter: none; }
+  30%  { transform: skewX(-2deg) translateX(-8px); }
+  40%  { transform: skewX(1deg) translateY(3px) scale(1.01); }
+  50%  { transform: skewX(-1.5deg) skewY(0.5deg) translateX(-4px); filter: brightness(0.7) contrast(1.5); }
+  65%  { transform: skewX(2deg) skewY(-0.8deg) translateX(6px) scale(0.98); filter: brightness(0.4) contrast(2) saturate(0.5); }
+  80%  { transform: skewX(-1deg) skewY(0.5deg) translateX(3px) scale(0.96); filter: brightness(0.2) contrast(2.5) saturate(0.2); }
+  100% { transform: skewX(0.5deg) translateX(1px) scale(0.95); filter: brightness(0) contrast(3) saturate(0); opacity: 0.3; }
+}
+
+/* Three.js background canvas — milder distortion */
+#three.dying {
+  animation: death-three-break 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes death-three-break {
+  0%   { transform: none; filter: none; }
+  20%  { transform: scale(1.01) translateX(3px); }
+  40%  { transform: scale(1.02) translateX(-4px); filter: hue-rotate(30deg) brightness(0.8); }
+  60%  { transform: scale(1.01) translateX(2px); filter: hue-rotate(60deg) brightness(0.5) saturate(0.5); }
+  100% { transform: scale(1.03); filter: hue-rotate(90deg) brightness(0.1) saturate(0); }
+}
+
+/* Red scanline overlay */
 .death-overlay {
-  position: fixed; inset: 0; z-index: 6;
+  position: fixed; inset: 0; z-index: 4;
   pointer-events: none;
-  animation: death-sequence 2.6s ease-in forwards;
+  animation: death-sequence 2.5s ease-in forwards;
 }
 @keyframes death-sequence {
   0%   { opacity: 0; }
@@ -206,27 +237,27 @@ body.zzz-active::before {
     repeating-linear-gradient(
       0deg,
       transparent,
-      transparent 2px,
-      rgba(255,50,50,0.15) 2px,
-      rgba(255,50,50,0.15) 4px
+      transparent 3px,
+      rgba(255,50,50,0.2) 3px,
+      rgba(255,50,50,0.2) 5px
     );
-  animation: death-scanlines 0.15s steps(3) infinite;
+  animation: death-scanlines 0.12s steps(2) infinite;
 }
 @keyframes death-scanlines {
   0%   { transform: translateY(0); }
-  33%  { transform: translateY(2px); }
-  66%  { transform: translateY(-1px); }
-  100% { transform: translateY(0); }
+  50%  { transform: translateY(2px); }
+  100% { transform: translateY(-1px); }
 }
 .death-overlay::after {
   content: '';
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.7) 100%);
-  animation: death-vignette-grow 2.6s ease-in forwards;
+  background: radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%);
+  animation: death-vignette-grow 2.5s ease-in forwards;
 }
 @keyframes death-vignette-grow {
   0%   { opacity: 0; }
-  15%  { opacity: 0.3; }
+  15%  { opacity: 0.2; }
+  50%  { opacity: 0.6; }
   100% { opacity: 1; }
 }
 
