@@ -242,9 +242,9 @@ export default class ThreeScene {
       },
       vertexShader, fragmentShader, side: THREE.DoubleSide
     });
-    const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(30, 20), this._bgMaterial);
-    bgMesh.position.z = -10;
-    this.scene.add(bgMesh);
+    this._bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(30, 20), this._bgMaterial);
+    this._bgMesh.position.z = -10;
+    this.scene.add(this._bgMesh);
   }
 
   _createParticles() {

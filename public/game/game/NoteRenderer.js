@@ -193,7 +193,7 @@ export default class NoteRenderer {
     }
   }
 
-  /** Rebuild the offscreen background cache */
+  /** Rebuild the offscreen background cache — ORTHOGRAPHIC (parallel lanes) */
   _rebuildBackgroundCache(laneCount) {
     const dpr = window.devicePixelRatio || 1;
     const pixelW = Math.round(this.w * dpr * this._resScale);
@@ -221,39 +221,35 @@ export default class NoteRenderer {
       cctx.restore();
     }
 
-    // Draw lane trapezoids — main section (top → judge line)
+    // ── Orthographic: parallel rectangular lanes ──
     const topY = this._getTopY();
     const judgeLineY = this._getJudgeLineY();
-    const bottomY = this._getBottomY(); // extended below judge line
+    const bottomY = this._getBottomY();
+    const geom = this._getLaneGeometry(0, judgeLineY, laneCount); // same at any Y now
+    const fieldLeft = geom.x;
+    const fieldWidth = laneCount * geom.width;
+
+    // Draw lane rectangles — main section (top → bottom)
     for (let i = 0; i < laneCount; i++) {
-      const tg = this._getLaneGeometry(i, topY, laneCount);
-      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
-      const btg = this._getLaneGeometry(i, bottomY, laneCount);
-      cctx.beginPath();
-      cctx.moveTo(tg.x, topY);
-      cctx.lineTo(tg.x + tg.width, topY);
-      cctx.lineTo(btg.x + btg.width, bottomY);
-      cctx.lineTo(btg.x, bottomY);
-      cctx.closePath();
-      // Main section: solid fill down to judge line
-      const b = i % 2 === 0 ? 10 : 18;
-      cctx.fillStyle = `rgba(${b},${Math.round(b * 0.7)},${Math.round(b * 0.5)},0.88)`;
-      cctx.fill();
+      const laneGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
+      cctx.fillStyle = i % 2 === 0
+        ? 'rgba(10,7,5,0.88)'
+        : 'rgba(18,13,9,0.88)';
+      cctx.fillRect(laneGeom.x, topY, laneGeom.width, bottomY - topY);
     }
 
-    // Beautiful fade overlay below judge line — lane-colored glow fading to dark
-    const fadeDist = bottomY - judgeLineY;
-    for (let i = 0; i < laneCount; i++) {
-      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
-      const btg = this._getLaneGeometry(i, bottomY, laneCount);
-      cctx.beginPath();
-      cctx.moveTo(bg.x, judgeLineY);
-      cctx.lineTo(bg.x + bg.width, judgeLineY);
-      cctx.lineTo(btg.x + btg.width, bottomY);
-      cctx.lineTo(btg.x, bottomY);
-      cctx.closePath();
+    // Depth gradient overlay — subtle darkening toward the top to hint at distance
+    const depthGrad = cctx.createLinearGradient(0, topY, 0, judgeLineY);
+    depthGrad.addColorStop(0, 'rgba(0,0,0,0.35)');
+    depthGrad.addColorStop(0.3, 'rgba(0,0,0,0.15)');
+    depthGrad.addColorStop(0.7, 'rgba(0,0,0,0)');
+    depthGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    cctx.fillStyle = depthGrad;
+    cctx.fillRect(fieldLeft, topY, fieldWidth, judgeLineY - topY);
 
-      // Colored glow near judge line fading to transparent below
+    // Fade overlay below judge line — lane-colored glow fading to dark
+    for (let i = 0; i < laneCount; i++) {
+      const laneGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
       const laneColor = LANE_COLORS[i % LANE_COLORS.length];
       const rgb = this._hexToRgb(laneColor);
       const fadeGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
@@ -263,47 +259,55 @@ export default class NoteRenderer {
       fadeGrad.addColorStop(0.5, 'rgba(0,0,0,0.15)');
       fadeGrad.addColorStop(1, 'rgba(0,0,0,0.95)');
       cctx.fillStyle = fadeGrad;
-      cctx.fill();
+      cctx.fillRect(laneGeom.x, judgeLineY, laneGeom.width, bottomY - judgeLineY);
     }
 
     // Bright glow strip right below judge line — white fade
     const glowH = 30;
     for (let i = 0; i < laneCount; i++) {
-      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
-      const glowBotGeom = this._getLaneGeometry(i, judgeLineY + glowH, laneCount);
-      cctx.beginPath();
-      cctx.moveTo(bg.x, judgeLineY);
-      cctx.lineTo(bg.x + bg.width, judgeLineY);
-      cctx.lineTo(glowBotGeom.x + glowBotGeom.width, judgeLineY + glowH);
-      cctx.lineTo(glowBotGeom.x, judgeLineY + glowH);
-      cctx.closePath();
+      const laneGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
       const glowGrad = cctx.createLinearGradient(0, judgeLineY, 0, judgeLineY + glowH);
       glowGrad.addColorStop(0, 'rgba(255,255,255,0.18)');
       glowGrad.addColorStop(0.3, 'rgba(255,255,255,0.05)');
       glowGrad.addColorStop(1, 'rgba(255,255,255,0)');
       cctx.fillStyle = glowGrad;
-      cctx.fill();
+      cctx.fillRect(laneGeom.x, judgeLineY, laneGeom.width, glowH);
     }
 
-    // Draw lane dividers — extended to bottomY with fade
+    // Draw lane dividers — parallel vertical lines with gradient
     for (let i = 0; i <= laneCount; i++) {
-      const tg = this._getLaneGeometry(i, topY, laneCount);
-      const btg = this._getLaneGeometry(i, bottomY, laneCount);
-      // Main divider line from top to bottom
+      const laneGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
       cctx.save();
       const divGrad = cctx.createLinearGradient(0, topY, 0, bottomY);
-      divGrad.addColorStop(0, 'rgba(170,255,0,0.05)');
-      divGrad.addColorStop(0.82, 'rgba(170,255,0,0.05)');  // judgeLineY is at 0.92/1.12 ≈ 0.82 of the way
-      divGrad.addColorStop(0.9, 'rgba(255,255,255,0.06)');
+      divGrad.addColorStop(0, 'rgba(170,255,0,0.03)');
+      divGrad.addColorStop(0.7, 'rgba(170,255,0,0.05)');
+      divGrad.addColorStop(0.85, 'rgba(255,255,255,0.06)');
       divGrad.addColorStop(1, 'rgba(255,255,255,0)');
       cctx.strokeStyle = divGrad;
       cctx.lineWidth = 1;
       cctx.beginPath();
-      cctx.moveTo(tg.x, topY);
-      cctx.lineTo(btg.x, bottomY);
+      cctx.moveTo(laneGeom.x, topY);
+      cctx.lineTo(laneGeom.x, bottomY);
       cctx.stroke();
       cctx.restore();
     }
+
+    // Side edges — subtle outer glow
+    cctx.save();
+    const edgeL = cctx.createLinearGradient(fieldLeft - 8, 0, fieldLeft + 4, 0);
+    edgeL.addColorStop(0, 'rgba(170,255,0,0)');
+    edgeL.addColorStop(0.6, 'rgba(170,255,0,0.04)');
+    edgeL.addColorStop(1, 'rgba(170,255,0,0)');
+    cctx.fillStyle = edgeL;
+    cctx.fillRect(fieldLeft - 8, topY, 12, bottomY - topY);
+
+    const edgeR = cctx.createLinearGradient(fieldLeft + fieldWidth - 4, 0, fieldLeft + fieldWidth + 8, 0);
+    edgeR.addColorStop(0, 'rgba(170,255,0,0)');
+    edgeR.addColorStop(0.4, 'rgba(170,255,0,0.04)');
+    edgeR.addColorStop(1, 'rgba(170,255,0,0)');
+    cctx.fillStyle = edgeR;
+    cctx.fillRect(fieldLeft + fieldWidth - 4, topY, 12, bottomY - topY);
+    cctx.restore();
 
     // Update cache metadata
     this._bgCacheLaneCount = laneCount;
@@ -318,7 +322,7 @@ export default class NoteRenderer {
     this._bgCacheBgImage = null;
   }
 
-  /* ── Perspective ────────────────────────────────────────────────── */
+  /* ── Layout (Orthographic — constant scale everywhere) ────────── */
 
   _getJudgeLineY() {
     return this.safeArea.y + this.safeArea.h * 0.92;
@@ -329,35 +333,28 @@ export default class NoteRenderer {
   }
 
   _getBottomY() {
-    // Extend the field well below the judge line for aesthetics
-    // Judge line is at 0.92; extend to bottom of screen + a bit beyond
+    // Extend the field below the judge line for aesthetics
     return this.safeArea.y + this.safeArea.h * 1.12;
   }
 
+  /**
+   * Orthographic: returns 1.0 always — no perspective distortion.
+   * Notes scroll at constant visual speed across the entire field.
+   * All lane widths are identical regardless of Y position.
+   */
   _getPerspectiveScale(y) {
-    const topY = this._getTopY();
-    const judgeLineY = this._getJudgeLineY();
-    // Allow scale to grow beyond 1.0 below judge line so that
-    // the background trapezoid's linear interpolation correctly
-    // matches the geometry at judgeLineY (where notes & judge line are drawn).
-    const p = Math.max(0, (y - topY) / (judgeLineY - topY));
-    return 0.18 + 0.82 * p;
+    return 1.0;
   }
 
+  /** Lane geometry is now independent of Y (orthographic/parallel lanes) */
   _getLaneGeometry(laneIndex, y, laneCount) {
     const sa = this.safeArea;
-    const pw = sa.w * 0.55;
+    const pw = sa.w * 0.55; // play field width = 55% of safe area
     const cx = sa.x + sa.w / 2;
-    const scale = this._getPerspectiveScale(y);
-    const cw = pw * scale;
-    const lw = cw / laneCount;
-    const le = cx - cw / 2;
+    const lw = pw / laneCount; // constant lane width
+    const le = cx - pw / 2;
     return { x: le + laneIndex * lw, width: lw, centerX: le + (laneIndex + 0.5) * lw };
   }
-
-  /* ── Background ─────────────────────────────────────────────────── */
-  // Background is now drawn via _drawBackgroundCached() using an offscreen canvas.
-  // The original _drawBackground method is replaced by _rebuildBackgroundCache().
 
   /* ── Lane Glows — horizontal flash at judge line (Project Sekai style) */
 
@@ -480,13 +477,9 @@ export default class NoteRenderer {
   }
 
   _noteY(time, currentTime, judgeLineY) {
-    const topY = this._getTopY();
-    const travelH = judgeLineY - topY;
     // Linear scroll: note position is directly proportional to time difference.
-    // Perspective V effect is already handled by _getPerspectiveScale() which
-    // makes notes smaller at the top and larger near the judge line.
-    // A non-linear curve here would break timing — notes must visually
-    // cross the judge line exactly when currentTime === note.time.
+    // With orthographic projection, the visual speed is constant — no perspective
+    // distortion makes notes appear to slow down near the judge line.
     const distFromJudge = (time - currentTime) * this.scrollSpeed;
     return judgeLineY - distFromJudge;
   }
@@ -499,17 +492,16 @@ export default class NoteRenderer {
 
   _drawTapNote(lane, noteY, laneCount, color, alpha) {
     const ctx = this.ctx;
-    const scale = this._getPerspectiveScale(noteY);
     const geom = this._getLaneGeometry(lane, noteY, laneCount);
-    const pad = 5 * scale;
+    const pad = 5;
     const x = geom.x + pad;
     const w = geom.width - pad * 2;
-    const h = this.noteHeight * scale;
-    const r = Math.max(2, 8 * scale);
+    const h = this.noteHeight;
+    const r = Math.max(2, 8);
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur = 14 * scale * this._gfx();
+    ctx.shadowBlur = 14 * this._gfx();
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     this._roundRect(ctx, x, noteY - h / 2, w, h, r);
@@ -577,37 +569,26 @@ export default class NoteRenderer {
 
   _drawHoldBody(note, laneCount, color, topY, bottomY, alpha, isHolding) {
     const ctx = this.ctx;
-    const segments = 10;
-    const points = [];
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      const y = topY + (bottomY - topY) * t;
-      const geom = this._getLaneGeometry(note.lane, y, laneCount);
-      const scale = this._getPerspectiveScale(y);
-      const pad = 3 * scale;
-      points.push({ lx: geom.x + pad, rx: geom.x + geom.width - pad, cx: geom.x + geom.width / 2, y });
-    }
+    const geom = this._getLaneGeometry(note.lane, bottomY, laneCount);
+    const pad = 3;
+    const x = geom.x + pad;
+    const w = geom.width - pad * 2;
+    const cx = geom.x + geom.width / 2;
 
     const gfx = this._gfx();
 
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    // Body fill — smooth polygon following perspective curves
-    ctx.beginPath();
-    ctx.moveTo(points[0].lx, points[0].y);
-    for (let i = 1; i <= segments; i++) ctx.lineTo(points[i].lx, points[i].y);
-    for (let i = segments; i >= 0; i--) ctx.lineTo(points[i].rx, points[i].y);
-    ctx.closePath();
-
+    // Body fill — simple rectangle (orthographic, no perspective curve needed)
     ctx.fillStyle = isHolding ? this._withAlpha(color, 0.30) : this._withAlpha(color, 0.18);
     ctx.shadowBlur = (isHolding ? 20 : 8) * gfx;
     ctx.shadowColor = color;
-    ctx.fill();
+    ctx.fillRect(x, topY, w, bottomY - topY);
 
     ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.7) : this._withAlpha(color, 0.45);
     ctx.lineWidth = isHolding ? 2 : 1.5;
-    ctx.stroke();
+    ctx.strokeRect(x, topY, w, bottomY - topY);
     ctx.restore();
 
     // Center glow line
@@ -618,25 +599,24 @@ export default class NoteRenderer {
     ctx.strokeStyle = isHolding ? '#ffffff' : this._withAlpha(color, 0.8);
     ctx.lineWidth = isHolding ? 4 : 2;
     ctx.beginPath();
-    ctx.moveTo(points[0].cx, points[0].y);
-    for (let i = 1; i <= segments; i++) ctx.lineTo(points[i].cx, points[i].y);
+    ctx.moveTo(cx, topY);
+    ctx.lineTo(cx, bottomY);
     ctx.stroke();
     ctx.restore();
   }
 
   _drawHoldCap(laneIndex, y, laneCount, color, alpha) {
     const ctx = this.ctx;
-    const scale = this._getPerspectiveScale(y);
     const geom = this._getLaneGeometry(laneIndex, y, laneCount);
-    const pad = 5 * scale;
+    const pad = 5;
     const x = geom.x + pad;
     const w = geom.width - pad * 2;
-    const h = this.noteHeight * scale;
-    const r = Math.max(2, 8 * scale);
+    const h = this.noteHeight;
+    const r = Math.max(2, 8);
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur = 12 * scale * this._gfx();
+    ctx.shadowBlur = 12 * this._gfx();
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     this._roundRect(ctx, x, y - h / 2, w, h, r);
@@ -656,29 +636,28 @@ export default class NoteRenderer {
 
   _drawHoldGlow(laneIndex, judgeLineY, laneCount, color) {
     const ctx = this.ctx;
-    const scale = this._getPerspectiveScale(judgeLineY);
     const geom = this._getLaneGeometry(laneIndex, judgeLineY, laneCount);
-    const pad = 4 * scale;
+    const pad = 4;
     const x = geom.x + pad;
     const w = geom.width - pad * 2;
     const gfx = this._gfx();
 
     // Tall vertical glow column while holding
-    const columnH = 140 * scale;
+    const columnH = 140;
     ctx.save();
     const grad = ctx.createLinearGradient(0, judgeLineY - columnH, 0, judgeLineY);
     grad.addColorStop(0, 'transparent');
     grad.addColorStop(0.4, this._withAlpha(color, 0.12));
     grad.addColorStop(1, this._withAlpha(color, 0.45));
     ctx.fillStyle = grad;
-    ctx.shadowBlur = 30 * scale * gfx;
+    ctx.shadowBlur = 30 * gfx;
     ctx.shadowColor = color;
     ctx.fillRect(x - 3, judgeLineY - columnH, w + 6, columnH);
 
     // Bright bar at judge line
-    const barH = 10 * scale;
+    const barH = 10;
     ctx.globalAlpha = 0.95;
-    ctx.shadowBlur = 30 * scale * gfx;
+    ctx.shadowBlur = 30 * gfx;
     ctx.fillStyle = color;
     ctx.fillRect(x, judgeLineY - barH / 2, w, barH);
 
@@ -690,7 +669,7 @@ export default class NoteRenderer {
     ctx.restore();
   }
 
-  /* ── HP Bar — vertical, right of playfield, 3x wider, half height ─ */
+  /* ── HP Bar — vertical, right of playfield (orthographic = simple rect) ─ */
 
   _drawHPBar(laneCount) {
     const ctx = this.ctx;
@@ -699,7 +678,6 @@ export default class NoteRenderer {
     const health = this._displayHealth;
     const gfx = this._gfx();
 
-    // HP bar: 3x wider than before, only bottom half of playfield height
     const barGap = 6;
     const barWidth = 18;
 
@@ -707,45 +685,19 @@ export default class NoteRenderer {
     const barTopY = sa.y + sa.h * 0.46;
     const barBotY = judgeLineY;
 
-    const topRightGeom = this._getLaneGeometry(laneCount - 1, barTopY, laneCount);
-    const botRightGeom = this._getLaneGeometry(laneCount - 1, barBotY, laneCount);
-
-    const topBarX = topRightGeom.x + topRightGeom.width + barGap * this._getPerspectiveScale(barTopY);
-    const botBarX = botRightGeom.x + botRightGeom.width + barGap * this._getPerspectiveScale(barBotY);
-
-    const topScale = this._getPerspectiveScale(barTopY);
-    const botScale = this._getPerspectiveScale(barBotY);
-    const topW = barWidth * topScale;
-    const botW = barWidth * botScale;
+    const rightGeom = this._getLaneGeometry(laneCount - 1, judgeLineY, laneCount);
+    const barX = rightGeom.x + rightGeom.width + barGap;
 
     // Background bar (empty)
     ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(topBarX, barTopY);
-    ctx.lineTo(topBarX + topW, barTopY);
-    ctx.lineTo(botBarX + botW, barBotY);
-    ctx.lineTo(botBarX, barBotY);
-    ctx.closePath();
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    ctx.fill();
+    ctx.fillRect(barX, barTopY, barWidth, barBotY - barTopY);
 
     // Health fill — from bottom up
     const fillRatio = health / 100;
     if (fillRatio > 0) {
       const fillHeight = (barBotY - barTopY) * fillRatio;
       const fillTopY = barBotY - fillHeight;
-
-      const fillTopT = (fillTopY - barTopY) / (barBotY - barTopY);
-      const fillTopScale = topScale + (botScale - topScale) * fillTopT;
-      const fillTopBarX = topBarX + (botBarX - topBarX) * fillTopT;
-      const fillTopW = topW + (botW - topW) * fillTopT;
-
-      ctx.beginPath();
-      ctx.moveTo(fillTopBarX, fillTopY);
-      ctx.lineTo(fillTopBarX + fillTopW, fillTopY);
-      ctx.lineTo(botBarX + botW, barBotY);
-      ctx.lineTo(botBarX, barBotY);
-      ctx.closePath();
 
       let fillColor, glowColor;
       if (health < 25) {
@@ -762,19 +714,13 @@ export default class NoteRenderer {
       ctx.fillStyle = fillColor;
       ctx.shadowBlur = 16 * gfx;
       ctx.shadowColor = glowColor;
-      ctx.fill();
+      ctx.fillRect(barX, fillTopY, barWidth, fillHeight);
     }
 
     // Border
-    ctx.beginPath();
-    ctx.moveTo(topBarX, barTopY);
-    ctx.lineTo(topBarX + topW, barTopY);
-    ctx.lineTo(botBarX + botW, barBotY);
-    ctx.lineTo(botBarX, barBotY);
-    ctx.closePath();
     ctx.strokeStyle = 'rgba(170,255,0,0.12)';
     ctx.lineWidth = 1;
-    ctx.stroke();
+    ctx.strokeRect(barX, barTopY, barWidth, barBotY - barTopY);
 
     ctx.restore();
   }
