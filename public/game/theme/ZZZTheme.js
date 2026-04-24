@@ -396,19 +396,10 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 .song-list-column { overflow: hidden; }
 .song-list-column * { max-width: 100%; box-sizing: border-box; }
 
-/* Song list fade edges */
-.song-list-fade-top,
-.song-list-fade-bottom {
-  position: absolute; left: 0; right: 0; height: 40px;
-  pointer-events: none; z-index: 3;
-}
-.song-list-fade-top {
-  top: 0;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
-}
-.song-list-fade-bottom {
-  bottom: 0;
-  background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
+/* Song list fade edges via CSS mask */
+.song-list-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 36px, black calc(100% - 36px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0px, black 36px, black calc(100% - 36px), transparent 100%);
 }
 
 @media (max-width: 768px) {

@@ -59,12 +59,8 @@ export default class SongSelect {
               <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
               <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." style="flex:1;min-width:0;font-size:13px;padding:8px 16px;" />
             </div>
-            <!-- Song list wrapper with fade edges -->
-            <div style="flex:1;min-height:0;position:relative;">
-              <div class="song-list-fade-top"></div>
-              <div id="song-list" class="zzz-scroll" style="height:100%;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:4px;padding-right:4px;"></div>
-              <div class="song-list-fade-bottom"></div>
-            </div>
+            <!-- Song list with fade edges via CSS mask -->
+            <div id="song-list" class="zzz-scroll song-list-fade" style="flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:4px;padding-right:4px;min-height:0;"></div>
             <!-- Action buttons -->
             <div style="flex-shrink:0;padding:4px 0 6px;display:flex;gap:6px;">
               <label class="zzz-btn zzz-btn--primary zzz-btn--sm zzz-import-btn" style="cursor:pointer;display:block;flex:1;text-align:center;" for="osz-input">IMPORT .OSZ</label>
@@ -255,8 +251,8 @@ export default class SongSelect {
         ${isActive ? 'box-shadow:0 0 14px rgba(170,255,0,0.15),inset 0 0 24px rgba(170,255,0,0.04);' : ''}
       `;
       diffRow.innerHTML = `
-        <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;">
-          <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;flex-shrink:0;">${this._escHtml(diff.version || 'NORMAL')}</span>
+        <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;flex-shrink:0;">${this._escHtml(diff.version || 'NORMAL')}</span>
+        <div style="flex:1;display:flex;justify-content:flex-end;min-width:0;">
           ${starSpectrumHtml}
         </div>
         ${recordHtml}
@@ -321,9 +317,9 @@ export default class SongSelect {
   /** Build a 10-star spectrum bar HTML string */
   _buildStarSpectrum(stars, color, large = false) {
     const partial = stars - Math.floor(stars); // e.g. 0.7 for ★3.7
-    const starSize = large ? 16 : 8;
-    const numSize = large ? 14 : 9;
-    const gap = large ? 2 : 0;
+    const starSize = large ? 16 : 12;
+    const numSize = large ? 14 : 11;
+    const gap = large ? 2 : 1;
     let html = `<div class="star-spectrum" style="gap:${gap}px;">`;
     for (let i = 1; i <= 10; i++) {
       if (i <= Math.floor(stars)) {
@@ -502,9 +498,16 @@ export default class SongSelect {
     // Star spectrum for the info panel (larger stars)
     const infoStarSpectrum = this._buildStarSpectrum(stars, starColor, true);
 
+    // Dynamic title size — shorter titles get bigger font
+    const titleLen = (set.title || '').length;
+    const titleSize = titleLen <= 8 ? 'clamp(36px, 6vw, 56px)' :
+                      titleLen <= 16 ? 'clamp(30px, 5vw, 44px)' :
+                      titleLen <= 28 ? 'clamp(24px, 4vw, 36px)' :
+                      'clamp(18px, 3vw, 28px)';
+
     // Remove PLAY button from info panel (moved to bottom-left)
     info.innerHTML = `
-      <div style="font-family:var(--zzz-font);font-weight:900;font-size:40px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.05;word-break:break-word;text-shadow:0 2px 20px rgba(0,0,0,0.9);">${this._escHtml(set.title)}</div>
+      <div style="font-family:var(--zzz-font);font-weight:900;font-size:${titleSize};color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.05;word-break:break-word;text-shadow:0 2px 20px rgba(0,0,0,0.9);">${this._escHtml(set.title)}</div>
       <div style="font-family:var(--zzz-font);font-weight:500;font-size:15px;color:var(--zzz-muted);margin-top:4px;text-shadow:0 1px 10px rgba(0,0,0,0.9);">${this._escHtml(set.artist)}</div>
       <div style="margin-top:10px;">${infoStarSpectrum}</div>
       <div style="display:flex;gap:14px;margin-top:6px;align-items:baseline;flex-wrap:wrap;">
