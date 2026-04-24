@@ -5,7 +5,7 @@ import DifficultyAnalyzer from './DifficultyAnalyzer.js';
 class BeatmapStore {
   static DB_NAME = 'rhythm-os-db';
   static STORE_NAME = 'beatmaps';
-  static DB_VERSION = 1;
+  static DB_VERSION = 2;
 
   /** Open (or create) the database */
   static async open() {
@@ -16,6 +16,7 @@ class BeatmapStore {
         if (!db.objectStoreNames.contains(BeatmapStore.STORE_NAME)) {
           db.createObjectStore(BeatmapStore.STORE_NAME, { keyPath: 'id' });
         }
+        // v1→v2: no structural change, just handling backgroundData
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -24,7 +25,6 @@ class BeatmapStore {
 
   /**
    * Serialize an AudioBuffer to a plain object storable in IndexedDB.
-   * Extracts raw PCM via copyFromChannel, stores metadata alongside.
    */
   static _serializeAudioBuffer(audioBuffer) {
     const numberOfChannels = audioBuffer.numberOfChannels;
@@ -54,7 +54,8 @@ class BeatmapStore {
 
   /**
    * Save a BeatmapSet to IndexedDB.
-   * AudioBuffers are serialized to raw PCM ArrayBuffers.
+   * Uses structured clone directly (not JSON) so that Uint8Arrays (backgroundData)
+   * are preserved natively. Only AudioBuffer needs special handling.
    */
   static async save(beatmapSet) {
     const db = await BeatmapStore.open();
@@ -62,28 +63,31 @@ class BeatmapStore {
       const tx = db.transaction(BeatmapStore.STORE_NAME, 'readwrite');
       const store = tx.objectStore(BeatmapStore.STORE_NAME);
 
-      // Deep-clone so we don't mutate the original object
-      const serializable = JSON.parse(JSON.stringify(beatmapSet, (key, value) => {
-        // Skip non-serializable items; we'll handle them explicitly
-        if (value instanceof AudioBuffer) return '__AUDIO_BUFFER__';
-        return value;
-      }));
+      // Shallow clone so we don't mutate the original
+      const storable = Object.assign({}, beatmapSet);
 
-      // Replace the __AUDIO_BUFFER__ placeholder with actual serialized data
-      if (beatmapSet.audioBuffer instanceof AudioBuffer) {
-        serializable.audioBuffer = BeatmapStore._serializeAudioBuffer(beatmapSet.audioBuffer);
+      // Replace AudioBuffer with serialized PCM data (not structured-cloneable)
+      if (storable.audioBuffer instanceof AudioBuffer) {
+        storable.audioBuffer = BeatmapStore._serializeAudioBuffer(storable.audioBuffer);
+        storable._hasAudioBuffer = true;
       }
 
-      store.put(serializable);
+      // Deep-clone the difficulties array to avoid mutating original
+      // (notes arrays etc. may have typed arrays inside)
+      storable.difficulties = JSON.parse(JSON.stringify(storable.difficulties));
+
+      // backgroundData (Uint8Array) and backgroundMime (string) are
+      // structured-clone compatible, so they survive IndexedDB put() natively.
+      // backgroundUrl (blob: URL) is also stored but is only valid for current session.
+
+      store.put(storable);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   }
 
   /**
-   * Load all stored beatmap sets, reconstructing AudioBuffers.
-   * @param {AudioContext} [audioCtx] - Optional AudioContext for AudioBuffer reconstruction.
-   *   If not provided, a temporary one will be created.
+   * Load all stored beatmap sets, reconstructing AudioBuffers and backgroundUrls.
    */
   static async loadAll(audioCtx) {
     const db = await BeatmapStore.open();
@@ -95,7 +99,6 @@ class BeatmapStore {
       request.onerror = () => reject(request.error);
     });
 
-    // Reconstruct AudioBuffers
     let ctx = audioCtx;
     let shouldClose = false;
     if (!ctx) {
@@ -104,7 +107,8 @@ class BeatmapStore {
     }
 
     const results = raw.map((entry) => {
-      if (entry.audioBuffer && entry.audioBuffer.sampleRate && entry.audioBuffer.channelData) {
+      // Reconstruct AudioBuffer
+      if (entry._hasAudioBuffer && entry.audioBuffer?.sampleRate && entry.audioBuffer?.channelData) {
         try {
           entry.audioBuffer = BeatmapStore._deserializeAudioBuffer(ctx, entry.audioBuffer);
         } catch (err) {
@@ -112,6 +116,28 @@ class BeatmapStore {
           entry.audioBuffer = null;
         }
       }
+
+      // Reconstruct backgroundUrl from backgroundData
+      // Blob URLs are session-only and die on reload, so we always recreate them
+      if (entry.backgroundData && entry.backgroundMime) {
+        try {
+          // backgroundData may be a Uint8Array (v2) or a plain object from old JSON serialization
+          let data = entry.backgroundData;
+          if (!(data instanceof Uint8Array)) {
+            // Old format: JSON-serialized Uint8Array → plain object like {"0": 255, ...}
+            const keys = Object.keys(data).map(Number).sort((a, b) => a - b);
+            const arr = new Uint8Array(keys.length);
+            keys.forEach(k => { arr[k] = data[k]; });
+            data = arr;
+          }
+          const blob = new Blob([data], { type: entry.backgroundMime });
+          entry.backgroundUrl = URL.createObjectURL(blob);
+        } catch (err) {
+          console.warn(`Failed to reconstruct backgroundUrl for ${entry.id}:`, err);
+          entry.backgroundUrl = null;
+        }
+      }
+
       return entry;
     });
 
@@ -226,14 +252,21 @@ export default class OszLoader {
         }
       }
 
-      // Create background Object URL
+      // Create background Object URL and also store raw data for persistence
       let backgroundUrl = null;
+      let backgroundData = null;
+      let backgroundMime = null;
+
       const bgFileName = firstParsed.background?.toLowerCase();
       if (bgFileName && imageFiles[bgFileName]) {
+        backgroundData = imageFiles[bgFileName]; // Uint8Array — survives structured clone
+        backgroundMime = bgFileName.endsWith('.png') ? 'image/png' : 'image/jpeg';
         backgroundUrl = this._createImageObjectURL(bgFileName, imageFiles[bgFileName]);
       } else {
         const firstImage = Object.entries(imageFiles)[0];
         if (firstImage) {
+          backgroundData = firstImage[1]; // Uint8Array
+          backgroundMime = firstImage[0].toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
           backgroundUrl = this._createImageObjectURL(firstImage[0], firstImage[1]);
         }
       }
@@ -258,6 +291,8 @@ export default class OszLoader {
         artist: firstParsed.metadata.Artist || 'Unknown',
         creator: firstParsed.metadata.Creator || '',
         backgroundUrl,
+        backgroundData,
+        backgroundMime,
         audioBuffer,
         difficulties,
       };
@@ -277,7 +312,7 @@ export default class OszLoader {
   }
 
   /**
-   * Load all beatmap sets from IndexedDB, reconstructing AudioBuffers.
+   * Load all beatmap sets from IndexedDB, reconstructing AudioBuffers and backgroundUrls.
    * @returns {Object[]} Array of BeatmapSet objects
    */
   async loadFromStore() {
@@ -296,7 +331,6 @@ export default class OszLoader {
    * Decode a Uint8Array of audio bytes into an AudioBuffer.
    */
   async _decodeAudio(uint8Array) {
-    // Slice to get a proper ArrayBuffer (not a view)
     const ab = uint8Array.buffer.slice(uint8Array.byteOffset, uint8Array.byteOffset + uint8Array.byteLength);
     return this.audio.decodeBuffer(ab);
   }
@@ -318,10 +352,8 @@ export default class OszLoader {
   _buildDifficulty(parsed) {
     let laneCount;
     if (parsed.mode === 3) {
-      // Native mania: CircleSize is the key count
       laneCount = parsed.difficulty.CircleSize || 4;
     } else {
-      // Converted standard map: default to 4 lanes
       laneCount = 4;
     }
 
@@ -331,7 +363,6 @@ export default class OszLoader {
       return null;
     }
 
-    // BPM changes
     const bpmChanges = parsed.timingPoints
       .filter(tp => tp.msPerBeat > 0)
       .map(tp => ({
@@ -341,10 +372,8 @@ export default class OszLoader {
 
     const primaryBpm = bpmChanges.length > 0 ? bpmChanges[0].bpm : 120;
 
-    // Duration: from first to last note, plus 2 s padding
     const sortedNotes = [...notes].sort((a, b) => a.time - b.time);
     const lastNote = sortedNotes[sortedNotes.length - 1];
-    const firstNote = sortedNotes[0];
     const mapDuration = lastNote
       ? (lastNote.time + lastNote.duration + 2) * 1000
       : 0;
@@ -379,42 +408,27 @@ export default class OszLoader {
 
   /**
    * Convert raw hit objects from .osu into mania note format.
-   *
-   * Standard (mode 0):
-   *   - Circles → tap notes, X position mapped to lane
-   *   - Sliders → hold notes, duration = endTime − startTime
-   *   - Spinners → skipped
-   *
-   * Mania (mode 3):
-   *   - X position maps to lane directly
-   *   - Sliders → hold notes
-   *   - Spinners → skipped
    */
   _convertHitObjects(hitObjects, laneCount, mode, timingPoints, difficulty) {
     const notes = [];
     let noteId = 0;
 
     for (const ho of hitObjects) {
-      // Type bitflags: 1 = circle, 2 = slider, 8 = spinner
       const isCircle = (ho.type & 1) !== 0;
       const isSlider = (ho.type & 2) !== 0;
       const isSpinner = (ho.type & 8) !== 0;
 
-      // Skip spinners — they don't map to mania
       if (isSpinner) continue;
 
-      // Lane mapping from X position (0-512)
       let lane;
       if (mode === 3) {
-        // Native mania: X position already encodes column
         lane = Math.min(Math.floor((ho.x * laneCount) / 512), laneCount - 1);
       } else {
-        // Converted standard: same X → lane mapping
         lane = Math.min(Math.floor((ho.x * laneCount) / 512), laneCount - 1);
       }
       lane = Math.max(0, lane);
 
-      const time = ho.time / 1000; // ms → seconds
+      const time = ho.time / 1000;
       let duration = 0;
       let noteType = 'tap';
 
@@ -432,10 +446,8 @@ export default class OszLoader {
       });
     }
 
-    // Sort by time then lane
     notes.sort((a, b) => a.time - b.time || a.lane - b.lane);
 
-    // Reassign IDs after sorting
     for (let i = 0; i < notes.length; i++) {
       notes[i].id = i;
     }
@@ -445,10 +457,6 @@ export default class OszLoader {
 
   // ── .osu File Parser ─────────────────────────────────────────────────────
 
-  /**
-   * Parse a single .osu file content into a structured object.
-   * Now includes Mode detection from the [General] section.
-   */
   _parseOsu(content) {
     const result = {
       general: {},
@@ -457,7 +465,7 @@ export default class OszLoader {
       timingPoints: [],
       hitObjects: [],
       background: null,
-      mode: 0, // default: standard osu!
+      mode: 0,
     };
 
     const lines = content.split(/\r?\n/);
@@ -473,32 +481,23 @@ export default class OszLoader {
         continue;
       }
 
-      // ── General ─────────────────────────────────────────────────────
       if (section === 'General') {
         const [key, ...rest] = line.split(':');
         const value = rest.join(':').trim();
         const keyTrimmed = key.trim();
-
         result.general[keyTrimmed] = value;
-
         if (keyTrimmed === 'Mode') {
           result.mode = parseInt(value, 10);
         }
       }
-
-      // ── Metadata ────────────────────────────────────────────────────
       else if (section === 'Metadata') {
         const [key, ...rest] = line.split(':');
         result.metadata[key.trim()] = rest.join(':').trim();
       }
-
-      // ── Difficulty ──────────────────────────────────────────────────
       else if (section === 'Difficulty') {
         const [key, ...rest] = line.split(':');
         result.difficulty[key.trim()] = parseFloat(rest.join(':').trim());
       }
-
-      // ── TimingPoints ────────────────────────────────────────────────
       else if (section === 'TimingPoints') {
         const parts = line.split(',');
         if (parts.length >= 2) {
@@ -509,8 +508,6 @@ export default class OszLoader {
           result.timingPoints.push({ offset, msPerBeat, meter, inherited });
         }
       }
-
-      // ── HitObjects ──────────────────────────────────────────────────
       else if (section === 'HitObjects') {
         const parts = line.split(',');
         if (parts.length < 4) continue;
@@ -521,7 +518,6 @@ export default class OszLoader {
         const type = parseInt(parts[3], 10);
         let endTime = 0;
 
-        // Slider: compute end time from timing + length
         if ((type & 2) && parts.length >= 8) {
           const tp = this._findTimingPoint(result.timingPoints, time);
           const sv = tp ? (tp.msPerBeat / 1000) : 1;
@@ -530,14 +526,10 @@ export default class OszLoader {
           const repeats = parseInt(parts[6], 10) || 1;
           endTime = time + (length * sv * repeats) / (sliderMult * 100);
         }
-        // Spinner: endTime from parts[5]
         else if ((type & 8) && parts.length >= 6) {
           endTime = parseFloat(parts[5]);
         }
-        // Mania hold note: endTime from parts[5] (colon-delimited extras)
-        // Some mania maps encode endTime in the extras field (parts[5])
         if ((type & 128) && parts.length >= 6) {
-          // type bit 128 = mania hold
           const extras = parts[5].split(':');
           if (extras.length >= 1) {
             const holdEnd = parseFloat(extras[0]);
@@ -549,8 +541,6 @@ export default class OszLoader {
 
         result.hitObjects.push({ x, y, time, type, endTime });
       }
-
-      // ── Events ──────────────────────────────────────────────────────
       else if (section === 'Events') {
         if (line.startsWith('0,0,')) {
           result.background = line.substring(4).trim().replace(/^"|"$/g, '');
@@ -561,9 +551,6 @@ export default class OszLoader {
     return result;
   }
 
-  /**
-   * Find the last uninherited timing point at or before `time`.
-   */
   _findTimingPoint(timingPoints, time) {
     let best = null;
     for (const tp of timingPoints) {

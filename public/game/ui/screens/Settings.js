@@ -12,7 +12,7 @@ export default class Settings {
     const savedResScale = localStorage.getItem('rhythm-os-res-scale') || '100';
 
     return `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:28px;">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:28px;background:rgba(17,17,17,0.85);">
         <h2 class="zzz-title" style="font-size:40px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
         <div class="zzz-panel" style="padding:28px;width:480px;">
           <div style="margin-bottom:24px;">

@@ -17,40 +17,37 @@ export default class SongSelect {
     this._previewFadeTimeout = null;
     this._filterText = '';
     this._filteredIndices = [];
+    this._expandedCard = -1; // Which song card has its difficulties expanded
   }
 
   build() {
     return `
       <div style="width:100%;height:100%;position:relative;">
-        <!-- Blurred background -->
-        <div id="ss-bg" style="position:absolute;inset:0;background-size:cover;background-position:center;filter:blur(40px) brightness(0.3);transform:scale(1.1);background-color:#111;"></div>
-        <!-- Dark overlay -->
-        <div style="position:absolute;inset:0;background:rgba(0,0,0,0.5);"></div>
+        <!-- Blurred background — semi-transparent so 3D TV shows through in bottom-left -->
+        <div id="ss-bg" style="position:absolute;inset:0;background-size:cover;background-position:center;filter:blur(40px) brightness(0.25);transform:scale(1.1);background-color:#111;opacity:0.85;"></div>
+        <!-- Dark overlay — transparent in bottom-left for 3D TV visibility -->
+        <div style="position:absolute;inset:0;background:linear-gradient(135deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.1) 85%, rgba(0,0,0,0) 100%);"></div>
 
-        <!-- Content -->
-        <div style="position:relative;z-index:1;display:flex;height:100%;padding:24px;gap:24px;box-sizing:border-box;">
-          <!-- LEFT: Song details + difficulty dropdown + import -->
-          <div style="flex:0 0 40%;display:flex;flex-direction:column;gap:16px;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
-              <span class="zzz-title" style="font-size:16px;color:var(--zzz-lime);">SONG SELECT</span>
-            </div>
+        <!-- Top-left song info overlay -->
+        <div id="ss-song-info" style="position:absolute;top:24px;left:24px;z-index:2;max-width:45%;pointer-events:none;">
+          <!-- Populated by JS -->
+        </div>
 
-            <!-- Song Info Panel -->
-            <div id="song-info-panel" class="zzz-panel" style="padding:24px;flex:1;display:flex;flex-direction:column;gap:16px;overflow-y:auto;">
-              <!-- Populated by JS -->
-            </div>
+        <!-- Top bar with back button + search -->
+        <div style="position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:3;display:flex;align-items:center;gap:12px;">
+          <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
+          <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." style="width:280px;" />
+        </div>
 
-            <!-- Import -->
-            <div class="zzz-panel" style="padding:16px;text-align:center;">
-              <label class="zzz-btn zzz-btn--primary zzz-btn--sm" style="cursor:pointer;display:inline-block;" for="osz-input">IMPORT .OSZ</label>
-              <input type="file" id="osz-input" accept=".osz" style="display:none;" multiple />
-            </div>
-          </div>
+        <!-- Import button (top right) -->
+        <div style="position:absolute;top:16px;right:24px;z-index:3;">
+          <label class="zzz-btn zzz-btn--primary zzz-btn--sm" style="cursor:pointer;display:inline-block;" for="osz-input">IMPORT .OSZ</label>
+          <input type="file" id="osz-input" accept=".osz" style="display:none;" multiple />
+        </div>
 
-          <!-- RIGHT: Song list -->
-          <div style="flex:1;display:flex;flex-direction:column;gap:10px;">
-            <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." />
+        <!-- Song list — centered, full height -->
+        <div style="position:relative;z-index:1;display:flex;justify-content:center;height:100%;padding:72px 24px 24px 24px;box-sizing:border-box;">
+          <div style="width:100%;max-width:680px;display:flex;flex-direction:column;gap:10px;">
             <div id="song-list" class="zzz-scroll" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;"></div>
           </div>
         </div>
@@ -81,7 +78,7 @@ export default class SongSelect {
     document.getElementById('song-search').addEventListener('input', (e) => this._filterSongs(e.target.value));
 
     this._keyHandler = (e) => {
-      if (e.target.tagName === 'INPUT') return; // Don't capture when typing in search
+      if (e.target.tagName === 'INPUT') return;
       if (e.code === 'ArrowUp') {
         e.preventDefault();
         this._navigateUp();
@@ -122,7 +119,6 @@ export default class SongSelect {
     this._filterText = query;
     this._buildFilteredIndices();
     this._renderSongList();
-    // Keep selection if still visible, otherwise select first
     if (this._filteredIndices.length > 0 && !this._filteredIndices.includes(this.selectedIndex)) {
       this._selectSong(this._filteredIndices[0]);
     } else if (this._filteredIndices.length === 0) {
@@ -171,20 +167,29 @@ export default class SongSelect {
       return;
     }
 
+    if (this._filteredIndices.length === 0 && this.beatmapSets.length === 0) {
+      this._renderEmptyState();
+      return;
+    }
+
     this._filteredIndices.forEach((setIndex) => {
       const set = this.beatmapSets[setIndex];
       const isSelected = setIndex === this.selectedIndex;
-      const card = this._createSongCard(set, setIndex, isSelected);
+      const isExpanded = setIndex === this._expandedCard;
+      const card = this._createSongCard(set, setIndex, isSelected, isExpanded);
       list.appendChild(card);
     });
   }
 
-  _createSongCard(set, setIndex, isSelected) {
+  _createSongCard(set, setIndex, isSelected, isExpanded) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'song-card-wrapper';
+    wrapper.dataset.index = setIndex;
+
     const card = document.createElement('div');
     card.className = 'song-card' + (isSelected ? ' active' : '');
-    card.dataset.index = setIndex;
 
-    // Determine display difficulty (highest or selected)
+    // Determine display difficulty
     const dispDiff = isSelected && set.difficulties[this.selectedDiffIndex]
       ? set.difficulties[this.selectedDiffIndex]
       : set.difficulties[0] || { difficulty: { stars: 0 } };
@@ -200,12 +205,18 @@ export default class SongSelect {
         <div class="song-card-diff-row">
           <span class="song-card-stars" style="color:${starColor};">★ ${stars.toFixed(1)}</span>
           <span class="song-card-diff-name" style="color:${starColor};">${diffName}</span>
-          ${set.difficulties.length > 1 ? `<span class="song-card-diff-count">+${set.difficulties.length - 1}</span>` : ''}
+          ${set.difficulties.length > 1 ? `<span class="song-card-diff-count">${isExpanded ? '▲' : '▼'} ${set.difficulties.length} diffs</span>` : ''}
         </div>
       </div>
     `;
 
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (e) => {
+      // If clicking on the diff count badge, toggle expansion
+      if (e.target.classList.contains('song-card-diff-count') && set.difficulties.length > 1) {
+        e.stopPropagation();
+        this._toggleExpand(setIndex);
+        return;
+      }
       const now = Date.now();
       if (this.selectedIndex === setIndex && now - this._lastSelectTime < 400) {
         this._confirmSong();
@@ -215,7 +226,82 @@ export default class SongSelect {
       this._lastSelectTime = now;
     });
 
-    return card;
+    wrapper.appendChild(card);
+
+    // Difficulty dropdown (osu!lazer style — expands below the card)
+    if (isExpanded && set.difficulties.length > 1) {
+      const diffList = document.createElement('div');
+      diffList.className = 'diff-dropdown';
+      diffList.style.cssText = `
+        display:flex;flex-direction:column;gap:2px;
+        padding:4px 8px 8px 8px;
+        margin-left:80px;
+        border-left:2px solid var(--zzz-graphite);
+      `;
+      set.difficulties.forEach((diff, diffIdx) => {
+        const s = diff.difficulty?.stars || 0;
+        const c = DifficultyAnalyzer.getStarColor(s);
+        const n = DifficultyAnalyzer.getDiffName(s);
+        const isActive = isSelected && diffIdx === this.selectedDiffIndex;
+        const diffRow = document.createElement('div');
+        diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
+        diffRow.style.cssText = `
+          display:flex;align-items:center;gap:10px;
+          padding:8px 12px;border-radius:8px;cursor:pointer;
+          transition:all 0.12s ease;
+          background:${isActive ? 'rgba(170,255,0,0.08)' : 'var(--zzz-panel)'};
+          border:2px solid ${isActive ? c : 'var(--zzz-graphite)'};
+        `;
+        const bpm = diff.metadata?.bpm || 0;
+        const duration = diff.metadata?.duration || 0;
+        const durationSec = Math.floor(duration / 1000);
+        const durationStr = `${Math.floor(durationSec / 60)}:${(durationSec % 60).toString().padStart(2, '0')}`;
+        const pattern = diff.difficulty?.pattern || '—';
+        const density = diff.difficulty?.density || 0;
+
+        diffRow.innerHTML = `
+          <span style="color:${c};font-family:var(--zzz-font);font-weight:900;font-size:14px;min-width:52px;">★ ${s.toFixed(1)}</span>
+          <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:0.04em;min-width:90px;">${this._escHtml(diff.version || n)}</span>
+          <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;min-width:50px;">${bpm} BPM</span>
+          <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;min-width:40px;">${durationStr}</span>
+          <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:11px;">${pattern} · ${density.toFixed(1)} NPS</span>
+        `;
+
+        diffRow.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._selectSong(setIndex);
+          this._selectDifficulty(diffIdx);
+        });
+
+        diffRow.addEventListener('mouseenter', () => {
+          if (!isActive) {
+            diffRow.style.background = 'rgba(170,255,0,0.04)';
+            diffRow.style.borderColor = 'var(--zzz-graphite-2)';
+          }
+        });
+        diffRow.addEventListener('mouseleave', () => {
+          if (!isActive) {
+            diffRow.style.background = 'var(--zzz-panel)';
+            diffRow.style.borderColor = 'var(--zzz-graphite)';
+          }
+        });
+
+        diffList.appendChild(diffRow);
+      });
+      wrapper.appendChild(diffList);
+    }
+
+    return wrapper;
+  }
+
+  _toggleExpand(setIndex) {
+    if (this._expandedCard === setIndex) {
+      this._expandedCard = -1;
+    } else {
+      this._expandedCard = setIndex;
+    }
+    // Re-render the list to update expansion state
+    this._renderSongList();
   }
 
   _escHtml(str) {
@@ -230,16 +316,17 @@ export default class SongSelect {
     if (setIndex < 0 || setIndex >= this.beatmapSets.length) return;
     this.selectedIndex = setIndex;
     this.selectedDiffIndex = 0;
+
+    // Auto-expand the selected card
+    this._expandedCard = setIndex;
+
     const set = this.beatmapSets[setIndex];
 
     // Update card highlights
-    document.querySelectorAll('.song-card').forEach((el) => {
-      const idx = parseInt(el.dataset.index);
-      el.classList.toggle('active', idx === setIndex);
-    });
+    this._renderSongList();
 
     // Scroll selected card into view
-    const activeCard = document.querySelector(`.song-card[data-index="${setIndex}"]`);
+    const activeCard = document.querySelector(`.song-card-wrapper[data-index="${setIndex}"]`);
     if (activeCard) {
       activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -256,7 +343,7 @@ export default class SongSelect {
       }
     }
 
-    // Render song info panel
+    // Update top-left song info
     this._renderSongInfo(set);
 
     // Play preview
@@ -270,13 +357,14 @@ export default class SongSelect {
     if (!set || diffIndex < 0 || diffIndex >= set.difficulties.length) return;
     this.selectedDiffIndex = diffIndex;
     this._renderSongInfo(set);
+    this._renderSongList(); // Re-render to update active difficulty in dropdown
   }
 
-  // ─── Song Info Panel ──────────────────────────────────────────────
+  // ─── Song Info (top-left overlay) ─────────────────────────────
 
   _renderSongInfo(set) {
-    const panel = document.getElementById('song-info-panel');
-    if (!panel) return;
+    const info = document.getElementById('ss-song-info');
+    if (!info) return;
 
     const diff = set.difficulties[this.selectedDiffIndex] || set.difficulties[0];
     if (!diff) return;
@@ -286,91 +374,45 @@ export default class SongSelect {
     const diffName = DifficultyAnalyzer.getDiffName(stars);
     const bpm = diff.metadata?.bpm || 0;
     const duration = diff.metadata?.duration || 0;
+    const durationSec = Math.floor(duration / 1000);
+    const durationStr = `${Math.floor(durationSec / 60)}:${(durationSec % 60).toString().padStart(2, '0')}`;
     const pattern = diff.difficulty?.pattern || '—';
     const density = diff.difficulty?.density || 0;
     const stamina = diff.difficulty?.stamina || 0;
-    const durationSec = Math.floor(duration / 1000);
-    const durationStr = `${Math.floor(durationSec / 60)}:${(durationSec % 60).toString().padStart(2, '0')}`;
 
-    let diffTabsHtml = '';
-    if (set.difficulties.length > 1) {
-      diffTabsHtml = `<div class="diff-tabs">${set.difficulties.map((d, i) => {
-        const s = d.difficulty?.stars || 0;
-        const c = DifficultyAnalyzer.getStarColor(s);
-        const n = DifficultyAnalyzer.getDiffName(s);
-        const active = i === this.selectedDiffIndex;
-        return `<button class="diff-tab${active ? ' active' : ''}" data-diff="${i}" style="${active ? `border-color:${c};color:${c};` : ''}">` +
-          `<span class="diff-tab-name">${this._escHtml(d.version || n)}</span>` +
-          `<span class="diff-tab-stars" style="color:${c};">★${s.toFixed(1)}</span>` +
-          `</button>`;
-      }).join('')}</div>`;
-    }
-
-    panel.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-        <span class="zzz-label">ARTIST</span>
+    info.innerHTML = `
+      <div style="font-family:var(--zzz-font);font-weight:900;font-size:28px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.1;word-break:break-word;text-shadow:0 2px 16px rgba(0,0,0,0.8);">${this._escHtml(set.title)}</div>
+      <div style="font-family:var(--zzz-font);font-weight:500;font-size:15px;color:var(--zzz-muted);margin-top:4px;text-shadow:0 1px 8px rgba(0,0,0,0.8);">${this._escHtml(set.artist)}${set.creator ? ' // ' + this._escHtml(set.creator) : ''}</div>
+      <div style="display:flex;gap:20px;margin-top:10px;flex-wrap:wrap;align-items:baseline;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="color:${starColor};font-family:var(--zzz-font);font-weight:900;font-size:20px;text-shadow:0 0 12px ${starColor}40;">★ ${stars.toFixed(1)}</span>
+          <span style="color:${starColor};font-family:var(--zzz-font);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:0.06em;">${diffName}</span>
+          <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">· ${this._escHtml(diff.version || '')}</span>
+        </div>
+        <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:13px;"><span style="color:var(--zzz-text);font-weight:700;">${bpm}</span> BPM</span>
+        <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:13px;"><span style="color:var(--zzz-text);font-weight:700;">${durationStr}</span></span>
+        <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${pattern} · ${density.toFixed(1)} NPS · ${stamina}%</span>
       </div>
-      <div style="font-family:var(--zzz-font);font-weight:900;font-size:28px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.1;word-break:break-word;">${this._escHtml(set.title)}</div>
-      <div style="font-family:var(--zzz-font);font-weight:500;font-size:14px;color:var(--zzz-muted);margin-top:2px;">${this._escHtml(set.artist)}${set.creator ? ' // ' + this._escHtml(set.creator) : ''}</div>
-
-      <div style="display:flex;gap:24px;margin-top:8px;flex-wrap:wrap;">
-        <div>
-          <div class="zzz-label">DIFFICULTY</div>
-          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
-            <span style="color:${starColor};font-family:var(--zzz-font);font-weight:900;font-size:20px;">★ ${stars.toFixed(1)}</span>
-            <span style="color:${starColor};font-family:var(--zzz-font);font-weight:700;font-size:14px;">${diffName}</span>
-          </div>
-        </div>
-        <div>
-          <div class="zzz-label">BPM</div>
-          <div class="zzz-value" style="font-size:20px;margin-top:4px;">${bpm || '---'}</div>
-        </div>
-        <div>
-          <div class="zzz-label">LENGTH</div>
-          <div class="zzz-value" style="font-size:20px;margin-top:4px;">${duration ? durationStr : '---'}</div>
-        </div>
-      </div>
-
-      <div style="display:flex;gap:24px;flex-wrap:wrap;">
-        <div>
-          <div class="zzz-label">PATTERN</div>
-          <div class="zzz-value" style="font-size:14px;margin-top:4px;">${pattern}</div>
-        </div>
-        <div>
-          <div class="zzz-label">DENSITY</div>
-          <div class="zzz-value" style="font-size:14px;margin-top:4px;">${density.toFixed(1)} NPS</div>
-        </div>
-        <div>
-          <div class="zzz-label">STAMINA</div>
-          <div class="zzz-value" style="font-size:14px;margin-top:4px;">${stamina}%</div>
-        </div>
-      </div>
-
-      ${diffTabsHtml}
-
-      <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="width:100%;font-size:16px;margin-top:auto;">▶ PLAY</button>
+      <button id="song-play-btn" class="zzz-btn zzz-btn--primary zzz-btn--sm" style="margin-top:12px;pointer-events:auto;">▶ PLAY</button>
     `;
 
     // Rebind play button
     document.getElementById('song-play-btn')?.addEventListener('click', () => this._confirmSong());
-
-    // Rebind difficulty tabs
-    panel.querySelectorAll('.diff-tab').forEach((tab) => {
-      tab.addEventListener('click', (e) => {
-        const diffIdx = parseInt(e.currentTarget.dataset.diff);
-        this._selectDifficulty(diffIdx);
-      });
-    });
   }
 
   _renderEmptyState() {
-    const panel = document.getElementById('song-info-panel');
-    if (!panel) return;
+    const info = document.getElementById('ss-song-info');
+    if (info) {
+      info.innerHTML = '';
+    }
 
-    panel.innerHTML = `
-      <div style="text-align:center;padding:40px 0;">
-        <div class="zzz-title" style="font-size:24px;color:var(--zzz-muted);margin-bottom:16px;">NO BEATMAPS LOADED</div>
-        <div style="color:var(--zzz-muted);font-size:14px;margin-bottom:24px;">Import .osz files to get started</div>
+    const list = document.getElementById('song-list');
+    if (!list) return;
+
+    list.innerHTML = `
+      <div style="text-align:center;padding:60px 0;display:flex;flex-direction:column;align-items:center;gap:20px;">
+        <div class="zzz-title" style="font-size:24px;color:var(--zzz-muted);">NO BEATMAPS LOADED</div>
+        <div style="color:var(--zzz-muted);font-size:14px;">Import .osz files to get started</div>
         <label class="zzz-btn zzz-btn--primary" style="cursor:pointer;display:inline-block;" for="osz-input">IMPORT .OSZ</label>
       </div>
     `;
@@ -392,18 +434,16 @@ export default class SongSelect {
   // ─── Audio Preview ────────────────────────────────────────────────
 
   _playPreview(set) {
-    // Fade out current audio
     this._stopPreview();
 
     if (!set.audioBuffer) return;
 
     const previewTime = set.difficulties[this.selectedDiffIndex]?.metadata?.previewTime || 0;
 
-    // Small delay for fade-out, then fade in new audio
     this.audio._ensureCtx();
     this.audio.fadeTo(0, 0.2);
     this._previewFadeTimeout = setTimeout(() => {
-      if (set !== this.beatmapSets[this.selectedIndex]) return; // Stale
+      if (set !== this.beatmapSets[this.selectedIndex]) return;
       this.audio.play(set.audioBuffer, Math.max(0, previewTime));
       this.audio.fadeTo(0.5, 0.4);
     }, 250);
@@ -469,11 +509,9 @@ export default class SongSelect {
       }
     }
 
-    // Reset file input so the same file can be re-imported
     const oszInput = document.getElementById('osz-input');
     if (oszInput) oszInput.value = '';
 
-    // Refresh
     this._buildFilteredIndices();
     this._renderSongList();
     if (this.beatmapSets.length > 0) {

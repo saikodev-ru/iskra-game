@@ -422,51 +422,38 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 .song-card-diff-count {
   font-family: var(--zzz-font);
   font-size: 11px;
-  color: var(--zzz-muted);
+  color: var(--zzz-lime);
   background: var(--zzz-graphite);
   border-radius: 9999px;
-  padding: 1px 6px;
-}
-
-/* DIFFICULTY TABS — dropdown below song info */
-.diff-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.diff-tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 14px;
-  background: var(--zzz-panel-2);
-  border: 2px solid var(--zzz-graphite);
-  border-radius: 10px;
+  padding: 2px 8px;
   cursor: pointer;
   transition: all 0.15s ease;
-  font-family: var(--zzz-font);
+  user-select: none;
 }
-.diff-tab:hover {
-  background: rgba(170,255,0,0.05);
-  border-color: var(--zzz-graphite-2);
+.song-card-diff-count:hover {
+  background: var(--zzz-lime-dim);
+  color: var(--zzz-bg);
 }
-.diff-tab.active {
-  background: rgba(170,255,0,0.08);
+
+/* SONG CARD WRAPPER — container for card + dropdown */
+.song-card-wrapper {
+  display: flex;
+  flex-direction: column;
 }
-.diff-tab-name {
-  font-weight: 700;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--zzz-text);
+
+/* DIFFICULTY DROPDOWN — osu!lazer style expand below card */
+.diff-dropdown {
+  animation: dropdown-in 0.15s ease-out forwards;
 }
-.diff-tab.active .diff-tab-name {
-  color: inherit;
+@keyframes dropdown-in {
+  from { opacity: 0; max-height: 0; transform: translateY(-8px); }
+  to   { opacity: 1; max-height: 600px; transform: translateY(0); }
 }
-.diff-tab-stars {
-  font-weight: 900;
-  font-size: 11px;
+.diff-dropdown-item {
+  transition: all 0.12s ease;
+}
+.diff-dropdown-item:hover {
+  transform: translateX(4px);
 }
 
 /* DIFFICULTY STARS (legacy) */
@@ -571,7 +558,7 @@ const ZZZTheme = {
     // CRT click delegation
     document.addEventListener('click', (e) => {
       if (!_crtSounds) return;
-      const target = e.target.closest('button, .zzz-btn, .song-item, .song-card, .diff-tab, [data-crt-click]');
+      const target = e.target.closest('button, .zzz-btn, .song-item, .song-card, .diff-tab, .diff-dropdown-item, [data-crt-click]');
       if (target) _crtSounds.crtClick();
     });
   },

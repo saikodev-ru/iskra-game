@@ -34,8 +34,8 @@ export default function Home() {
       <div id="judgement-overlay" style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none' }} />
       {/* HUD */}
       <div id="hud" style={{ position: 'fixed', inset: 0, zIndex: 3, pointerEvents: 'none' }} />
-      {/* Screen UI — semi-transparent so 3D shows through */}
-      <div id="screen" style={{ position: 'fixed', inset: 0, zIndex: 5, background: 'rgba(17,17,17,0.75)' }} />
+      {/* Screen UI — transparent so 3D shows through; each screen handles its own background */}
+      <div id="screen" style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
       {/* Modal */}
       <div id="modal" style={{ position: 'fixed', inset: 0, zIndex: 10, pointerEvents: 'none' }} />
     </div>

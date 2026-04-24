@@ -6,7 +6,7 @@ export default class MainMenu {
 
   build() {
     return `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:48px;">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:48px;background:rgba(17,17,17,0.85);">
         <div style="text-align:center;">
           <h1 class="zzz-title" style="font-size:72px;color:var(--zzz-lime);letter-spacing:0.25em;margin:0;text-shadow:0 0 40px rgba(170,255,0,0.4),0 0 80px rgba(170,255,0,0.2);">
             RHYTHM::OS

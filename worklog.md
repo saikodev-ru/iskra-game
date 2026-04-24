@@ -35,3 +35,23 @@ Stage Summary:
 - Removed Neon Pulse/Cyber Drift demo songs
 - Removed PREVIEW placeholder panel
 - Lint passes clean
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix three user-reported issues: 1) OSZ preview images not persisting, 2) 3D TV not visible, 3) SongSelect layout redesign
+
+Work Log:
+- Fixed OszLoader.js: Added backgroundData/backgroundMime fields to store raw image bytes alongside Object URLs. Changed BeatmapStore.save() from JSON serialization to structured clone (Object.assign + explicit AudioBuffer/difficulties handling) so Uint8Array survives IndexedDB. BeatmapStore.loadAll() now recreates Object URLs from stored image data. DB_VERSION bumped to 2. Added backward compatibility for old JSON-serialized Uint8Array format.
+- Fixed ThreeScene.js: Increased camera FOV from 60→75 so more of the scene is visible. Repositioned TV from (-4.5, -2.5, 1) to (-3.8, -2.0, 1.0). Enlarged TV geometry (3.0x2.2x0.3 vs 2.0x1.5x0.25). Added bezel, stand, and neck for better CRT aesthetic. Added brighter glow light on texture change.
+- Redesigned SongSelect.js: Removed song-info-panel left sidebar. Added top-left song info overlay (title, artist, difficulty/BPM/length). Added difficulty dropdown that expands from song cards (osu!lazer style) when clicking diff count badge. Moved back button + search to centered top bar. Moved import button to top-right. Made background gradient transparent in bottom-left so 3D TV shows through.
+- Updated page.tsx: Removed background from #screen div so each screen manages its own background transparency.
+- Updated MainMenu.js, Settings.js, ResultScreen.js: Added explicit background:rgba(17,17,17,0.85) to each screen's root div.
+- Updated ZZZTheme.js: Replaced diff-tabs CSS with .song-card-wrapper and .diff-dropdown CSS. Updated CRT click delegation to include .diff-dropdown-item. Made .song-card-diff-count look clickable with hover effects.
+
+Stage Summary:
+- OSZ preview images now persist across page reloads (backgroundData stored in IndexedDB)
+- 3D TV is visible in bottom-left corner of SongSelect (FOV 75, proper positioning)
+- SongSelect redesigned: no left panel, top-left info, difficulty dropdown from song cards
+- All screens have self-managed backgrounds, #screen is now transparent
+- Lint passes clean
