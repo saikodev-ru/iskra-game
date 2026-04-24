@@ -59,12 +59,17 @@ export default class SongSelect {
               <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
               <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." style="flex:1;min-width:0;font-size:13px;padding:8px 16px;" />
             </div>
-            <!-- Song list — osu!lazer carousel style -->
-            <div id="song-list" class="zzz-scroll" style="flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:4px;padding-right:4px;min-height:0;"></div>
-            <!-- Import button -->
-            <div style="flex-shrink:0;padding:4px 0 6px;">
-              <label class="zzz-btn zzz-btn--primary zzz-btn--sm zzz-import-btn" style="cursor:pointer;display:block;width:100%;text-align:center;" for="osz-input">IMPORT .OSZ</label>
+            <!-- Song list wrapper with fade edges -->
+            <div style="flex:1;min-height:0;position:relative;">
+              <div class="song-list-fade-top"></div>
+              <div id="song-list" class="zzz-scroll" style="height:100%;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:4px;padding-right:4px;"></div>
+              <div class="song-list-fade-bottom"></div>
+            </div>
+            <!-- Action buttons -->
+            <div style="flex-shrink:0;padding:4px 0 6px;display:flex;gap:6px;">
+              <label class="zzz-btn zzz-btn--primary zzz-btn--sm zzz-import-btn" style="cursor:pointer;display:block;flex:1;text-align:center;" for="osz-input">IMPORT .OSZ</label>
               <input type="file" id="osz-input" accept=".osz" style="display:none;" multiple />
+              <button id="create-playlist-btn" class="zzz-btn zzz-btn--sm zzz-import-btn" style="flex:1;text-align:center;border-color:var(--zzz-purple);color:var(--zzz-purple);">CREATE PLAYLIST</button>
             </div>
           </div>
         </div>
