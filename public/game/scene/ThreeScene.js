@@ -55,6 +55,13 @@ export default class ThreeScene {
     this._glitchIntensity = 0;  // 0-1, glitch effect intensity (RGB split, scan disruption)
     this._glitchSeed = 0;       // random seed for glitch patterns
 
+    // Reverse parallax — mouse tracking for background offset
+    this._mouseX = 0;  // -1 to 1
+    this._mouseY = 0;  // -1 to 1
+    this._bgOffsetX = 0; // smoothed offset
+    this._bgOffsetY = 0;
+    this._parallaxIntensity = 0.15; // how far the bg shifts (world units at z=-4)
+
     this._init();
     this._setupListeners();
   }
@@ -150,6 +157,13 @@ export default class ThreeScene {
 
     this._resizeHandler = () => this.resize();
     window.addEventListener('resize', this._resizeHandler);
+
+    // Mouse tracking for reverse parallax
+    this._mouseHandler = (e) => {
+      this._mouseX = (e.clientX / window.innerWidth - 0.5) * 2;  // -1 to 1
+      this._mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+    };
+    window.addEventListener('mousemove', this._mouseHandler);
 
     window.__threeSceneInstances.push(this);
   }
@@ -318,7 +332,7 @@ export default class ThreeScene {
           if (uCrtIntensity > 0.01) {
             vec2 d = uv - 0.5;
             float r2 = dot(d, d);
-            float barrel = 1.0 + uCrtIntensity * 0.35 * r2;
+            float barrel = 1.0 - uCrtIntensity * 0.35 * r2;
             uv = 0.5 + d * barrel;
           }
 
@@ -613,7 +627,7 @@ export default class ThreeScene {
           if (uCrtIntensity > 0.01) {
             vec2 d = uv - 0.5;
             float r2 = dot(d, d);
-            float barrel = 1.0 + uCrtIntensity * 0.35 * r2;
+            float barrel = 1.0 - uCrtIntensity * 0.35 * r2;
             uv = 0.5 + d * barrel;
           }
 
@@ -1003,6 +1017,22 @@ export default class ThreeScene {
       this._glitchIntensity = 0;
     }
 
+    // ── Reverse parallax — move bg opposite to mouse ──
+    const targetX = -this._mouseX * this._parallaxIntensity;
+    const targetY = this._mouseY * this._parallaxIntensity;
+    this._bgOffsetX += (targetX - this._bgOffsetX) * 0.06;
+    this._bgOffsetY += (targetY - this._bgOffsetY) * 0.06;
+    if (this._bgImageMesh) {
+      const pg = this._calcBgPlaneGeometry();
+      this._bgImageMesh.position.x = pg.cx + this._bgOffsetX;
+      this._bgImageMesh.position.y = pg.cy + this._bgOffsetY;
+    }
+    if (this._videoMesh) {
+      const pg = this._calcBgPlaneGeometry();
+      this._videoMesh.position.x = pg.cx + this._bgOffsetX;
+      this._videoMesh.position.y = pg.cy + this._bgOffsetY;
+    }
+
     // Camera position: always smoothly return to center (no shake)
     this.camera.position.x *= 0.85;
 
@@ -1021,6 +1051,10 @@ export default class ThreeScene {
     if (this._resizeHandler) {
       window.removeEventListener('resize', this._resizeHandler);
       this._resizeHandler = null;
+    }
+    if (this._mouseHandler) {
+      window.removeEventListener('mousemove', this._mouseHandler);
+      this._mouseHandler = null;
     }
 
     this.removeTVMonitor();
