@@ -89,7 +89,7 @@ body.zzz-active::before {
 .judgement-text {
   font-family: var(--zzz-font);
   font-weight: 900;
-  font-size: 28px;
+  font-size: 20px;
   text-transform: uppercase;
   letter-spacing: 0.15em;
   text-shadow: 0 0 12px currentColor;
@@ -165,8 +165,8 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 
 /* DELTA DISPLAY */
 .delta-display {
-  font-family: var(--zzz-mono); font-size: 12px; color: var(--zzz-muted);
-  position: absolute; left: 50%; top: calc(45% + 20px);
+  font-family: var(--zzz-mono); font-size: 10px; color: var(--zzz-muted);
+  position: absolute; left: 50%; top: calc(45% + 14px);
   transform: translateX(-50%); pointer-events: none; white-space: nowrap;
 }
 

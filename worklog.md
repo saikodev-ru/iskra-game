@@ -117,3 +117,29 @@ Stage Summary:
 - Lint passes clean
 - Hit feedback moved entirely to the 3D scene (bloom spikes, FOV pulses, light color changes)
 - Lint passes clean
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Fix long notes not rendering on 3D playfield, add HP bar to canvas with perspective tilt
+
+Work Log:
+- Rewrote NoteRenderer.js:
+  - Complete hold note rendering rewrite with clear osu!mania mechanics
+  - Separated hold notes and tap notes in _drawNotes() — hold bodies drawn first (behind caps and tap notes)
+  - Added _drawHoldGlow() — glowing indicator at judge line when holding a note
+  - Added _drawHPBar() — vertical HP bar drawn on canvas to the right of the playfield lanes, with same perspective tilt (narrow at top, wider at bottom)
+  - HP bar color changes: green (>50%), yellow (25-50%), red (<25%) with matching glow
+  - Added setHealth(pct) method for game loop to pass health data
+  - Extracted _getJudgeLineY() and _getTopY() helper methods for consistency
+- Updated main.js: Added noteRenderer.setHealth(health) call in game loop update
+- Updated HUD.js: Removed HTML HP bar (div#hud-hp-container and div#hud-health-fill), set els.health to null, made setHealth() a no-op for API compatibility
+- Updated ZZZTheme.js: Reduced judgement text from 28px to 20px, delta display from 12px to 10px
+
+Stage Summary:
+- Long notes now properly render with separated body/cap drawing order and hold glow indicator
+- HP bar rendered on canvas with same perspective tilt as playfield (right side of lanes)
+- HTML HP bar removed from HUD
+- Judgement text is now 20px (smaller, more osu!mania-like)
+- Delta display is now 10px
+- Lint passes clean

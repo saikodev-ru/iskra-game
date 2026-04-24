@@ -35,11 +35,6 @@ export default class HUD {
           </div>
         </div>
 
-        <!-- Health bar — VERTICAL along the right edge of the playfield -->
-        <div id="hud-hp-container" style="position:absolute;right:3%;top:50%;transform:translateY(-50%);width:8px;height:40%;border-radius:9999px;overflow:hidden;background:rgba(255,255,255,0.06);">
-          <div id="hud-health-fill" style="position:absolute;bottom:0;left:0;width:100%;height:100%;background:linear-gradient(0deg, var(--zzz-lime), #CCFF66);box-shadow:0 0 12px rgba(170,255,0,0.5);transition:height 0.1s linear;border-radius:9999px;"></div>
-        </div>
-
         <!-- Progress — top edge -->
         <div style="position:absolute;top:0;left:0;right:0;height:2px;background:rgba(255,255,255,0.03);">
           <div id="hud-progress" style="height:100%;width:0%;background:var(--zzz-lime);transition:width 0.5s linear;border-radius:0 2px 2px 0;"></div>
@@ -55,7 +50,7 @@ export default class HUD {
       combo: document.getElementById('hud-combo'),
       rank: document.getElementById('hud-rank'),
       accuracy: document.getElementById('hud-accuracy'),
-      health: document.getElementById('hud-health-fill'),
+      health: null, // HP bar now rendered on canvas by NoteRenderer
       progress: document.getElementById('hud-progress'),
       pause: document.getElementById('hud-pause'),
     };
@@ -163,15 +158,8 @@ export default class HUD {
   }
 
   setHealth(n) {
-    const pct = Math.max(0, Math.min(100, n));
-    this.els.health.style.height = pct + '%';
-    if (n < 25) {
-      this.els.health.style.background = 'linear-gradient(0deg, var(--zzz-red), #ff6b6b)';
-      this.els.health.style.boxShadow = '0 0 8px var(--zzz-red)';
-    } else {
-      this.els.health.style.background = 'linear-gradient(0deg, var(--zzz-lime), #CCFF66)';
-      this.els.health.style.boxShadow = '0 0 12px rgba(170,255,0,0.5)';
-    }
+    // HP bar is now rendered on canvas by NoteRenderer
+    // This method is kept for API compatibility
   }
 
   setProgress(ratio) { this.els.progress.style.width = (ratio * 100) + '%'; }

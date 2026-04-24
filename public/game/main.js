@@ -219,6 +219,7 @@ async function boot() {
         health = Math.max(0, Math.min(100, 100 - currentJudgement.hitCounts.miss * 5 + currentJudgement.hitCounts.perfect * 0.3));
         const stats = currentJudgement.getStats();
         stats.health = health;
+        noteRenderer.setHealth(health);
         hud.update(stats);
         if (currentBeatMap.notes.length > 0) {
           const last = currentBeatMap.notes[currentBeatMap.notes.length - 1];

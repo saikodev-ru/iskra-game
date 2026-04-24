@@ -21,6 +21,7 @@ export default class NoteRenderer {
     this._bgLoadAttempted = false;
     this.safeArea = { x: 0, y: 0, w: 0, h: 0 };
     this._safeAreaExplicit = false;
+    this._health = 100; // 0–100
     this.resize();
   }
 
@@ -29,6 +30,10 @@ export default class NoteRenderer {
   setSafeArea(x, y, w, h) {
     this.safeArea = { x, y, w, h };
     this._safeAreaExplicit = true;
+  }
+
+  setHealth(pct) {
+    this._health = Math.max(0, Math.min(100, pct));
   }
 
   setBackgroundImage(url) {
@@ -98,16 +103,24 @@ export default class NoteRenderer {
     this._drawBackground(laneCount);
     this._drawNotes(notes, currentTime, laneCount);
     this._drawJudgeLine(laneCount);
+    this._drawHPBar(laneCount);
     this._drawEffects();
     this._drawBlackBars();
   }
 
   /* ── Perspective ────────────────────────────────────────────────── */
 
+  _getJudgeLineY() {
+    return this.safeArea.y + this.safeArea.h * 0.92;
+  }
+
+  _getTopY() {
+    return this.safeArea.y;
+  }
+
   _getPerspectiveScale(y) {
-    const sa = this.safeArea;
-    const topY = sa.y;
-    const judgeLineY = sa.y + sa.h * 0.92;
+    const topY = this._getTopY();
+    const judgeLineY = this._getJudgeLineY();
     const p = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
     return 0.18 + 0.82 * p;
   }
@@ -123,13 +136,25 @@ export default class NoteRenderer {
     return { x: le + laneIndex * lw, width: lw, centerX: le + (laneIndex + 0.5) * lw };
   }
 
+  /** Get the right edge X of the entire lane group at a given Y */
+  _getPlayfieldRightX(y, laneCount) {
+    const geom = this._getLaneGeometry(laneCount, y, laneCount); // one past the last lane
+    return geom.x;
+  }
+
+  /** Get the left edge X of the entire lane group at a given Y */
+  _getPlayfieldLeftX(y, laneCount) {
+    const geom = this._getLaneGeometry(0, y, laneCount);
+    return geom.x;
+  }
+
   /* ── Background ─────────────────────────────────────────────────── */
 
   _drawBackground(laneCount) {
     const ctx = this.ctx;
     const sa = this.safeArea;
-    const topY = sa.y;
-    const judgeLineY = sa.y + sa.h * 0.92;
+    const topY = this._getTopY();
+    const judgeLineY = this._getJudgeLineY();
 
     if (this._bgImage) {
       ctx.save();
@@ -186,26 +211,38 @@ export default class NoteRenderer {
   /* ── Notes ──────────────────────────────────────────────────────── */
 
   _drawNotes(notes, currentTime, laneCount) {
-    const sa = this.safeArea;
-    const judgeLineY = sa.y + sa.h * 0.92;
+    const judgeLineY = this._getJudgeLineY();
+    const topY = this._getTopY();
+
+    // Separate hold and tap notes so we draw hold bodies first (behind caps)
+    const holdNotes = [];
+    const tapNotes = [];
 
     for (const note of notes) {
-      const color = LANE_COLORS[note.lane % LANE_COLORS.length];
-
       if (note.type === 'hold' && note.duration > 0) {
-        this._drawHoldNote(note, currentTime, laneCount, color, judgeLineY);
+        holdNotes.push(note);
       } else {
-        // Tap note: skip if already hit (non-miss), or if miss has faded
-        if (note.hit && note.judgement !== 'miss') continue;
-        if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
-
-        const noteY = this._noteY(note.time, currentTime, judgeLineY);
-        if (noteY < -80 || noteY > judgeLineY + 30) continue;
-
-        const fadeIn = this._fadeIn(noteY, judgeLineY);
-        const alpha = note.judgement === 'miss' ? 0.3 : 1;
-        this._drawTapNote(note.lane, noteY, laneCount, color, fadeIn * alpha);
+        tapNotes.push(note);
       }
+    }
+
+    // Draw hold note bodies first (so caps and tap notes render on top)
+    for (const note of holdNotes) {
+      this._drawHoldNote(note, currentTime, laneCount, judgeLineY, topY);
+    }
+
+    // Draw tap notes
+    for (const note of tapNotes) {
+      if (note.hit && note.judgement !== 'miss') continue;
+      if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
+
+      const noteY = this._noteY(note.time, currentTime, judgeLineY);
+      if (noteY < topY - 80 || noteY > judgeLineY + 30) continue;
+
+      const fadeIn = this._fadeIn(noteY, judgeLineY);
+      const alpha = note.judgement === 'miss' ? 0.3 : 1;
+      const color = LANE_COLORS[note.lane % LANE_COLORS.length];
+      this._drawTapNote(note.lane, noteY, laneCount, color, fadeIn * alpha);
     }
   }
 
@@ -220,10 +257,7 @@ export default class NoteRenderer {
 
   /* ── Tap note ───────────────────────────────────────────────────── */
 
-  _drawTapNote(ctx_or_lane, laneIndex_or_noteY, laneCount, color, alpha) {
-    // Support both calling conventions
-    const lane = typeof ctx_or_lane === 'number' ? ctx_or_lane : 0;
-    const noteY = typeof laneIndex_or_noteY === 'number' ? laneIndex_or_noteY : 0;
+  _drawTapNote(lane, noteY, laneCount, color, alpha) {
     const ctx = this.ctx;
     const scale = this._getPerspectiveScale(noteY);
     const geom = this._getLaneGeometry(lane, noteY, laneCount);
@@ -256,59 +290,76 @@ export default class NoteRenderer {
   /* ── Hold note — osu!mania style ────────────────────────────────── */
   /*
     In osu!mania, notes scroll from top to bottom toward the judge line.
+    
+    Coordinate system:
+    - judgeLineY is near the bottom of the screen (high Y value)
+    - Notes come from above (lower Y values)
+    - headY approaches judgeLineY from below as time approaches note.time
+    - tailY = _noteY(headTime + duration) is always ABOVE headY (lower Y value)
+    
     For a hold note:
-    - The HEAD (start time) is at the BOTTOM of the hold body (closer to judge line)
-    - The TAIL (end time) is at the TOP of the hold body (further from judge line)
+    - HEAD (start time) → closer to judge line (higher Y)
+    - TAIL (end time)   → further from judge line (lower Y)
     
-    When the head is being held:
-    - The body extends FROM the judge line UPWARD to wherever the tail currently is
-    - The head cap stays at the judge line
-    - The tail cap scrolls down normally
+    When holding:
+    - Head stays at judge line, body extends UP to tail
+    - No head cap drawn (body just starts at judge line)
     
-    When released early or head missed:
-    - The body should not be shown below the judge line
+    When not yet hit:
+    - Both head and tail caps are visible
+    - Body extends from headY (bottom) to tailY (top)
   */
 
-  _drawHoldNote(note, currentTime, laneCount, color, judgeLineY) {
+  _drawHoldNote(note, currentTime, laneCount, judgeLineY, topY) {
     const headTime = note.time;
     const tailTime = note.time + note.duration;
+    const color = LANE_COLORS[note.lane % LANE_COLORS.length];
+
     const isHolding = note.hit && note.judgement !== 'miss' && !note.released;
     const isMissed = note.judgement === 'miss';
 
     // Skip fully faded misses
     if (isMissed && currentTime - headTime > 0.5) return;
-    // Released notes (head was hit, then released) — just disappear like osu!mania
+    // Released notes — just disappear like osu!mania
     if (note.released && !isMissed) return;
 
     const alpha = isMissed ? 0.3 : 1;
 
+    // ── Calculate Y positions ─────────────────────────────────────
     // Head Y: if held, clamp to judge line. Otherwise compute normally.
-    const headY = isHolding ? judgeLineY : this._noteY(headTime, currentTime, judgeLineY);
+    const rawHeadY = this._noteY(headTime, currentTime, judgeLineY);
+    const headY = isHolding ? judgeLineY : rawHeadY;
     // Tail Y: always computed from time
     const tailY = this._noteY(tailTime, currentTime, judgeLineY);
 
-    // In our coordinate system:
     // tailY < headY (tail is above, further from judge line)
-    // headY approaches judgeLineY from above as note reaches judge line
+    // headY approaches judgeLineY from below as note reaches judge line
 
-    // Clip the body: only draw between topBound and judgeLineY
-    const topBound = this.safeArea.y - 40;
-    const bodyTop = Math.max(tailY, topBound);    // top of visible body (narrow end)
-    const bodyBottom = Math.min(headY, judgeLineY); // bottom of visible body (wide end)
+    // ── Clip the body to visible bounds ───────────────────────────
+    const clipTop = topY - 40;
+    const clipBottom = judgeLineY;
 
-    // Draw body if visible
-    if (bodyTop < bodyBottom && bodyBottom > topBound && bodyTop < judgeLineY) {
+    const bodyTop = Math.max(tailY, clipTop);     // top of visible body (narrow end)
+    const bodyBottom = Math.min(headY, clipBottom); // bottom of visible body (wide end)
+
+    // ── Draw body (trapezoid with perspective) ────────────────────
+    if (bodyTop < bodyBottom && bodyBottom > clipTop && bodyTop < clipBottom) {
       this._drawHoldBody(note, laneCount, color, bodyTop, bodyBottom, alpha, isHolding);
     }
 
-    // Draw tail cap if within visible bounds
-    if (tailY >= topBound && tailY <= judgeLineY) {
+    // ── Draw tail cap (always visible if on screen) ───────────────
+    if (tailY >= clipTop && tailY <= clipBottom) {
       this._drawHoldCap(note.lane, tailY, laneCount, color, alpha);
     }
 
-    // Draw head cap ONLY if not held and within visible bounds above judge line
-    if (!isHolding && headY >= topBound && headY <= judgeLineY) {
+    // ── Draw head cap (only if NOT holding and within visible bounds) ──
+    if (!isHolding && headY >= clipTop && headY <= clipBottom) {
       this._drawHoldCap(note.lane, headY, laneCount, color, alpha);
+    }
+
+    // ── Holding indicator at judge line ───────────────────────────
+    if (isHolding) {
+      this._drawHoldGlow(note.lane, judgeLineY, laneCount, color);
     }
   }
 
@@ -384,12 +435,125 @@ export default class NoteRenderer {
     ctx.restore();
   }
 
+  /** Glowing indicator at judge line when holding a note */
+  _drawHoldGlow(laneIndex, judgeLineY, laneCount, color) {
+    const ctx = this.ctx;
+    const scale = this._getPerspectiveScale(judgeLineY);
+    const geom = this._getLaneGeometry(laneIndex, judgeLineY, laneCount);
+    const pad = 3 * scale;
+    const x = geom.x + pad;
+    const w = geom.width - pad * 2;
+    const h = 6 * scale;
+
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    ctx.shadowBlur = 20 * scale;
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, judgeLineY - h / 2, w, h);
+
+    // Bright inner line
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + 2, judgeLineY - 1, w - 4, 2);
+    ctx.restore();
+  }
+
+  /* ── HP Bar — vertical, right of playfield with perspective ────── */
+
+  _drawHPBar(laneCount) {
+    const ctx = this.ctx;
+    const sa = this.safeArea;
+    const topY = this._getTopY();
+    const judgeLineY = this._getJudgeLineY();
+    const health = this._health;
+
+    // HP bar dimensions — thin strip to the right of the playfield
+    const barGap = 6;  // gap from playfield edge
+    const barWidth = 6;
+
+    // Get the right edge of the playfield at top and bottom
+    const topRightGeom = this._getLaneGeometry(laneCount - 1, topY, laneCount);
+    const botRightGeom = this._getLaneGeometry(laneCount - 1, judgeLineY, laneCount);
+
+    const topBarX = topRightGeom.x + topRightGeom.width + barGap * this._getPerspectiveScale(topY);
+    const botBarX = botRightGeom.x + botRightGeom.width + barGap * this._getPerspectiveScale(judgeLineY);
+
+    const topScale = this._getPerspectiveScale(topY);
+    const botScale = this._getPerspectiveScale(judgeLineY);
+    const topW = barWidth * topScale;
+    const botW = barWidth * botScale;
+
+    // Background bar (empty)
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(topBarX, topY);
+    ctx.lineTo(topBarX + topW, topY);
+    ctx.lineTo(botBarX + botW, judgeLineY);
+    ctx.lineTo(botBarX, judgeLineY);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.fill();
+
+    // Health fill — drawn from bottom up
+    const fillRatio = health / 100;
+    if (fillRatio > 0) {
+      // The fill Y position from bottom
+      const fillHeight = (judgeLineY - topY) * fillRatio;
+      const fillTopY = judgeLineY - fillHeight;
+
+      // Interpolate X and width at the fill top position
+      const fillTopT = (fillTopY - topY) / (judgeLineY - topY);
+      const fillTopScale = topScale + (botScale - topScale) * fillTopT;
+      const fillTopBarX = topBarX + (botBarX - topBarX) * fillTopT;
+      const fillTopW = topW + (botW - topW) * fillTopT;
+
+      ctx.beginPath();
+      ctx.moveTo(fillTopBarX, fillTopY);
+      ctx.lineTo(fillTopBarX + fillTopW, fillTopY);
+      ctx.lineTo(botBarX + botW, judgeLineY);
+      ctx.lineTo(botBarX, judgeLineY);
+      ctx.closePath();
+
+      // Color based on health
+      let fillColor, glowColor;
+      if (health < 25) {
+        fillColor = 'rgba(255,61,61,0.7)';
+        glowColor = '#FF3D3D';
+      } else if (health < 50) {
+        fillColor = 'rgba(245,197,24,0.6)';
+        glowColor = '#F5C518';
+      } else {
+        fillColor = 'rgba(170,255,0,0.5)';
+        glowColor = '#AAFF00';
+      }
+
+      ctx.fillStyle = fillColor;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = glowColor;
+      ctx.fill();
+    }
+
+    // Subtle border
+    ctx.beginPath();
+    ctx.moveTo(topBarX, topY);
+    ctx.lineTo(topBarX + topW, topY);
+    ctx.lineTo(botBarX + botW, judgeLineY);
+    ctx.lineTo(botBarX, judgeLineY);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(170,255,0,0.1)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
   /* ── Judge line ─────────────────────────────────────────────────── */
 
   _drawJudgeLine(laneCount) {
     const ctx = this.ctx;
-    const sa = this.safeArea;
-    const judgeLineY = sa.y + sa.h * 0.92;
+    const judgeLineY = this._getJudgeLineY();
     const fullGeom = this._getLaneGeometry(0, judgeLineY, laneCount);
     const startX = fullGeom.x;
     const totalWidth = laneCount * fullGeom.width;
