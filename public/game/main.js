@@ -87,9 +87,6 @@ async function boot() {
 
   const gameCanvas = document.getElementById('game');
   const noteRenderer = new NoteRenderer(gameCanvas);
-  const safeArea = calcSafeArea();
-  noteRenderer.setSafeArea(safeArea.x, safeArea.y, safeArea.w, safeArea.h);
-
   const input = new InputManager(audio);
   const calibrator = new LatencyCalibrator(audio);
   const hudContainer = document.getElementById('hud');
@@ -98,6 +95,14 @@ async function boot() {
   const judgementDisplay = new JudgementDisplay(judgementContainer);
   const screenContainer = document.getElementById('screen');
   const screens = new ScreenManager(screenContainer);
+
+  // Apply initial safe area to all containers
+  const initialSA = calcSafeArea();
+  noteRenderer.setSafeArea(initialSA.x, initialSA.y, initialSA.w, initialSA.h);
+  screenContainer.style.left = initialSA.x + 'px';
+  screenContainer.style.top = initialSA.y + 'px';
+  screenContainer.style.width = initialSA.w + 'px';
+  screenContainer.style.height = initialSA.h + 'px';
 
   let gameLoop = null, currentBeatMap = null, currentJudgement = null, gameActive = false;
   let currentMapData = null;
@@ -112,6 +117,11 @@ async function boot() {
     const sa = calcSafeArea();
     noteRenderer.setSafeArea(sa.x, sa.y, sa.w, sa.h);
     noteRenderer.resize();
+    // Apply aspect ratio to screen container
+    screenContainer.style.left = sa.x + 'px';
+    screenContainer.style.top = sa.y + 'px';
+    screenContainer.style.width = sa.w + 'px';
+    screenContainer.style.height = sa.h + 'px';
   };
 
   EventBus.on('settings:changed', ({ key, value }) => {
@@ -214,6 +224,10 @@ async function boot() {
 
     audio.startBeatScheduler(currentBeatMap.metadata.bpm);
 
+    // Forward beat pulses to NoteRenderer for sound-reactive field
+    const beatHandler = () => { noteRenderer.beatPulse(); };
+    EventBus.on('beat:pulse', beatHandler);
+
     let health = 100;
     gameLoop = new GameLoop({
       update(delta) {
@@ -248,6 +262,7 @@ async function boot() {
       EventBus.off('input:release', releaseHandler);
       EventBus.off('note:miss', missHandler);
       EventBus.off('combo:break', comboBreakHandler);
+      EventBus.off('beat:pulse', beatHandler);
     };
   };
 
@@ -259,6 +274,7 @@ async function boot() {
     audio.stopBeatScheduler();
     hud.hide();
     noteRenderer.clearBackground();
+    noteRenderer.clear(); // Clear the game canvas completely
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
     EventBus.emit('game:over', stats);

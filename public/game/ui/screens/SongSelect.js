@@ -24,7 +24,7 @@ export default class SongSelect {
     return `
       <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;">
         <!-- Song info (top-left) -->
-        <div id="ss-song-info" style="position:absolute;top:16px;left:24px;z-index:2;max-width:40%;pointer-events:none;"></div>
+        <div id="ss-song-info" style="position:absolute;top:16px;left:24px;z-index:2;max-width:45%;pointer-events:none;"></div>
 
         <!-- Right column: back + search + list -->
         <div style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:16px 24px 0 0;">
@@ -381,14 +381,14 @@ export default class SongSelect {
     const durationStr = `${Math.floor(durationSec / 60)}:${(durationSec % 60).toString().padStart(2, '0')}`;
 
     info.innerHTML = `
-      <div style="font-family:var(--zzz-font);font-weight:900;font-size:26px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.1;word-break:break-word;text-shadow:0 2px 16px rgba(0,0,0,0.9);">${this._escHtml(set.title)}</div>
-      <div style="font-family:var(--zzz-font);font-weight:500;font-size:14px;color:var(--zzz-muted);margin-top:3px;text-shadow:0 1px 8px rgba(0,0,0,0.9);">${this._escHtml(set.artist)}</div>
-      <div style="display:flex;gap:16px;margin-top:8px;align-items:baseline;flex-wrap:wrap;">
-        <span style="color:${starColor};font-family:var(--zzz-font);font-weight:900;font-size:18px;text-shadow:0 0 12px ${starColor}40;">★ ${stars.toFixed(1)}</span>
-        <span style="color:${starColor};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;">${diffName}</span>
-        <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${bpm} BPM · ${durationStr}</span>
+      <div style="font-family:var(--zzz-font);font-weight:900;font-size:36px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.05;word-break:break-word;text-shadow:0 2px 16px rgba(0,0,0,0.9);">${this._escHtml(set.title)}</div>
+      <div style="font-family:var(--zzz-font);font-weight:500;font-size:16px;color:var(--zzz-muted);margin-top:4px;text-shadow:0 1px 8px rgba(0,0,0,0.9);">${this._escHtml(set.artist)}</div>
+      <div style="display:flex;gap:16px;margin-top:10px;align-items:baseline;flex-wrap:wrap;">
+        <span style="color:${starColor};font-family:var(--zzz-font);font-weight:900;font-size:20px;text-shadow:0 0 12px ${starColor}40;">★ ${stars.toFixed(1)}</span>
+        <span style="color:${starColor};font-family:var(--zzz-font);font-weight:700;font-size:13px;text-transform:uppercase;">${diffName}</span>
+        <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:13px;">${bpm} BPM · ${durationStr}</span>
       </div>
-      <button id="song-play-btn" class="zzz-btn zzz-btn--primary zzz-btn--sm" style="margin-top:10px;pointer-events:auto;">▶ PLAY</button>
+      <button id="song-play-btn" class="zzz-btn zzz-btn--primary zzz-btn--sm" style="margin-top:12px;pointer-events:auto;">▶ PLAY</button>
     `;
     document.getElementById('song-play-btn')?.addEventListener('click', () => this._confirmSong());
   }

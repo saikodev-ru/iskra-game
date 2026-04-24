@@ -31,7 +31,7 @@ export default class HUD {
 
         <!-- Combo — RIGHT side of playfield -->
         <div style="position:absolute;right:5%;top:50%;transform:translateY(-50%);text-align:left;min-width:100px;">
-          <div id="hud-combo" class="zzz-title" style="font-size:64px;color:var(--zzz-text);transition:all 0.12s;font-variant-numeric:tabular-nums;line-height:1;"></div>
+          <div id="hud-combo" class="zzz-title" style="font-size:64px;color:#ffffff;transition:all 0.12s;font-variant-numeric:tabular-nums;line-height:1;text-shadow:0 0 20px rgba(255,255,255,0.3);"></div>
           <div id="hud-combo-label" class="zzz-label" style="display:none;text-align:left;margin-top:4px;">COMBO</div>
         </div>
 
@@ -136,8 +136,9 @@ export default class HUD {
     // Milestone scale
     if ([50, 100, 200, 500].includes(n)) {
       this.els.combo.style.transform = 'scale(1.3)';
-      this.els.combo.style.color = 'var(--zzz-lime)';
-      setTimeout(() => { this.els.combo.style.transform = ''; this.els.combo.style.color = ''; }, 250);
+      this.els.combo.style.color = '#ffffff';
+      this.els.combo.style.textShadow = '0 0 40px rgba(255,255,255,0.6)';
+      setTimeout(() => { this.els.combo.style.transform = ''; this.els.combo.style.color = '#ffffff'; this.els.combo.style.textShadow = '0 0 20px rgba(255,255,255,0.3)'; }, 250);
     }
   }
 

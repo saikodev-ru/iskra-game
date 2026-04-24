@@ -173,20 +173,20 @@ body.zzz-active::before {
   animation: click-pulse 0.1s ease;
 }
 
-/* JUDGEMENT — right side of playfield */
+/* JUDGEMENT — centered on screen */
 .judgement-text {
   font-family: var(--zzz-font);
   font-weight: 900;
-  font-size: 36px;
+  font-size: 42px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-shadow: 0 0 24px currentColor, 0 0 48px currentColor;
   pointer-events: none;
   user-select: none;
   position: absolute;
-  right: 6%;
-  top: 42%;
-  transform: translateY(-50%);
+  left: 50%;
+  top: 48%;
+  transform: translate(-50%, -50%);
   white-space: nowrap;
 }
 .judgement--perfect { color: #AAFF00; }
@@ -196,12 +196,12 @@ body.zzz-active::before {
 .judgement--miss    { color: #FF3D3D; }
 
 @keyframes judge-in  { 
-  from { transform: translateY(-50%) scale(1.8) translateX(20px); opacity:0; } 
-  to   { transform: translateY(-50%) scale(1) translateX(0); opacity:1; } 
+  from { transform: translate(-50%, -50%) scale(2.0); opacity:0; } 
+  to   { transform: translate(-50%, -50%) scale(1); opacity:1; } 
 }
 @keyframes judge-out { 
-  from { opacity:1; transform: translateY(-50%) translateY(0); } 
-  to   { opacity:0; transform: translateY(-50%) translateY(-20px); } 
+  from { opacity:1; transform: translate(-50%, -50%) translateY(0); } 
+  to   { opacity:0; transform: translate(-50%, -50%) translateY(-24px); } 
 }
 
 .judgement--in  { animation: judge-in  0.1s ease-out forwards; }
@@ -294,8 +294,9 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   font-size: 14px;
   color: var(--zzz-muted);
   position: absolute;
-  right: 6%;
-  top: calc(42% + 36px);
+  left: 50%;
+  top: calc(48% + 32px);
+  transform: translateX(-50%);
   pointer-events: none;
   white-space: nowrap;
 }
@@ -475,7 +476,23 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 .song-card-wrapper {
   display: flex;
   flex-direction: column;
+  animation: card-slide-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
 }
+@keyframes card-slide-in {
+  from { opacity: 0; transform: translateX(40px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+/* Stagger the animation for each card */
+.song-card-wrapper:nth-child(1) { animation-delay: 0ms; }
+.song-card-wrapper:nth-child(2) { animation-delay: 30ms; }
+.song-card-wrapper:nth-child(3) { animation-delay: 60ms; }
+.song-card-wrapper:nth-child(4) { animation-delay: 90ms; }
+.song-card-wrapper:nth-child(5) { animation-delay: 120ms; }
+.song-card-wrapper:nth-child(6) { animation-delay: 150ms; }
+.song-card-wrapper:nth-child(7) { animation-delay: 180ms; }
+.song-card-wrapper:nth-child(8) { animation-delay: 210ms; }
+.song-card-wrapper:nth-child(n+9) { animation-delay: 240ms; }
 
 /* DIFFICULTY DROPDOWN — osu!lazer style expand below card */
 .diff-dropdown {

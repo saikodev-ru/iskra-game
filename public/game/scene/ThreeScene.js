@@ -173,7 +173,7 @@ export default class ThreeScene {
       }
     });
     EventBus.on('note:miss', () => { if (!this._disposed) this._shakeFrames = [4, -4, 2, -2, 0]; });
-    EventBus.on('beat:pulse', () => { if (!this._disposed) this._beatIntensity = 1; });
+    EventBus.on('beat:pulse', () => { if (!this._disposed) this._beatIntensity = 0.5; });
   }
 
   createTVMonitor() {
@@ -206,8 +206,8 @@ export default class ThreeScene {
     neck.position.set(0, -0.85, 0.05);
     this._tvGroup.add(neck);
 
-    this._tvGroup.position.set(-3.5, -1.8, 0.5);
-    this._tvGroup.rotation.y = 0.35;
+    this._tvGroup.position.set(-1.2, -1.8, 0.5);
+    this._tvGroup.rotation.y = 0.25;
     this._tvGroup.rotation.x = -0.05;
     this.scene.add(this._tvGroup);
   }
@@ -290,7 +290,7 @@ export default class ThreeScene {
     else this.camera.position.x *= 0.8;
 
     if (this._tvGroup && !this._tvSpinAnim) {
-      this._tvGroup.rotation.y = 0.35 + Math.sin(time * 0.001 * 0.3 * Math.PI) * 0.03;
+      this._tvGroup.rotation.y = 0.25 + Math.sin(time * 0.001 * 0.3 * Math.PI) * 0.03;
     }
     if (this._tvSpinAnim) {
       const elapsed = performance.now() - this._tvSpinAnim.start;

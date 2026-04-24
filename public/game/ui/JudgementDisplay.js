@@ -25,7 +25,7 @@ export default class JudgementDisplay {
     el.textContent = judgement.toUpperCase();
     this.container.appendChild(el);
     this._currentEl = el;
-    if ((judgement === 'good' || judgement === 'bad') && delta !== undefined) {
+    if (delta !== undefined && Math.abs(delta) > 10) {
       const deltaEl = document.createElement('div');
       deltaEl.className = 'delta-display judgement--in';
       deltaEl.textContent = `${delta >= 0 ? '+' : ''}${delta}ms`;
@@ -44,20 +44,22 @@ export default class JudgementDisplay {
     if (this._currentEl) this._currentEl.remove();
     if (this._deltaEl) this._deltaEl.remove();
     const el = document.createElement('div');
-    el.className = 'combo-break-x';
-    el.textContent = '✕';
+    el.className = 'judgement-text judgement--miss judgement--in';
+    el.textContent = 'MISS';
     this.container.appendChild(el);
     this._currentEl = el;
     document.body.classList.add('combo-break');
     setTimeout(() => document.body.classList.remove('combo-break'), 300);
     clearTimeout(this._outTimer);
-    this._outTimer = setTimeout(() => { if (el.parentNode) el.remove(); }, 500);
+    this._outTimer = setTimeout(() => {
+      if (this._currentEl) { this._currentEl.classList.remove('judgement--in'); this._currentEl.classList.add('judgement--out'); const r = this._currentEl; setTimeout(() => r.remove(), 250); this._currentEl = null; }
+    }, 400);
   }
 
   showComboBreak(combo) {
     if (this._comboBreakEl) this._comboBreakEl.remove();
     const el = document.createElement('div');
-    el.style.cssText = 'position:absolute;right:8%;top:48%;transform:translateY(-50%);font-family:var(--zzz-font);font-weight:900;font-size:28px;color:var(--zzz-red);pointer-events:none;animation:combo-fly 0.5s ease-out forwards;';
+    el.style.cssText = 'position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);font-family:var(--zzz-font);font-weight:900;font-size:28px;color:var(--zzz-red);pointer-events:none;animation:combo-fly 0.5s ease-out forwards;';
     el.textContent = `${combo}x`;
     this.container.appendChild(el);
     this._comboBreakEl = el;
