@@ -21,7 +21,7 @@ export default class ThreeScene {
     this._bgMaterial = null;
     this._tvSpinAnim = null;
     this._particles = null;
-    this._particlesVisible = true; // control particle visibility
+    this._particlesVisible = false; // hidden by default — only shown on main menu
     this._aspectRatio = '16:9';
     this._disposed = false;
     this._contextLost = false;
@@ -134,28 +134,34 @@ export default class ThreeScene {
       varying vec2 vUv;
       void main() {
         vec2 uv = vUv;
-        float pulse = uBeatIntensity * 0.3;
-        float bassPulse = uBassIntensity * 0.4;
 
         // Base dark color
         vec3 baseColor = vec3(0.02, 0.02, 0.04);
         float vig = distance(vUv, vec2(0.5));
         baseColor *= smoothstep(0.9, 0.3, vig);
 
-        // Beat-reactive green glow from center
-        vec3 beatColor = vec3(0.4, 0.7, 0.0) * pulse * smoothstep(0.7, 0.0, vig);
+        // Audio-reactive green glow from center (main effect)
+        float audioPulse = uAudioIntensity;
+        float bassPulse = uBassIntensity;
 
-        // Bass-reactive deep glow
-        vec3 bassColor = vec3(0.15, 0.3, 0.0) * bassPulse * smoothstep(0.8, 0.0, vig);
+        // Green glow that pulses with overall audio
+        vec3 audioColor = vec3(0.4, 0.7, 0.0) * audioPulse * 0.6 * smoothstep(0.8, 0.0, vig);
+
+        // Bass-reactive deep glow — more intense
+        vec3 bassColor = vec3(0.2, 0.4, 0.0) * bassPulse * 0.8 * smoothstep(0.9, 0.0, vig);
+
+        // Beat-reactive flash (from hit judgements)
+        vec3 beatColor = vec3(0.5, 0.8, 0.0) * uBeatIntensity * 0.4 * smoothstep(0.7, 0.0, vig);
 
         // Subtle shimmer
         float shimmer = fract(sin(dot(uv * 100.0 + uTime * 0.1, vec2(12.9898, 78.233))) * 43758.5453);
         baseColor += vec3(0.008) * shimmer;
 
-        // Audio-reactive overall brightness
-        float audioBright = uAudioIntensity * 0.05 * smoothstep(0.6, 0.0, vig);
+        // Edge glow on bass
+        float edge = smoothstep(0.3, 0.7, vig);
+        vec3 edgeColor = vec3(0.1, 0.2, 0.0) * bassPulse * edge * 0.5;
 
-        vec3 color = baseColor + beatColor + bassColor + vec3(audioBright);
+        vec3 color = baseColor + audioColor + bassColor + beatColor + edgeColor;
         gl_FragColor = vec4(color, 1.0);
       }
     `;
@@ -188,6 +194,7 @@ export default class ThreeScene {
       sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
     });
     this._particles = new THREE.Points(geom, mat);
+    this._particles.visible = this._particlesVisible;
     this.scene.add(this._particles);
   }
 
@@ -199,7 +206,7 @@ export default class ThreeScene {
     }
   }
 
-  /** Set a background image for song select — reactive to audio */
+  /** Set a background image for song select — full-screen cover, audio-reactive */
   setBackgroundImage(url) {
     this._clearBackgroundImage();
     if (!url) return;
@@ -207,14 +214,46 @@ export default class ThreeScene {
     new THREE.TextureLoader().load(url, (texture) => {
       if (this._disposed) return;
       this._bgImageTexture = texture;
-      this._bgImageMaterial = new THREE.MeshBasicMaterial({
-        map: texture,
+      this._bgImageMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+          uTexture: { value: texture },
+          uOpacity: { value: 0.35 },
+          uBass: { value: 0 },
+          uTime: { value: 0 },
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+        `,
+        fragmentShader: `
+          uniform sampler2D uTexture;
+          uniform float uOpacity;
+          uniform float uBass;
+          uniform float uTime;
+          varying vec2 vUv;
+          void main() {
+            vec2 uv = vUv;
+            // Subtle zoom pulse on bass
+            float zoom = 1.0 + uBass * 0.03;
+            uv = (uv - 0.5) / zoom + 0.5;
+            vec4 tex = texture2D(uTexture, uv);
+            // Darken the image so UI is readable
+            tex.rgb *= 0.5 + uBass * 0.15;
+            gl_FragColor = vec4(tex.rgb, uOpacity);
+          }
+        `,
         transparent: true,
-        opacity: 0.25,
         side: THREE.DoubleSide,
+        depthWrite: false,
       });
-      this._bgImageMesh = new THREE.Mesh(new THREE.PlaneGeometry(16, 9), this._bgImageMaterial);
-      this._bgImageMesh.position.z = -8;
+      // Cover the full viewport — use a large plane at camera distance
+      const cam = this.camera;
+      const dist = 9;
+      const vFov = cam.fov * Math.PI / 180;
+      const planeH = 2 * Math.tan(vFov / 2) * dist;
+      const planeW = planeH * cam.aspect;
+      this._bgImageMesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), this._bgImageMaterial);
+      this._bgImageMesh.position.z = -dist;
       this.scene.add(this._bgImageMesh);
     });
   }
@@ -237,36 +276,24 @@ export default class ThreeScene {
   _setupListeners() {
     EventBus.on('note:hit', ({ judgement }) => {
       if (this._disposed) return;
+      // Subtle bloom boost on hit — no harsh flash
       if (judgement === 'perfect') {
-        this._bloomTarget = 1.4;
-        this.pointLight.intensity = 5;
-        this._bassLight.intensity = 3;
-        this._bassLight.color.set(0xAAFF00);
+        this._bloomTarget = 0.9;
+        this._beatIntensity = 0.6;
       } else if (judgement === 'great') {
-        this._bloomTarget = 1.0;
-        this.pointLight.intensity = 3.5;
-        this._bassLight.intensity = 2;
-        this._bassLight.color.set(0x88DD00);
+        this._bloomTarget = 0.75;
+        this._beatIntensity = 0.4;
       } else if (judgement === 'good') {
-        this._bloomTarget = 0.7;
-        this.pointLight.intensity = 2.5;
-        this._bassLight.intensity = 1;
-        this._bassLight.color.set(0x669900);
-      } else if (judgement === 'bad') {
-        this.pointLight.color.set(0xFF3D3D);
-        this.pointLight.intensity = 1.5;
-        this._bassLight.intensity = 0;
+        this._bloomTarget = 0.6;
+        this._beatIntensity = 0.2;
       }
     });
     EventBus.on('note:miss', () => {
       if (!this._disposed) {
-        this._shakeFrames = [4, -4, 2, -2, 0];
-        this.pointLight.color.set(0xFF3D3D);
-        this.pointLight.intensity = 2;
+        this._shakeFrames = [3, -3, 1.5, -1.5, 0];
         this._bloomTarget = 0.3;
       }
     });
-    // NO beat:pulse listener — removed flash effect per user request
   }
 
   createTVMonitor() {
@@ -333,14 +360,13 @@ export default class ThreeScene {
       this._beatIntensity *= 0.88;
     }
 
-    // ── Background image — audio-reactive opacity pulse ──
-    if (this._bgImageMesh && this._bgImageMaterial) {
-      const baseOpacity = 0.2;
-      const audioOpacity = baseOpacity + bassPulse * 0.3 + audioPulse * 0.15;
-      this._bgImageMaterial.opacity = Math.min(0.6, audioOpacity);
-      // Subtle scale pulse on bass
-      const scale = 1.0 + bassPulse * 0.05;
-      this._bgImageMesh.scale.set(scale, scale, 1);
+    // ── Background image — audio-reactive cover ──
+    if (this._bgImageMesh && this._bgImageMaterial && this._bgImageMaterial.uniforms) {
+      const baseOpacity = 0.3;
+      const audioOpacity = baseOpacity + bassPulse * 0.25 + audioPulse * 0.15;
+      this._bgImageMaterial.uniforms.uOpacity.value = Math.min(0.65, audioOpacity);
+      this._bgImageMaterial.uniforms.uBass.value = bassPulse;
+      this._bgImageMaterial.uniforms.uTime.value = time * 0.001;
     }
 
     // ── Particles — audio-reactive (only when visible) ──

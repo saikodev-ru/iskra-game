@@ -187,18 +187,21 @@ export default class Settings {
     const c = document.getElementById('keybinds'); if (!c) return;
     const km = this.input ? this.input.getKeyMap() : { KeyD: 0, KeyF: 1, KeyJ: 2, KeyK: 3 };
     const labels = ['Lane 1', 'Lane 2', 'Lane 3', 'Lane 4'];
-    const laneCount = this.input ? this.input.laneCount : 4;
+    // Always show 4 lanes for a 4-key game
+    const laneCount = 4;
     c.innerHTML = '';
-    // Always show one button per lane
-    for (let lane = 0; lane < laneCount; lane++) {
-      // Find which key is bound to this lane
-      let boundKey = null;
-      for (const [code, l] of Object.entries(km)) {
-        if (l === lane) { boundKey = code; break; }
+    // Build a reverse map: lane → key code
+    const laneToKey = {};
+    for (const [code, lane] of Object.entries(km)) {
+      if (lane >= 0 && lane < laneCount) {
+        laneToKey[lane] = code;
       }
+    }
+    for (let lane = 0; lane < laneCount; lane++) {
+      const boundKey = laneToKey[lane] || null;
       const btn = document.createElement('button');
       btn.className = 'zzz-btn zzz-btn--sm'; btn.style.width = '100%';
-      const keyName = boundKey ? boundKey.replace('Key', '') : '—';
+      const keyName = boundKey ? boundKey.replace('Key', '').replace('Digit', '') : '—';
       btn.textContent = `${labels[lane]}: ${keyName}`;
       if (!boundKey) {
         btn.style.borderColor = 'var(--zzz-red)';
@@ -212,15 +215,29 @@ export default class Settings {
   _startRebind(lane, btn) { this._rebinding = { lane, btn }; btn.textContent = 'PRESS A KEY...'; btn.style.borderColor = 'var(--zzz-lime)'; btn.style.color = 'var(--zzz-lime)'; }
   _finishRebind(code) {
     if (!this._rebinding) return;
+    const targetLane = this._rebinding.lane;
     const km = this.input ? this.input.getKeyMap() : {};
-    // 1. Remove the new key from ALL lanes it might be bound to
+
+    // Step 1: Remove the new key from ANY lane it's currently bound to
+    // This prevents the same key being bound to multiple lanes
     delete km[code];
-    // 2. Remove old keys bound to this lane
-    for (const [k, v] of Object.entries(km)) { if (v === this._rebinding.lane) delete km[k]; }
-    // 3. Assign the new key
-    km[code] = this._rebinding.lane;
+
+    // Step 2: Remove ALL keys currently bound to the target lane
+    // This prevents multiple keys bound to the same lane
+    const keysToRemove = [];
+    for (const [k, v] of Object.entries(km)) {
+      if (v === targetLane) keysToRemove.push(k);
+    }
+    for (const k of keysToRemove) delete km[k];
+
+    // Step 3: Assign the new key to the target lane
+    km[code] = targetLane;
+
+    // Step 4: Persist the new keymap
     if (this.input) this.input.setKeyMap(4, km);
-    this._rebinding = null; this._renderKeybinds();
+
+    this._rebinding = null;
+    this._renderKeybinds();
   }
 
   _getSavedOffset() { return parseInt(localStorage.getItem('rhythm-os-audio-offset') || '0'); }

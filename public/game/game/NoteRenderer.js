@@ -433,15 +433,15 @@ export default class NoteRenderer {
     ctx.lineTo(botGeom.x + botPad, bottomY);
     ctx.closePath();
 
-    // Fill: solid lane color with strong alpha
-    ctx.fillStyle = isHolding ? this._withAlpha(color, 0.65) : this._withAlpha(color, 0.50);
+    // Fill: solid lane color — more transparent for a ghostly look
+    ctx.fillStyle = isHolding ? this._withAlpha(color, 0.30) : this._withAlpha(color, 0.18);
     ctx.shadowBlur = isHolding ? 20 : 8;
     ctx.shadowColor = color;
     ctx.fill();
 
     // Border: bright and visible
-    ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.9) : this._withAlpha(color, 0.7);
-    ctx.lineWidth = isHolding ? 2.5 : 2;
+    ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.7) : this._withAlpha(color, 0.45);
+    ctx.lineWidth = isHolding ? 2 : 1.5;
     ctx.stroke();
     ctx.restore();
 
@@ -449,7 +449,7 @@ export default class NoteRenderer {
     const topCX = topGeom.x + topGeom.width / 2;
     const botCX = botGeom.x + botGeom.width / 2;
     ctx.save();
-    ctx.globalAlpha = alpha * (isHolding ? 0.6 : 0.35);
+    ctx.globalAlpha = alpha * (isHolding ? 0.4 : 0.2);
     ctx.shadowBlur = isHolding ? 20 : 12;
     ctx.shadowColor = color;
     ctx.strokeStyle = isHolding ? '#ffffff' : this._withAlpha(color, 0.8);

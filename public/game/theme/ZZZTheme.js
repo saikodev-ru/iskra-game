@@ -199,8 +199,8 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   transform: translateX(6px);
 }
 .song-card.active {
-  background: rgba(170,255,0,0.06);
-  box-shadow: 0 0 16px rgba(170,255,0,0.08), 0 2px 12px rgba(0,0,0,0.4);
+  background: rgba(42,42,42,0.7);
+  box-shadow: 0 0 16px rgba(0,0,0,0.3), 0 2px 12px rgba(0,0,0,0.4);
   transform: translateX(8px) scale(1.015);
 }
 
@@ -221,7 +221,7 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   border-radius: 12px 0 0 12px;
 }
 .song-card.active .song-card-thumb::after {
-  background: linear-gradient(90deg, transparent 40%, rgba(170,255,0,0.04) 100%);
+  background: linear-gradient(90deg, transparent 40%, rgba(42,42,42,0.7) 100%);
 }
 
 .song-card-info {

@@ -213,7 +213,7 @@ export default class SongSelect {
           display:flex;align-items:center;gap:8px;
           padding:6px 12px;border-radius:10px;cursor:pointer;
           transition:all 0.12s ease;
-          background:${isActive ? 'rgba(170,255,0,0.06)' : 'rgba(26,26,26,0.5)'};
+          background:${isActive ? 'rgba(42,42,42,0.7)' : 'rgba(26,26,26,0.5)'};
         `;
         diffRow.innerHTML = `
           <span style="color:${c};font-family:var(--zzz-font);font-weight:900;font-size:12px;min-width:40px;">★ ${s.toFixed(1)}</span>
@@ -324,7 +324,7 @@ export default class SongSelect {
       const s = set.difficulties[idx]?.difficulty?.stars || 0;
       const c = DifficultyAnalyzer.getStarColor(s);
       item.classList.toggle('active', isActive);
-      item.style.background = isActive ? 'rgba(170,255,0,0.06)' : 'rgba(26,26,26,0.5)';
+      item.style.background = isActive ? 'rgba(42,42,42,0.7)' : 'rgba(26,26,26,0.5)';
       const nameSpan = item.querySelector('span:last-child');
       if (nameSpan) nameSpan.style.color = isActive ? c : 'var(--zzz-text)';
     });
@@ -353,7 +353,7 @@ export default class SongSelect {
         <span style="color:${starColor};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;">${diffName}</span>
         <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${bpm} BPM · ${durationStr}</span>
       </div>
-      <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="margin-top:16px;pointer-events:auto;font-size:20px;padding:16px 40px;letter-spacing:0.1em;">▶ PLAY</button>
+      <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="margin-top:20px;pointer-events:auto;font-size:28px;padding:20px 56px;letter-spacing:0.12em;border-radius:16px;">▶ PLAY</button>
     `;
     document.getElementById('song-play-btn')?.addEventListener('click', () => this._confirmSong());
   }
