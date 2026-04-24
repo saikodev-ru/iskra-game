@@ -16,7 +16,7 @@ const CSS = `
   --zzz-graphite:  #2D2D2D;
   --zzz-graphite-2:#3A3A3A;
   --zzz-text:      #F0F0F0;
-  --zzz-muted:     #888888;
+  --zzz-muted:     #CCCCCC;
   --zzz-font:      'Google Sans', 'Segoe UI', sans-serif;
   --zzz-mono:      'JetBrains Mono', 'Fira Code', monospace;
 }

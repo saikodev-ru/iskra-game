@@ -146,7 +146,7 @@ export default class DifficultyAnalyzer {
     if (stars >= 5) return '#F5C518';   // Gold
     if (stars >= 3.5) return '#00E5FF'; // Cyan
     if (stars >= 2) return '#AAFF00';   // Lime
-    return '#888888';                     // Gray
+    return '#CCCCCC';                     // Light gray
   }
   
   /**

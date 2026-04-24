@@ -206,7 +206,7 @@ export default class ThreeScene {
     }
   }
 
-  /** Set a background image for song select — full-screen cover, audio-reactive */
+  /** Set a background image for song select — full-screen cover, audio-reactive glow + zoom */
   setBackgroundImage(url) {
     this._clearBackgroundImage();
     if (!url) return;
@@ -214,12 +214,18 @@ export default class ThreeScene {
     new THREE.TextureLoader().load(url, (texture) => {
       if (this._disposed) return;
       this._bgImageTexture = texture;
+
+      // Calculate "cover" UV offset based on image vs plane aspect ratio
+      const imgAspect = texture.image ? texture.image.width / texture.image.height : 16 / 9;
+      this._bgImageCoverScale = imgAspect;
+
       this._bgImageMaterial = new THREE.ShaderMaterial({
         uniforms: {
           uTexture: { value: texture },
-          uOpacity: { value: 0.35 },
           uBass: { value: 0 },
-          uTime: { value: 0 },
+          uAudioIntensity: { value: 0 },
+          uCoverScale: { value: imgAspect },
+          uPlaneAspect: { value: 1.0 }, // will be set when creating mesh
         },
         vertexShader: `
           varying vec2 vUv;
@@ -227,31 +233,59 @@ export default class ThreeScene {
         `,
         fragmentShader: `
           uniform sampler2D uTexture;
-          uniform float uOpacity;
           uniform float uBass;
-          uniform float uTime;
+          uniform float uAudioIntensity;
+          uniform float uCoverScale;
+          uniform float uPlaneAspect;
           varying vec2 vUv;
           void main() {
             vec2 uv = vUv;
-            // Subtle zoom pulse on bass
-            float zoom = 1.0 + uBass * 0.03;
+
+            // ── Cover-fit: adjust UVs so image fills the plane (like background-size: cover) ──
+            float planeAspect = uPlaneAspect;
+            float imgAspect = uCoverScale;
+            if (planeAspect > imgAspect) {
+              // Plane is wider than image → scale UVs vertically, crop top/bottom
+              float scale = planeAspect / imgAspect;
+              uv.y = (uv.y - 0.5) / scale + 0.5;
+            } else {
+              // Plane is taller than image → scale UVs horizontally, crop left/right
+              float scale = imgAspect / planeAspect;
+              uv.x = (uv.x - 0.5) / scale + 0.5;
+            }
+
+            // ── Subtle zoom on bass (z-scale effect) ──
+            float zoom = 1.0 + uBass * 0.02;
             uv = (uv - 0.5) / zoom + 0.5;
+
             vec4 tex = texture2D(uTexture, uv);
-            // Darken the image so UI is readable
-            tex.rgb *= 0.5 + uBass * 0.15;
-            gl_FragColor = vec4(tex.rgb, uOpacity);
+
+            // ── Darken base so UI is readable ──
+            vec3 color = tex.rgb * 0.35;
+
+            // ── Glow: brighten on audio ──
+            float glow = uBass * 0.25 + uAudioIntensity * 0.1;
+            color += tex.rgb * glow;
+
+            // ── Subtle vignette overlay for depth ──
+            float vig = distance(vUv, vec2(0.5));
+            color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
+
+            gl_FragColor = vec4(color, 1.0);
           }
         `,
-        transparent: true,
         side: THREE.DoubleSide,
         depthWrite: false,
       });
-      // Cover the full viewport — use a large plane at camera distance
+
+      // Create a plane that covers the full camera viewport
       const cam = this.camera;
       const dist = 9;
       const vFov = cam.fov * Math.PI / 180;
       const planeH = 2 * Math.tan(vFov / 2) * dist;
       const planeW = planeH * cam.aspect;
+      this._bgImageMaterial.uniforms.uPlaneAspect.value = planeW / planeH;
+
       this._bgImageMesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), this._bgImageMaterial);
       this._bgImageMesh.position.z = -dist;
       this.scene.add(this._bgImageMesh);
@@ -360,13 +394,10 @@ export default class ThreeScene {
       this._beatIntensity *= 0.88;
     }
 
-    // ── Background image — audio-reactive cover ──
+    // ── Background image — audio-reactive cover with glow + zoom ──
     if (this._bgImageMesh && this._bgImageMaterial && this._bgImageMaterial.uniforms) {
-      const baseOpacity = 0.3;
-      const audioOpacity = baseOpacity + bassPulse * 0.25 + audioPulse * 0.15;
-      this._bgImageMaterial.uniforms.uOpacity.value = Math.min(0.65, audioOpacity);
       this._bgImageMaterial.uniforms.uBass.value = bassPulse;
-      this._bgImageMaterial.uniforms.uTime.value = time * 0.001;
+      this._bgImageMaterial.uniforms.uAudioIntensity.value = audioPulse;
     }
 
     // ── Particles — audio-reactive (only when visible) ──
