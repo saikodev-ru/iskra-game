@@ -42,7 +42,7 @@ export default class HUD {
           <div style="display:flex;align-items:baseline;gap:8px;">
             <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:56px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0</div>
             <div style="font-family:var(--zzz-font);font-weight:700;font-size:16px;color:rgba(255,255,255,0.5);letter-spacing:0.05em;text-shadow:0 2px 8px rgba(0,0,0,0.9);">x</div>
-            <div id="hud-rank" style="font-family:var(--zzz-font);font-weight:900;font-size:30px;color:var(--zzz-lime);text-shadow:0 0 24px rgba(170,255,0,0.35),0 2px 10px rgba(0,0,0,0.9),-1px -1px 0 rgba(0,0,0,0.6),1px -1px 0 rgba(0,0,0,0.6),-1px 1px 0 rgba(0,0,0,0.6),1px 1px 0 rgba(0,0,0,0.6);opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
+            <div id="hud-rank" class="hud-rank" data-rank="" style="font-family:var(--zzz-font);font-weight:900;font-size:30px;opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
           </div>
           <!-- Combo label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px;text-shadow:0 0 8px rgba(0,0,0,0.9);">COMBO</div>
@@ -167,13 +167,8 @@ export default class HUD {
     if (this.els.rank) {
       const style = rankStyles[rank] || rankStyles.D;
       this.els.rank.textContent = rank;
-      this.els.rank.style.background = style.bg;
-      this.els.rank.style.webkitBackgroundClip = 'text';
-      this.els.rank.style.backgroundClip = 'text';
-      this.els.rank.style.webkitTextFillColor = 'transparent';
-      this.els.rank.style.color = 'transparent';
-      this.els.rank.style.filter = `drop-shadow(0 0 12px ${style.shadow})`;
-      this.els.rank.style.textShadow = 'none';
+      this.els.rank.dataset.rank = rank;
+      this.els.rank.style.setProperty('--grade-bg', style.bg);
       this.els.rank.style.opacity = '1';
       this._rankScale = 1.5;
     }

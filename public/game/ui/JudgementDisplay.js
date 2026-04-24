@@ -25,6 +25,7 @@ export default class JudgementDisplay {
     const el = document.createElement('div');
     el.className = `judgement-text judgement--${judgement} judgement--in`;
     el.textContent = judgement.toUpperCase();
+    el.dataset.text = judgement.toUpperCase();
     this.container.appendChild(el);
     this._currentEl = el;
 
@@ -66,6 +67,7 @@ export default class JudgementDisplay {
     const el = document.createElement('div');
     el.className = 'judgement-text judgement--miss judgement--in';
     el.textContent = 'MISS';
+    el.dataset.text = 'MISS';
     this.container.appendChild(el);
     this._currentEl = el;
     document.body.classList.add('combo-break');

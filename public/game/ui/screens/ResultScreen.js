@@ -50,7 +50,7 @@ export default class ResultScreen {
         <!-- Grade letter -->
         <div class="result-grade"
              data-grade="${s.rank}"
-             style="background:${grade.bg};-webkit-text-stroke:4px ${grade.stroke};filter:drop-shadow(0 0 40px ${grade.glow}) drop-shadow(0 0 80px ${grade.glow});">
+             style="--grade-bg: ${grade.bg};">
           ${s.rank}
         </div>
 

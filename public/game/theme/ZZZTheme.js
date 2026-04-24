@@ -159,20 +159,34 @@ body.zzz-active::before {
   white-space: nowrap;
 }
 .judgement--perfect {
+  position: relative;
+  color: #000;
+  text-shadow:
+    0 4px 0 rgba(0,0,0,0.8),
+    0 7px 0 rgba(0,0,0,0.5),
+    -2px -2px 0 rgba(0,0,0,0.9),
+    2px -2px 0 rgba(0,0,0,0.9),
+    -2px 2px 0 rgba(0,0,0,0.9),
+    2px 2px 0 rgba(0,0,0,0.9);
+  filter: none !important;
+}
+.judgement--perfect::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  font-family: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  white-space: inherit;
   color: transparent;
-  -webkit-text-stroke: 3px rgba(0, 0, 0, 0.85);
+  -webkit-text-fill-color: transparent;
   background: linear-gradient(180deg, #67E8F9 0%, #FDA4AF 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  text-shadow: none;
-  filter: drop-shadow(0 0 18px rgba(103, 232, 249, 0.55))
-          drop-shadow(0 0 36px rgba(253, 164, 175, 0.35))
-          drop-shadow(0 3px 0 rgba(0,0,0,0.9))
-          drop-shadow(0 6px 0 rgba(0,0,0,0.9))
-          drop-shadow(-2px -2px 0 rgba(0,0,0,0.9))
-          drop-shadow(2px -2px 0 rgba(0,0,0,0.9))
-          drop-shadow(-2px 2px 0 rgba(0,0,0,0.9))
-          drop-shadow(2px 2px 0 rgba(0,0,0,0.9));
+  -webkit-text-stroke: 2px rgba(0,0,0,0.6);
+  pointer-events: none;
 }
 .judgement--great   { color: #00E5FF; }
 .judgement--good    { color: #F5C518; }
@@ -515,15 +529,32 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 .result-grade {
   font-family: var(--zzz-font); font-weight: 900; font-size: 140px;
   line-height: 1; letter-spacing: 0.08em;
-  -webkit-text-stroke: 4px rgba(0, 0, 0, 0.8);
-  background-clip: text; -webkit-background-clip: text;
-  color: transparent; position: relative;
+  position: relative;
+  color: #000;
+  text-shadow:
+    0 5px 0 rgba(0,0,0,0.85),
+    0 10px 0 rgba(0,0,0,0.5),
+    -3px -3px 0 rgba(0,0,0,0.9),
+    3px -3px 0 rgba(0,0,0,0.9),
+    -3px 3px 0 rgba(0,0,0,0.9),
+    3px 3px 0 rgba(0,0,0,0.9);
 }
 .result-grade::after {
-  content: attr(data-grade); position: absolute; inset: 0;
-  -webkit-text-stroke: 4px rgba(0, 0, 0, 0.8);
-  background: inherit; background-clip: text; -webkit-background-clip: text;
-  color: transparent; filter: blur(1px); opacity: 0.4; z-index: -1;
+  content: attr(data-grade);
+  position: absolute;
+  inset: 0;
+  font-family: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: var(--grade-bg, linear-gradient(180deg, #EF4444, #7F1D1D));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 4px rgba(0,0,0,0.55);
+  pointer-events: none;
 }
 
 .result-song-info {
@@ -656,6 +687,36 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   .result-judge-item-value { font-size: 15px; }
   .result-buttons { gap: 8px; }
   .result-btn { padding: 12px 24px; font-size: 12px; }
+}
+
+/* ── HUD RANK (gradient text with 3D shadow) ──── */
+.hud-rank {
+  position: relative;
+  color: #000;
+  text-shadow:
+    0 2px 0 rgba(0,0,0,0.8),
+    0 4px 0 rgba(0,0,0,0.4),
+    -1px -1px 0 rgba(0,0,0,0.9),
+    1px -1px 0 rgba(0,0,0,0.9),
+    -1px 1px 0 rgba(0,0,0,0.9),
+    1px 1px 0 rgba(0,0,0,0.9);
+}
+.hud-rank::after {
+  content: attr(data-rank);
+  position: absolute;
+  inset: 0;
+  font-family: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: var(--grade-bg, linear-gradient(180deg, #67E8F9, #FDA4AF));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 1px rgba(0,0,0,0.5);
+  pointer-events: none;
 }
 
 /* PARALLAX layer */
