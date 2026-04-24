@@ -22,6 +22,26 @@ export default class SongSelect {
     this._parallaxEls = [];
   }
 
+  /** Get local record for a beatmap difficulty */
+  _getRecord(setId, diffVersion) {
+    try {
+      const key = `rhythm-record-${setId}-${(diffVersion || '').replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) { return null; }
+  }
+
+  /** Save local record for a beatmap difficulty */
+  static saveRecord(setId, diffVersion, score, rank) {
+    try {
+      const key = `rhythm-record-${setId}-${(diffVersion || '').replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const existing = JSON.parse(localStorage.getItem(key) || 'null');
+      if (!existing || score > existing.score) {
+        localStorage.setItem(key, JSON.stringify({ score, rank }));
+      }
+    } catch (_) {}
+  }
+
   build() {
     return `
       <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;">
@@ -158,23 +178,11 @@ export default class SongSelect {
     const card = document.createElement('div');
     card.className = 'song-card' + (isSelected ? ' active' : '');
 
-    const dispDiff = isSelected && set.difficulties[this.selectedDiffIndex]
-      ? set.difficulties[this.selectedDiffIndex]
-      : set.difficulties[0] || { difficulty: { stars: 0 } };
-    const stars = dispDiff.difficulty?.stars || 0;
-    const starColor = DifficultyAnalyzer.getStarColor(stars);
-    const diffName = DifficultyAnalyzer.getDiffName(stars);
-
     card.innerHTML = `
       <div class="song-card-thumb" style="${set.backgroundUrl ? `background-image:url('${set.backgroundUrl}')` : set.videoUrl ? 'background:linear-gradient(135deg,#1a1a2e,#16213e);' : 'background:var(--zzz-graphite);'}">${set.videoUrl && !set.backgroundUrl ? '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;opacity:0.4;">▶</span>' : ''}</div>
       <div class="song-card-info">
-        <div class="song-card-title">${this._escHtml(set.title)}${set.videoUrl ? ' <span style="font-size:10px;color:var(--zzz-muted);vertical-align:middle;opacity:0.6;">🎬</span>' : ''}</div>
-        <div class="song-card-artist">${this._escHtml(set.artist)}</div>
-        <div class="song-card-diff-row">
-          <span class="song-card-stars" style="color:${starColor};">★ ${stars.toFixed(1)}</span>
-          <span class="song-card-diff-name" style="color:${starColor};">${diffName}</span>
-          ${set.difficulties.length > 1 ? `<span class="song-card-diff-count">${isExpanded ? '▲' : '▼'} ${set.difficulties.length}</span>` : ''}
-        </div>
+        <div class="song-card-title">${this._escHtml(set.title)} <span style="font-size:10px;font-weight:500;color:var(--zzz-muted);text-transform:none;letter-spacing:0;">— ${this._escHtml(set.artist)}</span>${set.videoUrl ? ' <span style="font-size:9px;color:var(--zzz-muted);vertical-align:middle;opacity:0.5;">🎬</span>' : ''}</div>
+        ${set.difficulties.length > 1 ? `<span class="song-card-diff-count">${isExpanded ? '▲' : '▼'} ${set.difficulties.length}</span>` : ''}
       </div>
       <button class="song-card-delete" data-delete="${setIndex}" title="Delete">✕</button>
     `;
@@ -201,7 +209,7 @@ export default class SongSelect {
     if (isExpanded && set.difficulties.length > 1) {
       const diffList = document.createElement('div');
       diffList.className = 'diff-dropdown';
-      diffList.style.cssText = `display:flex;flex-direction:column;gap:2px;padding:3px 8px 6px 64px;`;
+      diffList.style.cssText = `display:flex;flex-direction:column;gap:4px;padding:4px 8px 6px;`;
 
       set.difficulties.forEach((diff, diffIdx) => {
         const s = diff.difficulty?.stars || 0;
@@ -209,27 +217,41 @@ export default class SongSelect {
         const n = DifficultyAnalyzer.getDiffName(s);
         const isActive = isSelected && diffIdx === this.selectedDiffIndex;
 
+        // Get local record
+        const record = this._getRecord(set.id, diff.version);
+        const recordHtml = record
+          ? `<span class="diff-record diff-record--has">${record.score.toLocaleString()}</span>`
+          : `<span class="diff-record diff-record--none">?</span>`;
+
         const diffRow = document.createElement('div');
         diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
         diffRow.style.cssText = `
-          display:flex;align-items:center;gap:8px;
-          padding:6px 12px;border-radius:10px;cursor:pointer;
-          transition:all 0.12s ease;
-          background:${isActive ? 'rgba(42,42,42,0.7)' : 'rgba(26,26,26,0.5)'};
+          display:flex;align-items:center;gap:10px;
+          padding:10px 14px;border-radius:14px;cursor:pointer;
+          transition:all 0.15s cubic-bezier(0.4,0,0.2,1);
+          background:${isActive ? 'rgba(170,255,0,0.08)' : 'rgba(0,0,0,0.6)'};
+          border:2px solid ${isActive ? 'var(--zzz-lime)' : 'transparent'};
+          ${isActive ? 'box-shadow:0 0 12px rgba(170,255,0,0.12),inset 0 0 20px rgba(170,255,0,0.03);' : ''}
         `;
         diffRow.innerHTML = `
-          <span style="color:${c};font-family:var(--zzz-font);font-weight:900;font-size:12px;min-width:40px;">★ ${s.toFixed(1)}</span>
-          <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;">${this._escHtml(diff.version || n)}</span>
+          <span style="color:${c};font-family:var(--zzz-font);font-weight:900;font-size:13px;min-width:44px;">★ ${s.toFixed(1)}</span>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+            <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(diff.version || n)}</span>
+            <span style="color:${c};font-family:var(--zzz-font);font-weight:900;font-size:10px;letter-spacing:0.02em;opacity:0.7;">${n}</span>
+          </div>
+          ${recordHtml}
         `;
 
         diffRow.addEventListener('click', (e) => {
-          e.stopPropagation(); this._selectSong(setIndex); this._selectDifficulty(diffIdx);
+          e.stopPropagation();
+          // Don't call _selectSong — we're on the same track, just change difficulty
+          this._selectDifficulty(diffIdx);
         });
         diffRow.addEventListener('mouseenter', () => {
-          if (!isActive) diffRow.style.background = 'rgba(42,42,42,0.6)';
+          if (!isActive) diffRow.style.background = 'rgba(30,30,30,0.8)';
         });
         diffRow.addEventListener('mouseleave', () => {
-          if (!isActive) diffRow.style.background = 'rgba(26,26,26,0.5)';
+          if (!diffRow.classList.contains('active')) diffRow.style.background = 'rgba(0,0,0,0.6)';
         });
 
         diffList.appendChild(diffRow);
@@ -311,38 +333,10 @@ export default class SongSelect {
     const set = this.beatmapSets[this.selectedIndex];
     if (!set || diffIndex < 0 || diffIndex >= set.difficulties.length) return;
     this.selectedDiffIndex = diffIndex;
+    this._renderSongList(); // re-render to update diff highlight
     this._renderSongInfo(set);
-    this._updateDiffHighlight(set);
-    this._playPreview(set);
-  }
-
-  _updateDiffHighlight(set) {
-    if (!set || this._expandedCard !== this.selectedIndex) return;
-    const wrapper = document.querySelector(`.song-card-wrapper[data-index="${this.selectedIndex}"]`);
-    if (!wrapper) return;
-
-    const card = wrapper.querySelector('.song-card');
-    if (card) {
-      const diff = set.difficulties[this.selectedDiffIndex] || set.difficulties[0];
-      const stars = diff.difficulty?.stars || 0;
-      const starColor = DifficultyAnalyzer.getStarColor(stars);
-      const diffName = DifficultyAnalyzer.getDiffName(stars);
-      const starsEl = card.querySelector('.song-card-stars');
-      const nameEl = card.querySelector('.song-card-diff-name');
-      if (starsEl) { starsEl.style.color = starColor; starsEl.textContent = `★ ${stars.toFixed(1)}`; }
-      if (nameEl) { nameEl.style.color = starColor; nameEl.textContent = diffName; }
-    }
-
-    const items = wrapper.querySelectorAll('.diff-dropdown-item');
-    items.forEach((item, idx) => {
-      const isActive = idx === this.selectedDiffIndex;
-      const s = set.difficulties[idx]?.difficulty?.stars || 0;
-      const c = DifficultyAnalyzer.getStarColor(s);
-      item.classList.toggle('active', isActive);
-      item.style.background = isActive ? 'rgba(42,42,42,0.7)' : 'rgba(26,26,26,0.5)';
-      const nameSpan = item.querySelector('span:last-child');
-      if (nameSpan) nameSpan.style.color = isActive ? c : 'var(--zzz-text)';
-    });
+    // Don't restart preview when just switching difficulty on same song
+    // — just update the info, preview keeps playing
   }
 
   _renderSongInfo(set) {
@@ -360,6 +354,12 @@ export default class SongSelect {
     const durationSec = Math.floor(duration / 1000);
     const durationStr = `${Math.floor(durationSec / 60)}:${(durationSec % 60).toString().padStart(2, '0')}`;
 
+    // Local record for selected difficulty
+    const record = this._getRecord(set.id, diff.version);
+    const recordHtml = record
+      ? `<span style="color:var(--zzz-lime);font-family:var(--zzz-font);font-weight:900;font-size:14px;">${record.score.toLocaleString()}</span><span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:11px;margin-left:6px;">BEST</span>`
+      : `<span style="color:rgba(255,255,255,0.15);font-family:var(--zzz-font);font-weight:700;font-size:14px;">—</span><span style="color:rgba(255,255,255,0.15);font-family:var(--zzz-font);font-size:11px;margin-left:6px;">NO RECORD</span>`;
+
     info.innerHTML = `
       <div style="font-family:var(--zzz-font);font-weight:900;font-size:40px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.05;word-break:break-word;text-shadow:0 2px 20px rgba(0,0,0,0.9);">${this._escHtml(set.title)}</div>
       <div style="font-family:var(--zzz-font);font-weight:500;font-size:15px;color:var(--zzz-muted);margin-top:4px;text-shadow:0 1px 10px rgba(0,0,0,0.9);">${this._escHtml(set.artist)}</div>
@@ -368,7 +368,8 @@ export default class SongSelect {
         <span style="color:${starColor};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;">${diffName}</span>
         <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${bpm} BPM · ${durationStr}</span>
       </div>
-      <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="margin-top:20px;pointer-events:auto;font-size:28px;padding:20px 56px;letter-spacing:0.12em;border-radius:16px;">▶ PLAY</button>
+      <div style="margin-top:8px;display:flex;align-items:baseline;gap:4px;">${recordHtml}</div>
+      <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="margin-top:16px;pointer-events:auto;font-size:28px;padding:20px 56px;letter-spacing:0.12em;border-radius:16px;">▶ PLAY</button>
     `;
     document.getElementById('song-play-btn')?.addEventListener('click', () => this._confirmSong());
   }
@@ -430,7 +431,7 @@ export default class SongSelect {
     if (!diff) return;
     this._stopPreview();
     const map = {
-      metadata: { ...(set.metadata || {}), ...diff.metadata, title: set.title, artist: set.artist, version: diff.version, creator: set.creator },
+      metadata: { ...(set.metadata || {}), ...diff.metadata, setId: set.id, title: set.title, artist: set.artist, version: diff.version, creator: set.creator },
       audioBuffer: set.audioBuffer, backgroundUrl: set.backgroundUrl, videoUrl: set.videoUrl,
       notes: diff.notes, laneCount: diff.laneCount, bpmChanges: diff.bpmChanges, difficulty: diff.difficulty
     };

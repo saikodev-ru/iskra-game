@@ -295,6 +295,18 @@ async function boot() {
     three._clearBackgroundVideo();
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
+    // Save local record
+    if (currentMapData && stats) {
+      try {
+        const setId = currentMapData.metadata?.setId || currentMapData.metadata?.title || '';
+        const diffVersion = currentMapData.metadata?.version || '';
+        const key = `rhythm-record-${setId}-${diffVersion.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const existing = JSON.parse(localStorage.getItem(key) || 'null');
+        if (!existing || stats.score > existing.score) {
+          localStorage.setItem(key, JSON.stringify({ score: stats.score, rank: stats.rank }));
+        }
+      } catch (_) {}
+    }
     EventBus.emit('game:over', stats);
     screens.show('result', { stats, map: currentMapData });
   };

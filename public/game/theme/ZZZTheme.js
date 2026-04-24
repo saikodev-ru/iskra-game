@@ -241,87 +241,75 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 .zzz-scroll::-webkit-scrollbar-thumb { background: var(--zzz-lime-dim); border-radius: 2px; }
 .zzz-scroll::-webkit-scrollbar-thumb:hover { background: rgba(170,255,0,0.5); }
 
-/* ── SONG CARD — osu!lazer style ─────────────────────────────────── */
+/* ── SONG CARD — compact, rounded ─────────────────────────────────── */
 
 .song-card {
-  display: flex; align-items: stretch; gap: 0;
-  border-radius: 12px; overflow: hidden;
-  background: rgba(0,0,0,0.75); border: none; cursor: pointer;
+  display: flex; align-items: center; gap: 0;
+  border-radius: 16px; overflow: hidden;
+  background: rgba(0,0,0,0.8); border: none; cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative; min-height: 64px;
+  position: relative; height: 48px;
   backdrop-filter: blur(12px);
   max-width: 100%; box-sizing: border-box;
 }
 .song-card:hover {
-  background: rgba(20,20,20,0.85);
+  background: rgba(20,20,20,0.9);
   box-shadow: 0 2px 16px rgba(0,0,0,0.3);
   transform: translateX(6px);
 }
 .song-card.active {
-  background: rgba(15,15,15,0.85);
-  box-shadow: 0 0 16px rgba(0,0,0,0.3), 0 2px 12px rgba(0,0,0,0.4);
-  transform: translateX(8px) scale(1.015);
+  background: rgba(10,10,10,0.9);
+  box-shadow: 0 0 16px rgba(0,0,0,0.3), 0 0 8px rgba(170,255,0,0.08);
+  transform: translateX(8px);
 }
 
 /* Active card left accent bar */
 .song-card.active::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
   background: var(--zzz-lime); border-radius: 0 2px 2px 0;
   box-shadow: 0 0 8px rgba(170,255,0,0.4);
 }
 
 .song-card-thumb {
-  flex: 0 0 64px; background-size: cover; background-position: center;
-  position: relative; border-radius: 12px 0 0 12px;
+  flex: 0 0 88px; height: 100%; background-size: cover; background-position: center;
+  position: relative; border-radius: 16px 0 0 16px;
 }
 .song-card-thumb::after {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent 40%, rgba(26,26,26,0.9) 100%);
-  border-radius: 12px 0 0 12px;
-}
-.song-card.active .song-card-thumb::after {
-  background: linear-gradient(90deg, transparent 40%, rgba(15,15,15,0.8) 100%);
+  background: linear-gradient(90deg, transparent 30%, rgba(0,0,0,0.95) 100%);
+  border-radius: 16px 0 0 16px;
 }
 
 .song-card-info {
-  flex: 1; display: flex; flex-direction: column; justify-content: center;
-  padding: 8px 14px; gap: 1px; overflow: hidden;
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  padding: 0 12px; overflow: hidden; height: 100%;
 }
 .song-card-title {
-  font-family: var(--zzz-font); font-weight: 900; font-size: 14px; color: var(--zzz-text);
+  font-family: var(--zzz-font); font-weight: 900; font-size: 13px; color: var(--zzz-text);
   text-transform: uppercase; letter-spacing: 0.04em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  transition: color 0.2s;
+  transition: color 0.2s; flex: 1; min-width: 0;
 }
 .song-card.active .song-card-title { color: #ffffff; }
 
-.song-card-artist {
-  font-family: var(--zzz-font); font-size: 11px; color: var(--zzz-muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.song-card-diff-row { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
-.song-card-stars { font-family: var(--zzz-font); font-weight: 900; font-size: 12px; }
-.song-card-diff-name {
-  font-family: var(--zzz-font); font-weight: 700; font-size: 10px;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}
 .song-card-diff-count {
-  font-family: var(--zzz-font); font-size: 10px; color: var(--zzz-lime);
-  background: var(--zzz-graphite); border-radius: 9999px; padding: 1px 7px;
-  cursor: pointer; transition: all 0.15s ease; user-select: none;
+  font-family: var(--zzz-font); font-size: 11px; font-weight: 700; color: var(--zzz-lime);
+  background: rgba(170,255,0,0.12); border-radius: 9999px; padding: 2px 8px;
+  cursor: pointer; transition: all 0.15s ease; user-select: none; flex-shrink: 0;
 }
 .song-card-diff-count:hover { background: var(--zzz-lime-dim); color: var(--zzz-bg); }
 
 /* DELETE BUTTON */
 .song-card-delete {
-  position: absolute; top: 6px; right: 6px; width: 24px; height: 24px;
+  position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+  width: 20px; height: 20px;
   border-radius: 50%; border: none; background: rgba(255,61,61,0.1);
-  color: var(--zzz-red); font-size: 11px; cursor: pointer;
+  color: var(--zzz-red); font-size: 10px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: all 0.15s ease; z-index: 2; padding: 0; line-height: 1;
 }
-.song-card:hover .song-card-delete { opacity: 0.4; }
-.song-card-delete:hover { opacity: 1 !important; background: rgba(255,61,61,0.25); transform: scale(1.1); }
+.song-card:hover .song-card-delete { opacity: 0.3; }
+.song-card-delete:hover { opacity: 1 !important; background: rgba(255,61,61,0.25); transform: translateY(-50%) scale(1.1); }
 
 /* ── SONG CARD WRAPPER — osu!lazer carousel animation ────────────── */
 
@@ -351,8 +339,28 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   from { opacity: 0; max-height: 0; transform: translateY(-6px); }
   to   { opacity: 1; max-height: 600px; transform: translateY(0); }
 }
-.diff-dropdown-item { transition: all 0.12s ease; }
-.diff-dropdown-item:hover { transform: translateX(4px); }
+.diff-dropdown-item {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid transparent;
+}
+.diff-dropdown-item:hover { transform: translateX(4px); background: rgba(30,30,30,0.8) !important; }
+.diff-dropdown-item.active {
+  border-color: var(--zzz-lime);
+  box-shadow: 0 0 12px rgba(170,255,0,0.12), inset 0 0 20px rgba(170,255,0,0.03);
+}
+
+/* Local record badge in diff panel */
+.diff-record {
+  font-family: var(--zzz-font); font-weight: 700; font-size: 11px;
+  padding: 2px 8px; border-radius: 8px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.diff-record--none {
+  color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04);
+}
+.diff-record--has {
+  color: var(--zzz-lime); background: rgba(170,255,0,0.1);
+}
 
 /* IMPORT BUTTON */
 .zzz-import-btn { border-radius: 12px !important; font-weight: 900 !important; letter-spacing: 0.08em !important; }
@@ -363,11 +371,10 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 
 @media (max-width: 768px) {
   .song-list-column { width: 100% !important; max-width: 100% !important; }
-  .song-card { min-height: 56px; }
-  .song-card-thumb { flex: 0 0 48px; }
-  .song-card-title { font-size: 12px; }
-  .song-card-artist { font-size: 10px; }
-  .song-card-info { padding: 6px 10px; }
+  .song-card { height: 40px; }
+  .song-card-thumb { flex: 0 0 56px; }
+  .song-card-title { font-size: 11px; }
+  .song-card-info { padding: 0 8px; }
 }
 
 /* TEXT STYLES */

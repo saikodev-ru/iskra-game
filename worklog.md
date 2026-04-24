@@ -220,3 +220,28 @@ Stage Summary:
 - Video race condition fixed: generation counter prevents stale loads, old video stays visible until new one is ready
 - Background is now true black (#000000)
 - Song panels are more opaque (0.75 vs 0.6) with stronger blur
+
+---
+Task ID: 9
+Agent: Main Agent
+Task: Redesign song cards (shorter, rounded, wider cover), redesign diff panels (rounded, taller, records), fix diff click behavior
+
+Work Log:
+- ZZZTheme.js: Song card redesign — height reduced from min-height:64px to height:48px, border-radius 12px→16px. Cover thumb widened from 64px→88px with gradient fade to full transparency (transparent 30% → rgba(0,0,0,0.95)). Single-row layout: title + artist inline with diff count badge on right. Removed .song-card-artist, .song-card-diff-row, .song-card-stars, .song-card-diff-name CSS classes. Delete button repositioned to vertical center.
+- ZZZTheme.js: Difficulty dropdown redesign — border-radius 10px→14px, padding 6px→10px, gap 2px→4px. Added .diff-dropdown-item.active CSS with lime border + glow box-shadow + inset glow. Added .diff-record and .diff-record--none / .diff-record--has CSS for local record badges.
+- SongSelect.js: Card HTML simplified — title with inline artist ("Title — Artist"), diff count badge on right side. No star rating or diff name on card itself.
+- SongSelect.js: Difficulty dropdown rows now show: ★ stars | version name + diff name (2-line) | record badge (score or transparent "?").
+- SongSelect.js: _selectDifficulty() — removed _playPreview() call (preview keeps playing, no restart). Removed _updateDiffHighlight() method (replaced by _renderSongList() call). Diff click handler no longer calls _selectSong(), just _selectDifficulty().
+- SongSelect.js: Added _getRecord() and static saveRecord() methods for localStorage-based records keyed by setId + diffVersion.
+- SongSelect.js: _renderSongInfo() now shows local record below difficulty info (lime score + "BEST" or transparent "— NO RECORD").
+- SongSelect.js: _confirmSong() now passes setId in metadata for record lookup.
+- main.js: endGame() now saves score to localStorage as local record (keyed by setId + diffVersion).
+
+Stage Summary:
+- Song cards are compact 48px tall with 16px border-radius, wider 88px cover with smooth gradient fade
+- No star/diff info on cards — just title, artist, diff count badge
+- Difficulty panels are 14px rounded, taller rows with 2-line content (version + diff name)
+- Local records stored in localStorage, displayed as lime badge in diff panels and song info
+- Transparent "?" when no record exists
+- Clicking a difficulty no longer triggers glitch or restarts audio preview
+- Selected difficulty has clear lime border + glow highlight
