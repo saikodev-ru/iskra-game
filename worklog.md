@@ -578,3 +578,46 @@ Work Log:
 Stage Summary:
 - All 7 changes verified working correctly
 - Code quality confirmed clean (lint passes)
+
+---
+Task ID: 2
+Agent: full-stack-developer
+Task: Add background darkening overlay to main menu
+
+Work Log:
+- Read MainMenu.js to understand current structure
+- Added full-screen darkening overlay div (`rgba(0,0,0,0.25)`) after grain noise div and before top gradient fade
+- Overlay uses `position:absolute;inset:0;pointer-events:none;z-index:0`
+- z-index layering preserved: darkening=0, top gradient=1, main content=2
+
+Stage Summary:
+- Main menu now has a 25% opacity black overlay darkening the Three.js background
+- z-index stacking: grain noise (none) → darkening (0) → top gradient (1) → content (2)
+- Files modified: `public/game/ui/screens/MainMenu.js`
+
+---
+Task ID: 1
+Agent: full-stack-developer
+Task: Fix unclickable bottom-left buttons in SongSelect.js - make bigger, use SVG icons, make play wider
+
+Work Log:
+- Read SongSelect.js to understand _renderPlayButton() method (line 813) and build() method (line 80)
+- Changed song info backdrop bottom from 55% to 58% in build() to give more room for buttons
+- Changed play area container z-index from 2 to 3 (higher than right column's z-index:2) to ensure buttons are always clickable
+- Changed play area container bottom from 24px to 28px for more breathing room
+- Replaced emoji icons (▶, ⚙, 🎲) with SVG icons:
+  - PLAY: filled triangle SVG (white, 26x26px)
+  - MODS: sliders/settings SVG (purple, 22x22px) with stroke-based lines and filled circles
+  - RANDOM: two crossing arrows SVG (yellow, 22x22px) with stroke-based polylines and lines
+- Increased button sizes: PLAY from 60x60 to 84x72px (wider), MODS/RANDOM from 60x60 to 68x68px
+- Removed `pointer-events:auto !important` from button styles
+- Increased gap between buttons from 8px to 10px
+- Increased icon-text gap from 2px to 3px
+- Slightly increased PLAY text font size from 10px to 11px
+
+Stage Summary:
+- Buttons are now larger with proper touch targets (84x72 and 68x68, all > 44px minimum)
+- SVG icons replace emojis for cleaner, more professional appearance
+- z-index:3 ensures buttons are always above right column (z-index:2)
+- No more pointer-events hacks needed
+- Files modified: `public/game/ui/screens/SongSelect.js`

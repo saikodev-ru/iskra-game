@@ -1,10 +1,30 @@
 export default class HitSounds {
-  constructor(audioCtx) { this._ctx = audioCtx; }
+  constructor(audioCtx) {
+    this._ctx = audioCtx;
+    this._volume = 0.7;
+    this._masterGain = null;
+  }
+
+  _ensureMasterGain() {
+    if (!this._masterGain) {
+      this._masterGain = this._ctx.createGain();
+      this._masterGain.gain.value = this._volume;
+      this._masterGain.connect(this._ctx.destination);
+    }
+  }
+
+  setVolume(vol) {
+    this._volume = vol;
+    if (this._masterGain) {
+      this._masterGain.gain.value = vol;
+    }
+  }
 
   _play(fn) {
     if (!this._ctx) return;
+    this._ensureMasterGain();
     const g = this._ctx.createGain();
-    g.connect(this._ctx.destination);
+    g.connect(this._masterGain);
     fn(g);
   }
 

@@ -120,8 +120,11 @@ async function boot() {
   let currentLaneCount = 4;
 
   const savedVolume = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
+  const savedGameVolume = parseInt(localStorage.getItem('rhythm-os-game-volume') || '70') / 100;
   audio._ensureCtx();
   audio.setVolume(savedVolume);
+  initAudio();
+  if (hitSounds) hitSounds.setVolume(savedGameVolume);
 
   const updateSafeArea = () => {
     const sa = calcSafeArea();
@@ -148,6 +151,8 @@ async function boot() {
     } else if (key === 'scrollSpeed') {
       // Apply scroll speed immediately (works mid-game from pause settings)
       noteRenderer.scrollSpeed = value;
+    } else if (key === 'gameVolume') {
+      if (hitSounds) hitSounds.setVolume(value / 100);
     }
   });
 

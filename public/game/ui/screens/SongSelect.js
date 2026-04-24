@@ -71,13 +71,13 @@ export default class SongSelect {
         <div style="position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.35) 70%, rgba(0,0,0,0.7) 100%);"></div>
 
         <!-- Song info backdrop (top-left) -->
-        <div style="position:absolute;top:8px;left:12px;right:55%;bottom:55%;z-index:1;pointer-events:none;background:linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.3) 60%, transparent 100%);border-radius:16px;"></div>
+        <div style="position:absolute;top:8px;left:12px;right:55%;bottom:58%;z-index:1;pointer-events:none;background:linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.3) 60%, transparent 100%);border-radius:16px;"></div>
 
         <!-- Song info (top-left) with parallax -->
         <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:16px;left:24px;z-index:2;max-width:45%;pointer-events:none;"></div>
 
         <!-- PLAY button (bottom-left) with parallax -->
-        <div id="ss-play-area" class="parallax-layer" data-parallax="5" style="position:absolute;bottom:24px;left:24px;z-index:2;pointer-events:auto;"></div>
+        <div id="ss-play-area" class="parallax-layer" data-parallax="5" style="position:absolute;bottom:28px;left:24px;z-index:3;pointer-events:auto;"></div>
 
         <!-- Right column: back + search + list -->
         <div id="ss-right-column" class="parallax-layer" data-parallax="2" style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:16px 24px 0 0;z-index:2;position:relative;">
@@ -819,17 +819,17 @@ export default class SongSelect {
     const starColor = DifficultyAnalyzer.getStarColor(stars);
 
     area.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="pointer-events:auto !important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:60px;height:60px;border-radius:16px;padding:0;box-shadow:0 0 30px ${starColor}30;">
-          <span style="font-size:20px;line-height:1;">▶</span>
-          <span style="font-family:var(--zzz-font);font-weight:900;font-size:10px;letter-spacing:0.08em;">PLAY</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:84px;height:72px;border-radius:16px;padding:0;box-shadow:0 0 30px ${starColor}30;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <span style="font-family:var(--zzz-font);font-weight:900;font-size:11px;letter-spacing:0.08em;">PLAY</span>
         </button>
-        <button id="song-mods-btn" class="zzz-btn" style="pointer-events:auto !important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:60px;height:60px;border-radius:16px;padding:0;border-color:var(--zzz-purple);color:var(--zzz-purple);">
-          <span style="font-size:20px;line-height:1;">⚙</span>
+        <button id="song-mods-btn" class="zzz-btn" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:68px;height:68px;border-radius:16px;padding:0;border-color:var(--zzz-purple);color:var(--zzz-purple);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="4" y1="6" x2="4" y2="18"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="20" y1="8" x2="20" y2="16"/><circle cx="4" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="20" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
           <span style="font-family:var(--zzz-font);font-weight:700;font-size:10px;letter-spacing:0.08em;">MODS</span>
         </button>
-        <button id="song-random-btn" class="zzz-btn" style="pointer-events:auto !important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:60px;height:60px;border-radius:16px;padding:0;border-color:var(--zzz-yellow);color:var(--zzz-yellow);">
-          <span style="font-size:20px;line-height:1;">🎲</span>
+        <button id="song-random-btn" class="zzz-btn" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:68px;height:68px;border-radius:16px;padding:0;border-color:var(--zzz-yellow);color:var(--zzz-yellow);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
           <span style="font-family:var(--zzz-font);font-weight:700;font-size:10px;letter-spacing:0.08em;">RANDOM</span>
         </button>
       </div>

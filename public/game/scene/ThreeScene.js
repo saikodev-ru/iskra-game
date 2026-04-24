@@ -50,6 +50,7 @@ export default class ThreeScene {
     this._audioEngineRef = null; // for syncing video to audio time
     this._videoLoadId = 0;      // generation counter to prevent stale video loads
     this._leadInOffset = 0;     // seconds to subtract from audio time for video sync (0 for preview, 1.0 in-game)
+    this._skipVideoFrame = false; // frame-skip toggle for video texture updates (performance)
 
     // CRT / Glitch state
     this._crtIntensity = 0;     // 0-1, CRT overlay intensity (scanlines, barrel distortion)
@@ -578,6 +579,10 @@ export default class ThreeScene {
         return;
       }
 
+      // Optimize video playback for stability
+      video.muted = true;
+      video.playbackRate = 1.0;
+
       // Now clear the old video (after new one is ready)
       this._clearBackgroundVideo();
 
@@ -749,6 +754,7 @@ export default class ThreeScene {
   /** Clear the video background and release resources */
   _clearBackgroundVideo() {
     this._videoActive = false;
+    this._skipVideoFrame = false;
     if (this._videoMesh) {
       this.scene.remove(this._videoMesh);
       this._videoMesh.geometry.dispose();
@@ -1002,10 +1008,11 @@ export default class ThreeScene {
           this._videoElement.play().catch(() => {});
         }
       }
-      // Update video texture
-      if (this._videoTexture) {
+      // Update video texture every 2nd frame for performance
+      if (this._videoTexture && !this._skipVideoFrame) {
         this._videoTexture.needsUpdate = true;
       }
+      this._skipVideoFrame = !this._skipVideoFrame;
       // Audio-reactive uniforms
       this._videoMaterial.uniforms.uBass.value = bassPulse;
       this._videoMaterial.uniforms.uAudioIntensity.value = audioPulse;

@@ -54,10 +54,17 @@ export default class Settings {
         </div>
       </div>
       <div style="margin-bottom:20px;">
-        <div class="zzz-label" style="margin-bottom:8px;">VOLUME</div>
+        <div class="zzz-label" style="margin-bottom:8px;">MUSIC VOLUME</div>
         <div style="display:flex;gap:10px;align-items:center;">
           <input type="range" id="settings-volume" min="0" max="100" value="${this._getSavedVolume()}" style="flex:1;" />
           <span id="settings-volume-val" class="zzz-value" style="min-width:40px;text-align:center;">${this._getSavedVolume()}%</span>
+        </div>
+      </div>
+      <div style="margin-bottom:20px;">
+        <div class="zzz-label" style="margin-bottom:8px;">GAME VOLUME</div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <input type="range" id="settings-game-volume" min="0" max="100" value="${this._getSavedGameVolume()}" style="flex:1;" />
+          <span id="settings-game-volume-val" class="zzz-value" style="min-width:40px;text-align:center;">${this._getSavedGameVolume()}%</span>
         </div>
       </div>
       <div style="margin-bottom:20px;">
@@ -98,6 +105,8 @@ export default class Settings {
     if (oi) oi.addEventListener('input', () => { const v = parseInt(oi.value); ov.textContent = v; localStorage.setItem('rhythm-os-audio-offset', v.toString()); if (this.audio) this.audio.setOffset(v / 1000); });
     const vi = document.getElementById('settings-volume'), vv = document.getElementById('settings-volume-val');
     if (vi) vi.addEventListener('input', () => { const v = parseInt(vi.value); vv.textContent = v + '%'; localStorage.setItem('rhythm-os-volume', v.toString()); if (this.audio) this.audio.setVolume(v / 100); });
+    const gvi = document.getElementById('settings-game-volume'), gvv = document.getElementById('settings-game-volume-val');
+    if (gvi) gvi.addEventListener('input', () => { const v = parseInt(gvi.value); gvv.textContent = v + '%'; localStorage.setItem('rhythm-os-game-volume', v.toString()); EventBus.emit('settings:changed', { key: 'gameVolume', value: v }); });
 
     // Scroll speed — synced number input + slider
     const si = document.getElementById('settings-scroll'), sv = document.getElementById('settings-scroll-val');
@@ -269,6 +278,7 @@ export default class Settings {
 
   _getSavedOffset() { return parseInt(localStorage.getItem('rhythm-os-audio-offset') || '0'); }
   _getSavedVolume() { return parseInt(localStorage.getItem('rhythm-os-volume') || '70'); }
+  _getSavedGameVolume() { return parseInt(localStorage.getItem('rhythm-os-game-volume') || '70'); }
   _getSavedScrollSpeed() { return parseInt(localStorage.getItem('rhythm-os-scroll-speed') || '400'); }
 
   destroy() {
