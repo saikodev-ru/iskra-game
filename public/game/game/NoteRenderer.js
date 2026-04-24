@@ -218,32 +218,54 @@ export default class NoteRenderer {
       cctx.restore();
     }
 
-    // Draw lane trapezoids
+    // Draw lane trapezoids — main section (top → judge line)
     const topY = this._getTopY();
     const judgeLineY = this._getJudgeLineY();
+    const bottomY = this._getBottomY(); // extended below judge line
     for (let i = 0; i < laneCount; i++) {
       const tg = this._getLaneGeometry(i, topY, laneCount);
       const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
+      const btg = this._getLaneGeometry(i, bottomY, laneCount);
       cctx.beginPath();
       cctx.moveTo(tg.x, topY);
       cctx.lineTo(tg.x + tg.width, topY);
-      cctx.lineTo(bg.x + bg.width, judgeLineY);
-      cctx.lineTo(bg.x, judgeLineY);
+      cctx.lineTo(btg.x + btg.width, bottomY);
+      cctx.lineTo(btg.x, bottomY);
       cctx.closePath();
+      // Main section: solid fill down to judge line
       const b = i % 2 === 0 ? 10 : 18;
       cctx.fillStyle = `rgba(${b},${Math.round(b * 0.7)},${Math.round(b * 0.5)},0.88)`;
       cctx.fill();
     }
 
-    // Draw lane dividers
+    // Fade overlay below judge line — darken/transparent so the field fades out
+    for (let i = 0; i < laneCount; i++) {
+      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
+      const btg = this._getLaneGeometry(i, bottomY, laneCount);
+      cctx.beginPath();
+      cctx.moveTo(bg.x, judgeLineY);
+      cctx.lineTo(bg.x + bg.width, judgeLineY);
+      cctx.lineTo(btg.x + btg.width, bottomY);
+      cctx.lineTo(btg.x, bottomY);
+      cctx.closePath();
+      // Gradient fade from semi-transparent to full black
+      const fadeGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
+      fadeGrad.addColorStop(0, 'rgba(0,0,0,0.1)');
+      fadeGrad.addColorStop(0.4, 'rgba(0,0,0,0.5)');
+      fadeGrad.addColorStop(1, 'rgba(0,0,0,0.95)');
+      cctx.fillStyle = fadeGrad;
+      cctx.fill();
+    }
+
+    // Draw lane dividers — extended to bottomY
     cctx.strokeStyle = 'rgba(170,255,0,0.05)';
     cctx.lineWidth = 1;
     for (let i = 0; i <= laneCount; i++) {
       const tg = this._getLaneGeometry(i, topY, laneCount);
-      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
+      const btg = this._getLaneGeometry(i, bottomY, laneCount);
       cctx.beginPath();
       cctx.moveTo(tg.x, topY);
-      cctx.lineTo(bg.x, judgeLineY);
+      cctx.lineTo(btg.x, bottomY);
       cctx.stroke();
     }
 
@@ -268,6 +290,11 @@ export default class NoteRenderer {
 
   _getTopY() {
     return this.safeArea.y;
+  }
+
+  _getBottomY() {
+    // Extend the field below the judge line for aesthetics
+    return this.safeArea.y + this.safeArea.h * 0.98;
   }
 
   _getPerspectiveScale(y) {
@@ -750,24 +777,26 @@ export default class NoteRenderer {
     const totalWidth = laneCount * fullGeom.width;
     const gfx = this._gfx();
 
+    // White judgement line with soft glow
     ctx.save();
     ctx.shadowBlur = 20 * gfx;
-    ctx.shadowColor = '#AAFF00';
+    ctx.shadowColor = 'rgba(255,255,255,0.6)';
     const grad = ctx.createLinearGradient(startX, judgeLineY, startX + totalWidth, judgeLineY);
-    grad.addColorStop(0, 'rgba(170,255,0,0)');
-    grad.addColorStop(0.06, 'rgba(170,255,0,0.5)');
-    grad.addColorStop(0.5, '#AAFF00');
-    grad.addColorStop(0.94, 'rgba(170,255,0,0.5)');
-    grad.addColorStop(1, 'rgba(170,255,0,0)');
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.06, 'rgba(255,255,255,0.5)');
+    grad.addColorStop(0.5, '#ffffff');
+    grad.addColorStop(0.94, 'rgba(255,255,255,0.5)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(startX, judgeLineY - 2.5, totalWidth, 5);
     ctx.restore();
 
+    // Soft white bloom line
     ctx.save();
     ctx.globalAlpha = 0.25;
     ctx.shadowBlur = 35 * gfx;
-    ctx.shadowColor = '#AAFF00';
-    ctx.fillStyle = '#AAFF00';
+    ctx.shadowColor = 'rgba(255,255,255,0.5)';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(startX, judgeLineY - 1, totalWidth, 2);
     ctx.restore();
   }
