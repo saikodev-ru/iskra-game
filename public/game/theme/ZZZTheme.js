@@ -498,6 +498,79 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   from { transform: translateY(20px) scale(0.95); opacity: 0; }
   to   { transform: translateY(0) scale(1); opacity: 1; }
 }
+
+/* ── SONG → GAME TRANSITION ────────────────────── */
+.song-transition-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0);
+  transition: background 0.4s ease;
+}
+.song-transition-overlay.fade-bg {
+  background: rgba(0,0,0,0.85);
+}
+
+.song-transition-card {
+  position: absolute;
+  border-radius: 24px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.92);
+  box-shadow: 0 0 40px rgba(0,0,0,0.6), 0 0 20px rgba(170,255,0,0.05);
+  will-change: transform, border-radius, width, height, top, left;
+  border: 1px solid rgba(170,255,0,0.08);
+  transform-origin: center center;
+}
+
+/* Phase 1: fly to center — handled by JS transition */
+
+.song-loading-bar {
+  width: 60%; height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.song-loading-bar-fill {
+  height: 100%; width: 0%;
+  background: var(--zzz-lime);
+  border-radius: 2px;
+  transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 0 8px rgba(170,255,0,0.5);
+}
+
+/* Phase 4: final glitch burst before game */
+@keyframes transition-glitch-burst {
+  0%   { transform: scale(1); filter: none; opacity: 1; }
+  10%  { transform: scale(1.05) translateX(-4px); filter: hue-rotate(90deg) brightness(2); }
+  20%  { transform: scale(1.03) translateX(3px); filter: hue-rotate(-45deg) brightness(1.5); }
+  30%  { transform: scale(1.08); filter: brightness(3) saturate(0); }
+  50%  { transform: scale(15); filter: brightness(5); opacity: 1; }
+  80%  { opacity: 0; transform: scale(25); }
+  100% { opacity: 0; transform: scale(30); filter: brightness(10); }
+}
+.song-transition-card.burst {
+  animation: transition-glitch-burst 0.6s cubic-bezier(0.4,0,0.2,1) forwards;
+}
+
+/* Scanline shimmer inside the card during loading */
+@keyframes scanline-shimmer {
+  0%   { background-position: 0 0; }
+  100% { background-position: 0 200px; }
+}
+.song-transition-card .scanline-overlay {
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(170,255,0,0.03) 3px,
+    rgba(170,255,0,0.03) 4px
+  );
+  background-size: 100% 200px;
+  animation: scanline-shimmer 2s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
 `;
 
 let _crtSounds = null;

@@ -29,6 +29,9 @@ export default class SongSelect {
     this._dragButton = 0;
     this._dragHandler = null;
     this._dragUpHandler = null;
+
+    // Transition state
+    this._transitioning = false;
   }
 
   /** Get local record for a beatmap difficulty */
@@ -774,13 +777,134 @@ export default class SongSelect {
     if (!set) return;
     const diff = set.difficulties[this.selectedDiffIndex];
     if (!diff) return;
+
+    // Prevent double-confirm
+    if (this._transitioning) return;
+    this._transitioning = true;
+
     this._stopPreview();
+
     const map = {
       metadata: { ...(set.metadata || {}), ...diff.metadata, setId: set.id, title: set.title, artist: set.artist, version: diff.version, creator: set.creator },
       audioBuffer: set.audioBuffer, backgroundUrl: set.backgroundUrl, videoUrl: set.videoUrl,
       notes: diff.notes, laneCount: diff.laneCount, bpmChanges: diff.bpmChanges, difficulty: diff.difficulty
     };
-    this.screens.show('game', { map });
+
+    this._playTransition(set, diff, map);
+  }
+
+  /** Beautiful song → game transition */
+  _playTransition(set, diff, map) {
+    // Find the active song card element to get its position
+    const activeCard = document.querySelector(`.song-card-wrapper[data-index="${this.selectedIndex}"] .song-card`);
+    const cardRect = activeCard ? activeCard.getBoundingClientRect() : null;
+
+    // Create the transition overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'song-transition-overlay';
+    overlay.id = 'song-transition-overlay';
+
+    // Create the flying card clone
+    const card = document.createElement('div');
+    card.className = 'song-transition-card';
+
+    // Start at the song card's position (or center-right if no card found)
+    const startX = cardRect ? cardRect.left : window.innerWidth * 0.65;
+    const startY = cardRect ? cardRect.top : window.innerHeight * 0.3;
+    const startW = cardRect ? cardRect.width : 300;
+    const startH = cardRect ? cardRect.height : 64;
+
+    card.style.cssText = `
+      left:${startX}px; top:${startY}px;
+      width:${startW}px; height:${startH}px;
+      transition: left 0.5s cubic-bezier(0.22,1,0.36,1),
+                  top 0.5s cubic-bezier(0.22,1,0.36,1),
+                  width 0.5s cubic-bezier(0.22,1,0.36,1),
+                  height 0.5s cubic-bezier(0.22,1,0.36,1);
+    `;
+
+    // Dynamic title size based on length
+    const titleLen = (set.title || '').length;
+    const titleSize = titleLen <= 10 ? '20px' : titleLen <= 20 ? '17px' : titleLen <= 30 ? '14px' : '12px';
+
+    // Stars info
+    const stars = diff.difficulty?.stars || 0;
+    const starColor = DifficultyAnalyzer.getStarColor(stars);
+
+    // Background image
+    const bgUrl = set.backgroundUrl || '';
+    card.innerHTML = `
+      <div style="display:flex;width:100%;height:100%;position:relative;">
+        <!-- Left: background image thumbnail -->
+        <div style="flex:0 0 42%;height:100%;background:${bgUrl ? `url('${bgUrl}') center/cover` : 'linear-gradient(135deg,#1a1a2e,#16213e)'};position:relative;">
+          <div class="scanline-overlay"></div>
+        </div>
+        <!-- Right: song info + loading -->
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:20px 24px;position:relative;z-index:2;">
+          <div style="font-family:var(--zzz-font);font-weight:900;font-size:${titleSize};color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.1;word-break:break-word;">${this._escHtml(set.title)}</div>
+          <div style="font-family:var(--zzz-font);font-weight:500;font-size:12px;color:var(--zzz-muted);margin-top:4px;letter-spacing:0.02em;">${this._escHtml(set.artist)}</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+            <span style="font-family:var(--zzz-font);font-weight:700;font-size:11px;color:${starColor};letter-spacing:0.06em;text-transform:uppercase;">${this._escHtml(diff.version || 'NORMAL')}</span>
+            <span style="font-family:var(--zzz-font);font-size:10px;color:${starColor};opacity:0.7;">★${stars.toFixed(1)}</span>
+          </div>
+          <div style="margin-top:12px;">
+            <div class="song-loading-bar"><div class="song-loading-bar-fill" id="song-loading-fill"></div></div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    // Trigger glitch effect on Three.js canvas
+    ZZZTheme.glitchTransition(this.three?.canvas);
+    if (this.three) this.three.triggerGlitch(0.8);
+    ZZZTheme.playSwitchSound();
+
+    // Phase 1: Fly to center (after a frame) — target: rectangular card (16:9-ish, ~55% of viewport width)
+    requestAnimationFrame(() => {
+      const targetW = Math.min(window.innerWidth * 0.55, 520);
+      const targetH = targetW * 0.42;  // ~2.4:1 aspect ratio
+      const targetX = (window.innerWidth - targetW) / 2;
+      const targetY = (window.innerHeight - targetH) / 2;
+
+      card.style.left = targetX + 'px';
+      card.style.top = targetY + 'px';
+      card.style.width = targetW + 'px';
+      card.style.height = targetH + 'px';
+
+      // Darken background
+      overlay.classList.add('fade-bg');
+    });
+
+    // Phase 2: Show loading bar after card arrives
+    setTimeout(() => {
+      // Animate loading bar
+      const fill = document.getElementById('song-loading-fill');
+      if (fill) {
+        setTimeout(() => { fill.style.width = '100%'; }, 100);
+      }
+
+      // Trigger another subtle glitch
+      if (this.three) this.three.triggerGlitch(0.3);
+    }, 550);
+
+    // Phase 3: After minimum 1.5s total, burst and transition to game
+    const totalDelay = 1600;
+    setTimeout(() => {
+      // Burst animation
+      card.classList.add('burst');
+      ZZZTheme.playSwitchSound();
+      if (this.three) this.three.triggerGlitch(1.0);
+
+      // After burst, clean up and transition to game
+      setTimeout(() => {
+        overlay.remove();
+        this._transitioning = false;
+        this.screens.show('game', { map });
+      }, 600);
+    }, totalDelay);
   }
 
   async _handleOszFiles(files) {
@@ -802,6 +926,10 @@ export default class SongSelect {
     if (this._dragHandler) { window.removeEventListener('mousemove', this._dragHandler); this._dragHandler = null; }
     if (this._dragUpHandler) { window.removeEventListener('mouseup', this._dragUpHandler); this._dragUpHandler = null; }
     this._dragScrolling = false;
+    this._transitioning = false;
+    // Clean up any lingering transition overlay
+    const transOverlay = document.getElementById('song-transition-overlay');
+    if (transOverlay) transOverlay.remove();
     this._stopPreview();
     if (this.three) {
       this.three.removeTVMonitor(); // no-op but safe

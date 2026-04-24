@@ -110,6 +110,7 @@ async function boot() {
 
   let gameLoop = null, currentBeatMap = null, currentJudgement = null, gameActive = false;
   let _endingGame = false;  // guard against double-calling endGame()
+  let _inCountdown = false; // true during 3-2-1 countdown (after resume)
   let currentMapData = null;
   let currentLaneCount = 4;
 
@@ -170,8 +171,9 @@ async function boot() {
       three._clearBackgroundVideo();
     }
 
-    // Brief delay before starting — no countdown, just a short pause
-    setTimeout(() => _actuallyStartGame(map), 600);
+    // Start the game immediately — the song-select transition already
+    // provides the visual delay. Audio starts only in _actuallyStartGame.
+    _actuallyStartGame(map);
   };
 
   const _actuallyStartGame = (map) => {
@@ -243,6 +245,13 @@ async function boot() {
       update(delta) {
         if (!gameActive) return;
         const ct = audio.currentTime;
+        // During countdown (after resume), keep rendering but skip judgement processing
+        if (_inCountdown) {
+          // Only render — don't check misses or update state
+          noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount });
+          three.update(performance.now());
+          return;
+        }
         currentJudgement.checkMisses(ct);
         health = Math.max(0, Math.min(100, 100 - currentJudgement.hitCounts.miss * 5 + currentJudgement.hitCounts.perfect * 0.3));
         const stats = currentJudgement.getStats();
@@ -287,8 +296,12 @@ async function boot() {
   const endGame = () => {
     if (_endingGame) return;  // prevent double-call
     _endingGame = true;
+    _inCountdown = false;
     gameActive = false;
     input.disable();
+    // Remove countdown overlay if present
+    const cdOverlay = document.getElementById('countdown-overlay');
+    if (cdOverlay) cdOverlay.remove();
     if (gameLoop) { gameLoop.stop(); gameLoop = null; }
     audio.stop();
     audio.stopBeatScheduler();
@@ -409,13 +422,53 @@ async function boot() {
   EventBus.on('settings:close-overlay', () => { _closePauseSettings(); });
 
   const resumeGame = () => {
-    gameActive = true;
+    // Show countdown before resuming
+    const sa = calcSafeArea();
+    const countdownOverlay = document.createElement('div');
+    countdownOverlay.id = 'countdown-overlay';
+    countdownOverlay.style.cssText = `position:fixed;left:${sa.x}px;top:${sa.y}px;width:${sa.w}px;height:${sa.h}px;display:flex;align-items:center;justify-content:center;z-index:55;pointer-events:none;`;
+    document.body.appendChild(countdownOverlay);
+
+    // Resume audio quietly first (so timing stays accurate), but start at 0 volume
     audio.resume();
+    audio.fadeTo(0, 0.01);
     three.resumeVideo();
-    const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
-    audio.fadeTo(vol, 0.1);
+
+    // Start game loop in countdown mode (renders but skips judgement)
+    gameActive = true;
+    _inCountdown = true;
     if (gameLoop) gameLoop.start();
-    EventBus.emit('game:resume');
+
+    // 3-2-1 countdown (3 beats at ~600ms each = 1.8s total)
+    const steps = ['3', '2', '1'];
+    let stepIndex = 0;
+
+    const showStep = () => {
+      if (stepIndex >= steps.length) {
+        // Countdown done — resume for real
+        countdownOverlay.remove();
+        _inCountdown = false;
+        const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
+        audio.fadeTo(vol, 0.15);
+        EventBus.emit('game:resume');
+        return;
+      }
+
+      const num = steps[stepIndex];
+      countdownOverlay.innerHTML = `
+        <div style="font-family:var(--zzz-font);font-weight:900;font-size:120px;color:var(--zzz-lime);
+          text-shadow:0 0 40px rgba(170,255,0,0.5),0 0 80px rgba(170,255,0,0.2),-4px -4px 0 #000,4px -4px 0 #000,-4px 4px 0 #000,4px 4px 0 #000;
+          letter-spacing:0.1em;line-height:1;user-select:none;">${num}</div>
+      `;
+
+      // Play subtle tick sound
+      if (hitSounds) hitSounds.hit();
+
+      stepIndex++;
+      setTimeout(showStep, 600);
+    };
+
+    showStep();
   };
 
   EventBus.on('game:pause', pauseGame);
@@ -424,6 +477,18 @@ async function boot() {
       e.preventDefault();
       if (_pauseSettingsInstance) { _closePauseSettings(); return; }
       if (_pauseOverlay) { _closePause(); resumeGame(); return; }
+      if (_inCountdown) {
+        // During countdown after resume — re-pause
+        const cd = document.getElementById('countdown-overlay');
+        if (cd) cd.remove();
+        _inCountdown = false;
+        gameActive = false;
+        audio.pause();
+        if (gameLoop) gameLoop.stop();
+        three.pauseVideo();
+        pauseGame();
+        return;
+      }
       if (gameActive) { pauseGame(); }
     }
   });
