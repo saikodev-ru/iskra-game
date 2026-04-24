@@ -42,8 +42,8 @@ body.zzz-active::before {
   position: fixed; inset: 0; z-index: 1;
   pointer-events: none;
   background:
-    repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,0,0,0.06) 1px, rgba(0,0,0,0.06) 2px),
-    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.02) 3px, rgba(0,0,0,0.02) 6px);
+    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.08) 3px, rgba(0,0,0,0.08) 5px),
+    repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(0,0,0,0.03) 8px, rgba(0,0,0,0.03) 12px);
   mix-blend-mode: multiply;
 }
 .crt-overlay::before {
@@ -555,6 +555,11 @@ const ZZZTheme = {
     }, { once: true });
   },
 
+  /** Play channel switch sound */
+  playSwitchSound() {
+    if (_crtSounds) _crtSounds.crtSwitch();
+  },
+
   /** Create a CRT overlay element for the song select screen */
   createCrtOverlay() {
     const overlay = document.createElement('div');
@@ -579,18 +584,9 @@ const ZZZTheme = {
     void canvas.offsetWidth;
     canvas.classList.add('glitch-transition');
 
-    // Add RGB overlay
-    let rgbOverlay = document.getElementById('glitch-rgb-overlay');
-    if (rgbOverlay) rgbOverlay.remove();
-    rgbOverlay = document.createElement('div');
-    rgbOverlay.className = 'glitch-rgb-overlay';
-    rgbOverlay.id = 'glitch-rgb-overlay';
-    document.body.appendChild(rgbOverlay);
-
     // Clean up after animation
     setTimeout(() => {
       canvas.classList.remove('glitch-transition');
-      if (rgbOverlay.parentNode) rgbOverlay.remove();
     }, 450);
   }
 };

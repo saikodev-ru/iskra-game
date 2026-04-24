@@ -497,6 +497,7 @@ export default class SongSelect {
       if (isSongChange) {
         this.three.triggerGlitch(0.8);
         ZZZTheme.glitchTransition(this.three.canvas);
+        ZZZTheme.playSwitchSound();
       }
 
       // Use video if available, otherwise use image background
@@ -522,7 +523,8 @@ export default class SongSelect {
     this._renderSongInfo(set);
     this._renderPlayButton(set);
 
-    // Effectful difficulty switch — brief glitch + RGB flash
+    // Effectful difficulty switch — brief glitch + channel switch sound
+    ZZZTheme.playSwitchSound();
     if (this.three) {
       this.three.triggerGlitch(0.35);
     }
