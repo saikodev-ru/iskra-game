@@ -95,6 +95,7 @@ async function boot() {
   const initialSA = calcSafeArea();
   noteRenderer.setSafeArea(initialSA.x, initialSA.y, initialSA.w, initialSA.h);
   noteRenderer.setResScale(getResScale());
+  three.setSafeArea(initialSA.x, initialSA.y, initialSA.w, initialSA.h);
   const applySafeAreaToContainers = (sa) => {
     [screenContainer, hudContainer, judgementContainer].forEach(c => {
       c.style.left = sa.x + 'px'; c.style.top = sa.y + 'px';
@@ -117,6 +118,7 @@ async function boot() {
     noteRenderer.setResScale(getResScale());
     noteRenderer.resize();
     applySafeAreaToContainers(sa);
+    three.setSafeArea(sa.x, sa.y, sa.w, sa.h);
   };
 
   EventBus.on('settings:changed', ({ key, value }) => {

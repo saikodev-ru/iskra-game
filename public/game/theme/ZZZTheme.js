@@ -85,14 +85,14 @@ body.zzz-active::before {
 
 .zzz-btn--sm { padding: 8px 20px; font-size: 12px; }
 
-/* JUDGEMENT — smaller, cleaner */
+/* JUDGEMENT — bigger, bolder */
 .judgement-text {
   font-family: var(--zzz-font);
   font-weight: 900;
-  font-size: 20px;
+  font-size: 38px;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  text-shadow: 0 0 12px currentColor;
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 20px currentColor, 0 3px 0 #000, 0 6px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
   pointer-events: none; user-select: none;
   position: absolute;
   left: 50%; top: 45%;

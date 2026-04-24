@@ -37,6 +37,7 @@ export default class ThreeScene {
     this._bgImageMesh = null;
     this._bgImageMaterial = null;
     this._bgImageTexture = null;
+    this._safeArea = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
 
     this._init();
     this._setupListeners();
@@ -45,6 +46,12 @@ export default class ThreeScene {
   /** Set the audio engine reference for reactive analysis */
   setAudioEngine(audioEngine) {
     this._audioEngine = audioEngine;
+  }
+
+  /** Set the safe area for background image positioning */
+  setSafeArea(x, y, w, h) {
+    this._safeArea = { x, y, w, h };
+    this._resizeBackgroundImage();
   }
 
   _init() {
@@ -206,8 +213,8 @@ export default class ThreeScene {
     }
   }
 
-  /** Set a background image — full-screen cover, audio-reactive glow + zoom, fade+swipe transition */
-  setBackgroundImage(url) {
+  /** Set a background image — safe-area cover, audio-reactive, fade±swipe transition */
+  setBackgroundImage(url, useSwipe = false) {
     if (!url) {
       this._clearBackgroundImage();
       return;
@@ -222,13 +229,45 @@ export default class ThreeScene {
       const oldMesh = this._bgImageMesh;
       const oldMaterial = this._bgImageMaterial;
       const oldTexture = this._bgImageTexture;
+      const oldPlaneGeom = oldMesh ? this._calcBgPlaneGeometry() : null;
 
-      // Clear references so _clearBackgroundImage doesn't remove the old one yet
       this._bgImageMesh = null;
       this._bgImageMaterial = null;
       this._bgImageTexture = null;
-
       this._bgImageTexture = texture;
+
+      const fragmentShader = `
+        uniform sampler2D uTexture;
+        uniform float uBass;
+        uniform float uAudioIntensity;
+        uniform float uCoverScale;
+        uniform float uPlaneAspect;
+        uniform float uBrightness;
+        uniform float uOpacity;
+        varying vec2 vUv;
+        void main() {
+          vec2 uv = vUv;
+          float planeAspect = uPlaneAspect;
+          float imgAspect = uCoverScale;
+          if (planeAspect > imgAspect) {
+            float scale = planeAspect / imgAspect;
+            uv.y = (uv.y - 0.5) / scale + 0.5;
+          } else {
+            float scale = imgAspect / planeAspect;
+            uv.x = (uv.x - 0.5) / scale + 0.5;
+          }
+          float zoom = 1.0 + uBass * 0.06;
+          uv = (uv - 0.5) / zoom + 0.5;
+          vec4 tex = texture2D(uTexture, uv);
+          vec3 color = tex.rgb * 0.25;
+          float glow = uBass * 0.2 + uAudioIntensity * 0.08;
+          color += tex.rgb * glow;
+          color += vec3(uBrightness * 0.15);
+          float vig = distance(vUv, vec2(0.5));
+          color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
+          gl_FragColor = vec4(color, uOpacity);
+        }
+      `;
 
       this._bgImageMaterial = new THREE.ShaderMaterial({
         uniforms: {
@@ -244,166 +283,91 @@ export default class ThreeScene {
           varying vec2 vUv;
           void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
         `,
-        fragmentShader: `
-          uniform sampler2D uTexture;
-          uniform float uBass;
-          uniform float uAudioIntensity;
-          uniform float uCoverScale;
-          uniform float uPlaneAspect;
-          uniform float uBrightness;
-          uniform float uOpacity;
-          varying vec2 vUv;
-          void main() {
-            vec2 uv = vUv;
-
-            // ── Cover-fit ──
-            float planeAspect = uPlaneAspect;
-            float imgAspect = uCoverScale;
-            if (planeAspect > imgAspect) {
-              float scale = planeAspect / imgAspect;
-              uv.y = (uv.y - 0.5) / scale + 0.5;
-            } else {
-              float scale = imgAspect / planeAspect;
-              uv.x = (uv.x - 0.5) / scale + 0.5;
-            }
-
-            // ── Z-scale zoom on bass ──
-            float zoom = 1.0 + uBass * 0.06;
-            uv = (uv - 0.5) / zoom + 0.5;
-
-            vec4 tex = texture2D(uTexture, uv);
-
-            // ── Darken base so UI is readable ──
-            vec3 color = tex.rgb * 0.25;
-
-            // ── Glow: brighten on audio ──
-            float glow = uBass * 0.2 + uAudioIntensity * 0.08;
-            color += tex.rgb * glow;
-
-            // ── Transition brightness flash ──
-            color += vec3(uBrightness * 0.15);
-
-            // ── Subtle vignette overlay for depth ──
-            float vig = distance(vUv, vec2(0.5));
-            color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
-
-            gl_FragColor = vec4(color, uOpacity);
-          }
-        `,
+        fragmentShader,
         side: THREE.DoubleSide,
         depthWrite: false,
         transparent: true,
       });
 
-      // Create a plane — oversized by 12% so edges never show during swipe
-      const cam = this.camera;
-      const meshZ = -4;
-      const dist = cam.position.z - meshZ;
-      const vFov = cam.fov * Math.PI / 180;
-      const planeH = 2 * Math.tan(vFov / 2) * dist * 1.12;
-      const planeW = planeH * cam.aspect;
-      this._bgImageMaterial.uniforms.uPlaneAspect.value = (planeW / planeH);
+      // ── Calculate plane geometry based on safe area ──
+      const planeGeom = this._calcBgPlaneGeometry();
+      this._bgImageMaterial.uniforms.uPlaneAspect.value = planeGeom.safeAreaAspect;
 
-      // Store plane width for swipe calculations
-      const viewWidth = planeW;
+      this._bgImageMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(planeGeom.width, planeGeom.height),
+        this._bgImageMaterial
+      );
+      this._bgImageMesh.position.set(planeGeom.cx, planeGeom.cy, -4);
 
-      this._bgImageMesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), this._bgImageMaterial);
-      this._bgImageMesh.position.z = meshZ;
-
-      // If there's no old image, just fade in at center
+      // ── No old image: simple fade-in ──
       if (!oldMesh) {
-        this._bgImageMesh.position.x = 0;
-        // Simple fade-in
-        const fadeDuration = 500;
+        this.scene.add(this._bgImageMesh);
+        const fadeDuration = 350;
         const startTime = performance.now();
         const animateFadeIn = () => {
           if (this._disposed) return;
           const elapsed = performance.now() - startTime;
           const t = Math.min(1, elapsed / fadeDuration);
-          const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
-          if (this._bgImageMesh && this._bgImageMesh.material && this._bgImageMesh.material.uniforms) {
-            this._bgImageMesh.material.uniforms.uOpacity.value = ease;
+          if (this._bgImageMesh?.material?.uniforms) {
+            this._bgImageMesh.material.uniforms.uOpacity.value = 1 - Math.pow(1 - t, 3);
           }
           if (t < 1) requestAnimationFrame(animateFadeIn);
         };
-        this.scene.add(this._bgImageMesh);
         requestAnimationFrame(animateFadeIn);
         return;
       }
 
-      // ── Fade + Swipe transition ──
-      // Add uOpacity to old material if it doesn't have it
-      if (oldMaterial && oldMaterial.uniforms && oldMaterial.uniforms.uOpacity === undefined) {
-        oldMaterial.uniforms.uOpacity = { value: 1.0 };
-      }
-      // Make old material transparent too
-      if (oldMaterial) oldMaterial.transparent = true;
-      // Patch old fragment shader to support opacity — replace gl_FragColor
-      // We need to update the old shader to support uOpacity
-      // Easier: just set old material opacity via a uniform injection
-      // Since we can't change the shader source at runtime, we'll just use
-      // the mesh scale and material opacity approach instead.
-
-      // New image starts slightly right and faded out
-      this._bgImageMesh.position.x = viewWidth * 0.35;
+      // ── Transition: seamless crossfade (+ optional swipe) ──
       this._bgImageMesh.material.uniforms.uOpacity.value = 0;
+      if (useSwipe) {
+        this._bgImageMesh.position.x = planeGeom.cx + planeGeom.viewWidth * 0.3;
+      }
       this.scene.add(this._bgImageMesh);
 
-      const fadeDuration = 800; // ms
+      const oldStartX = oldMesh.position.x;
+      const fadeDuration = 380;
       const startTime = performance.now();
       const animateTransition = () => {
         if (this._disposed) return;
         const elapsed = performance.now() - startTime;
         const t = Math.min(1, elapsed / fadeDuration);
+        const ease = t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
 
-        // Ease: smooth cubic ease-in-out
-        const ease = t < 0.5
-          ? 4 * t * t * t
-          : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
-        // ── New image: slide from right → center + fade in + slight scale ──
+        // ── New image: fade in (+ swipe if enabled) ──
         if (this._bgImageMesh) {
-          this._bgImageMesh.position.x = viewWidth * 0.35 * (1 - ease);
           this._bgImageMesh.material.uniforms.uOpacity.value = ease;
-          // Slight zoom-in effect during transition
-          const scale = 1.04 - 0.04 * ease; // starts at 1.04, ends at 1.0
-          this._bgImageMesh.scale.set(scale, scale, 1);
-          // Brightness flash peaks early then fades
-          const flashT = t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8;
-          this._bgImageMesh.material.uniforms.uBrightness.value = Math.max(0, flashT) * (1 - t * 0.7);
+          if (useSwipe) {
+            const startX = planeGeom.cx + planeGeom.viewWidth * 0.3;
+            this._bgImageMesh.position.x = startX + (planeGeom.cx - startX) * ease;
+            const sc = 1.03 - 0.03 * ease;
+            this._bgImageMesh.scale.set(sc, sc, 1);
+          }
+          const flash = t < 0.12 ? t / 0.12 : 1 - (t - 0.12) / 0.88;
+          this._bgImageMesh.material.uniforms.uBrightness.value = Math.max(0, flash) * (1 - t) * 0.4;
         }
 
-        // ── Old image: slide left + fade out + slight scale down ──
+        // ── Old image: fade out (+ swipe if enabled) ──
         if (oldMesh) {
-          oldMesh.position.x = -viewWidth * 0.35 * ease;
-          const oldScale = 1.0 - 0.03 * ease; // slight shrink
-          oldMesh.scale.set(oldScale, oldScale, 1);
-          // Fade out old image via material opacity if available
-          if (oldMaterial && oldMaterial.uniforms) {
-            if (oldMaterial.uniforms.uOpacity) {
-              oldMaterial.uniforms.uOpacity.value = 1 - ease;
-            } else {
-              // Fallback: dim via brightness
-              if (oldMaterial.uniforms.uBrightness) {
-                oldMaterial.uniforms.uBrightness.value = -ease * 0.8;
-              }
-            }
+          if (oldMaterial?.uniforms?.uOpacity) {
+            oldMaterial.uniforms.uOpacity.value = 1 - ease;
+          } else if (oldMaterial?.uniforms?.uBrightness) {
+            oldMaterial.uniforms.uBrightness.value = -ease * 0.9;
+          }
+          if (useSwipe) {
+            oldMesh.position.x = oldStartX - (oldPlaneGeom ? oldPlaneGeom.viewWidth * 0.3 * ease : 0);
+            const oldSc = 1 - 0.02 * ease;
+            oldMesh.scale.set(oldSc, oldSc, 1);
           }
         }
 
         if (t < 1) {
           requestAnimationFrame(animateTransition);
         } else {
-          // Transition complete — remove old mesh
-          if (oldMesh) {
-            this.scene.remove(oldMesh);
-            oldMesh.geometry.dispose();
-          }
+          if (oldMesh) { this.scene.remove(oldMesh); oldMesh.geometry.dispose(); }
           if (oldMaterial) oldMaterial.dispose();
           if (oldTexture) oldTexture.dispose();
-          // Ensure new mesh is at center
           if (this._bgImageMesh) {
-            this._bgImageMesh.position.x = 0;
+            this._bgImageMesh.position.set(planeGeom.cx, planeGeom.cy, -4);
             this._bgImageMesh.scale.set(1, 1, 1);
             this._bgImageMesh.material.uniforms.uOpacity.value = 1;
             this._bgImageMesh.material.uniforms.uBrightness.value = 0;
@@ -412,6 +376,31 @@ export default class ThreeScene {
       };
       requestAnimationFrame(animateTransition);
     });
+  }
+
+  /** Calculate background plane geometry to match safe area */
+  _calcBgPlaneGeometry() {
+    const cam = this.camera;
+    const dist = cam.position.z - (-4);
+    const vFov = cam.fov * Math.PI / 180;
+    const halfH = Math.tan(vFov / 2) * dist;
+    const halfW = halfH * cam.aspect;
+    const sa = this._safeArea;
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+    // Safe area in NDC
+    const l = (2 * sa.x / winW) - 1;
+    const r = (2 * (sa.x + sa.w) / winW) - 1;
+    const t = 1 - (2 * sa.y / winH);
+    const b = 1 - (2 * (sa.y + sa.h) / winH);
+    // 3D at z=-4
+    const rawW = (r - l) * halfW;
+    const rawH = (t - b) * halfH;
+    return {
+      width: rawW * 1.12, height: rawH * 1.12,
+      cx: ((l + r) / 2) * halfW, cy: ((t + b) / 2) * halfH,
+      safeAreaAspect: sa.w / sa.h, viewWidth: rawW
+    };
   }
 
   _clearBackgroundImage() {
@@ -466,9 +455,9 @@ export default class ThreeScene {
     }
   }
 
-  setTVTexture(imageUrl) {
+  setTVTexture(imageUrl, useSwipe = true) {
     // TV disabled — use background image instead for song select
-    this.setBackgroundImage(imageUrl);
+    this.setBackgroundImage(imageUrl, useSwipe);
   }
 
   setTVStatic() {
@@ -480,45 +469,25 @@ export default class ThreeScene {
   resize() {
     if (this._disposed) return;
     const w = window.innerWidth, h = window.innerHeight;
-    const ar = this._aspectRatio;
-    if (ar !== 'Fill') {
-      const parts = ar.split(':');
-      const arW = parseInt(parts[0]) || 16;
-      const arH = parseInt(parts[1]) || 9;
-      this.camera.aspect = arW / arH;
-    } else {
-      this.camera.aspect = w / h;
-    }
+    // Camera aspect always matches actual window ratio — safe area handles the rest
+    this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
     this.renderer.setClearColor(0x000000, 1);
-
-    // Resize background image plane to match new camera aspect
     this._resizeBackgroundImage();
   }
 
-  /** Resize the background image plane when camera aspect changes */
+  /** Resize the background image plane to match safe area */
   _resizeBackgroundImage() {
     if (!this._bgImageMesh) return;
-    const cam = this.camera;
-    const meshZ = this._bgImageMesh.position.z;
-    const dist = cam.position.z - meshZ;
-    const vFov = cam.fov * Math.PI / 180;
-    const planeH = 2 * Math.tan(vFov / 2) * dist * 1.12;
-    const planeW = planeH * cam.aspect;
-
-    // Update geometry
+    const pg = this._calcBgPlaneGeometry();
     this._bgImageMesh.geometry.dispose();
-    this._bgImageMesh.geometry = new THREE.PlaneGeometry(planeW, planeH);
-
-    // Update shader uniform for cover-fit
-    if (this._bgImageMaterial && this._bgImageMaterial.uniforms) {
-      this._bgImageMaterial.uniforms.uPlaneAspect.value = planeW / planeH;
+    this._bgImageMesh.geometry = new THREE.PlaneGeometry(pg.width, pg.height);
+    this._bgImageMesh.position.set(pg.cx, pg.cy, this._bgImageMesh.position.z);
+    if (this._bgImageMaterial?.uniforms) {
+      this._bgImageMaterial.uniforms.uPlaneAspect.value = pg.safeAreaAspect;
     }
-
-    // Reset position to center
-    this._bgImageMesh.position.x = 0;
   }
 
   update(time) {

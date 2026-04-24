@@ -225,8 +225,8 @@ export default class NoteRenderer {
 
       // Flash expands outward from center over time
       const expandProgress = 1 - glow.intensity; // 0→1 as glow fades
-      const halfW = hw * (1 + expandProgress * 0.5);
-      const barH = 8 + expandProgress * 12;
+      const halfW = hw * 0.7 * (1 + expandProgress * 0.3); // narrower
+      const barH = 20 + expandProgress * 28; // taller (20-48px)
 
       ctx.save();
 
@@ -326,7 +326,13 @@ export default class NoteRenderer {
   }
 
   _noteY(time, currentTime, judgeLineY) {
-    return judgeLineY - (time - currentTime) * this.scrollSpeed;
+    const topY = this._getTopY();
+    const travelH = judgeLineY - topY;
+    const distFromJudge = (time - currentTime) * this.scrollSpeed;
+    if (distFromJudge <= 0) return judgeLineY - distFromJudge; // past judge line — no curve
+    const t = Math.min(1, distFromJudge / travelH);
+    const curvedT = Math.pow(t, 1.35); // perspective acceleration toward judge line
+    return judgeLineY - curvedT * travelH;
   }
 
   _fadeIn(noteY, judgeLineY) {
@@ -415,39 +421,38 @@ export default class NoteRenderer {
 
   _drawHoldBody(note, laneCount, color, topY, bottomY, alpha, isHolding) {
     const ctx = this.ctx;
-    const topGeom = this._getLaneGeometry(note.lane, topY, laneCount);
-    const botGeom = this._getLaneGeometry(note.lane, bottomY, laneCount);
-    const topScale = this._getPerspectiveScale(topY);
-    const botScale = this._getPerspectiveScale(bottomY);
-    const topPad = 3 * topScale;
-    const botPad = 3 * botScale;
+    const segments = 10;
+    const points = [];
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const y = topY + (bottomY - topY) * t;
+      const geom = this._getLaneGeometry(note.lane, y, laneCount);
+      const scale = this._getPerspectiveScale(y);
+      const pad = 3 * scale;
+      points.push({ lx: geom.x + pad, rx: geom.x + geom.width - pad, cx: geom.x + geom.width / 2, y });
+    }
 
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    // Body fill — trapezoid with MUCH higher opacity
+    // Body fill — smooth polygon following perspective curves
     ctx.beginPath();
-    ctx.moveTo(topGeom.x + topPad, topY);
-    ctx.lineTo(topGeom.x + topGeom.width - topPad, topY);
-    ctx.lineTo(botGeom.x + botGeom.width - botPad, bottomY);
-    ctx.lineTo(botGeom.x + botPad, bottomY);
+    ctx.moveTo(points[0].lx, points[0].y);
+    for (let i = 1; i <= segments; i++) ctx.lineTo(points[i].lx, points[i].y);
+    for (let i = segments; i >= 0; i--) ctx.lineTo(points[i].rx, points[i].y);
     ctx.closePath();
 
-    // Fill: solid lane color — more transparent for a ghostly look
     ctx.fillStyle = isHolding ? this._withAlpha(color, 0.30) : this._withAlpha(color, 0.18);
     ctx.shadowBlur = isHolding ? 20 : 8;
     ctx.shadowColor = color;
     ctx.fill();
 
-    // Border: bright and visible
     ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.7) : this._withAlpha(color, 0.45);
     ctx.lineWidth = isHolding ? 2 : 1.5;
     ctx.stroke();
     ctx.restore();
 
     // Center glow line
-    const topCX = topGeom.x + topGeom.width / 2;
-    const botCX = botGeom.x + botGeom.width / 2;
     ctx.save();
     ctx.globalAlpha = alpha * (isHolding ? 0.4 : 0.2);
     ctx.shadowBlur = isHolding ? 20 : 12;
@@ -455,8 +460,8 @@ export default class NoteRenderer {
     ctx.strokeStyle = isHolding ? '#ffffff' : this._withAlpha(color, 0.8);
     ctx.lineWidth = isHolding ? 4 : 2;
     ctx.beginPath();
-    ctx.moveTo(topCX, topY);
-    ctx.lineTo(botCX, bottomY);
+    ctx.moveTo(points[0].cx, points[0].y);
+    for (let i = 1; i <= segments; i++) ctx.lineTo(points[i].cx, points[i].y);
     ctx.stroke();
     ctx.restore();
   }
@@ -495,22 +500,34 @@ export default class NoteRenderer {
     const ctx = this.ctx;
     const scale = this._getPerspectiveScale(judgeLineY);
     const geom = this._getLaneGeometry(laneIndex, judgeLineY, laneCount);
-    const pad = 3 * scale;
+    const pad = 4 * scale;
     const x = geom.x + pad;
     const w = geom.width - pad * 2;
-    const h = 6 * scale;
 
+    // Tall vertical glow column while holding
+    const columnH = 140 * scale;
     ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.shadowBlur = 25 * scale;
+    const grad = ctx.createLinearGradient(0, judgeLineY - columnH, 0, judgeLineY);
+    grad.addColorStop(0, 'transparent');
+    grad.addColorStop(0.4, this._withAlpha(color, 0.12));
+    grad.addColorStop(1, this._withAlpha(color, 0.45));
+    ctx.fillStyle = grad;
+    ctx.shadowBlur = 30 * scale;
     ctx.shadowColor = color;
-    ctx.fillStyle = color;
-    ctx.fillRect(x, judgeLineY - h / 2, w, h);
+    ctx.fillRect(x - 3, judgeLineY - columnH, w + 6, columnH);
 
+    // Bright bar at judge line
+    const barH = 10 * scale;
+    ctx.globalAlpha = 0.95;
+    ctx.shadowBlur = 30 * scale;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, judgeLineY - barH / 2, w, barH);
+
+    // White hot center
     ctx.shadowBlur = 0;
-    ctx.globalAlpha = 0.6;
+    ctx.globalAlpha = 0.7;
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x + 2, judgeLineY - 1, w - 4, 2);
+    ctx.fillRect(x + 2, judgeLineY - 1.5, w - 4, 3);
     ctx.restore();
   }
 
