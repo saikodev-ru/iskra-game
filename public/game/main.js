@@ -108,6 +108,8 @@ async function boot() {
   };
   applySafeAreaToContainers(initialSA);
 
+  const LEAD_IN = 1.0; // 1 second lead-in before notes arrive
+
   let gameLoop = null, currentBeatMap = null, currentJudgement = null, gameActive = false;
   let _endingGame = false;  // guard against double-calling endGame()
   let _inCountdown = false; // true during 3-2-1 countdown (after resume)
@@ -146,6 +148,10 @@ async function boot() {
   const startGame = (map) => {
     if (gameActive) endGame();
     initAudio();
+
+    // Restore HUD and judgement container opacity (hidden during song-select transition)
+    hudContainer.style.opacity = '';
+    judgementContainer.style.opacity = '';
 
     currentMapData = map;
     currentBeatMap = new BeatMap(map);
@@ -244,7 +250,7 @@ async function boot() {
     gameLoop = new GameLoop({
       update(delta) {
         if (!gameActive) return;
-        const ct = audio.currentTime;
+        const ct = audio.currentTime - LEAD_IN; // Game time: 1s behind audio for lead-in
         // During countdown (after resume), keep rendering but skip judgement processing
         if (_inCountdown) {
           // Only render — don't check misses or update state
@@ -259,17 +265,18 @@ async function boot() {
         noteRenderer.setHealth(health);
         hud.update(stats);
 
-        // Progress bar: use audio duration as the total map length
+        // Progress bar: use raw audio position (not game time with lead-in offset)
+        const rawTime = audio.currentTime;
         if (audioDuration > 0) {
-          hud.setProgress(Math.min(1, ct / audioDuration));
+          hud.setProgress(Math.min(1, rawTime / audioDuration));
         }
 
         // End map when audio finishes (or health depleted)
-        // Use both isPlaying and time-based check for reliability
-        const songFinished = !audio.isPlaying || (audioDuration > 0 && ct >= audioDuration - 0.1);
+        // Use raw audio position for reliable end detection
+        const songFinished = !audio.isPlaying || (audioDuration > 0 && rawTime >= audioDuration - 0.1);
         if (songFinished || health <= 0) {
-          // Don't end if audio hasn't actually started yet (currentTime ~0)
-          if (ct > 0.5 || health <= 0) {
+          // Don't end if audio hasn't actually started yet
+          if (rawTime > 0.5 || health <= 0) {
             if (health <= 0 && hitSounds) hitSounds.fail();
             endGame();
           }
@@ -277,7 +284,7 @@ async function boot() {
       },
       render() {
         if (!gameActive) return;
-        const ct = audio.currentTime;
+        const ct = audio.currentTime - LEAD_IN; // Game time: 1s behind audio for lead-in
         noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount });
         three.update(performance.now());
       }
@@ -422,19 +429,17 @@ async function boot() {
   EventBus.on('settings:close-overlay', () => { _closePauseSettings(); });
 
   const resumeGame = () => {
-    // Show countdown before resuming
+    // Show countdown before resuming — map stays paused during countdown
     const sa = calcSafeArea();
     const countdownOverlay = document.createElement('div');
     countdownOverlay.id = 'countdown-overlay';
     countdownOverlay.style.cssText = `position:fixed;left:${sa.x}px;top:${sa.y}px;width:${sa.w}px;height:${sa.h}px;display:flex;align-items:center;justify-content:center;z-index:55;pointer-events:none;`;
     document.body.appendChild(countdownOverlay);
 
-    // Resume audio quietly first (so timing stays accurate), but start at 0 volume
-    audio.resume();
-    audio.fadeTo(0, 0.01);
-    three.resumeVideo();
+    // DON'T resume audio yet — keep the map paused during countdown.
+    // The game loop will render a frozen frame since audio.currentTime is static.
 
-    // Start game loop in countdown mode (renders but skips judgement)
+    // Start game loop in countdown mode (renders frozen frame, skips judgement)
     gameActive = true;
     _inCountdown = true;
     if (gameLoop) gameLoop.start();
@@ -445,9 +450,11 @@ async function boot() {
 
     const showStep = () => {
       if (stepIndex >= steps.length) {
-        // Countdown done — resume for real
+        // Countdown done — NOW resume audio and video for real
         countdownOverlay.remove();
         _inCountdown = false;
+        audio.resume();
+        three.resumeVideo();
         const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
         audio.fadeTo(vol, 0.15);
         EventBus.emit('game:resume');

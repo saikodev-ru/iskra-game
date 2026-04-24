@@ -32,6 +32,7 @@ export default class SongSelect {
 
     // Transition state
     this._transitioning = false;
+    this._leavingToGame = false;  // true when transitioning to game screen
   }
 
   /** Get local record for a beatmap difficulty */
@@ -764,12 +765,14 @@ export default class SongSelect {
   _stopPreview() {
     if (this._previewFadeTimeout) { clearTimeout(this._previewFadeTimeout); this._previewFadeTimeout = null; }
     if (this._previewInterval) { clearInterval(this._previewInterval); this._previewInterval = null; }
+    // Cancel any previous pending stop
+    if (this._previewStopTimeout) { clearTimeout(this._previewStopTimeout); this._previewStopTimeout = null; }
     this.audio.fadeTo(0, 0.15);
     // Pause video preview
     if (this.three && this.three._videoElement) {
       this.three._videoElement.pause();
     }
-    setTimeout(() => { this.audio.stop(); }, 200);
+    this._previewStopTimeout = setTimeout(() => { this.audio.stop(); this._previewStopTimeout = null; }, 200);
   }
 
   _confirmSong() {
@@ -781,6 +784,7 @@ export default class SongSelect {
     // Prevent double-confirm
     if (this._transitioning) return;
     this._transitioning = true;
+    this._leavingToGame = true;
 
     this._stopPreview();
 
@@ -795,6 +799,17 @@ export default class SongSelect {
 
   /** Beautiful song → game transition */
   _playTransition(set, diff, map) {
+    // Immediately hide the song select UI (screen container + CRT overlay)
+    const screenContainer = document.getElementById('screen');
+    if (screenContainer) screenContainer.style.opacity = '0';
+    const crtOverlay = document.getElementById('crt-overlay');
+    if (crtOverlay) crtOverlay.style.display = 'none';
+    // Also hide HUD and judgement overlays to be safe
+    const hudContainer = document.getElementById('hud');
+    if (hudContainer) hudContainer.style.opacity = '0';
+    const judgementContainer = document.getElementById('judgement-overlay');
+    if (judgementContainer) judgementContainer.style.opacity = '0';
+
     // Find the active song card element to get its position
     const activeCard = document.querySelector(`.song-card-wrapper[data-index="${this.selectedIndex}"] .song-card`);
     const cardRect = activeCard ? activeCard.getBoundingClientRect() : null;
@@ -862,7 +877,7 @@ export default class SongSelect {
     if (this.three) this.three.triggerGlitch(0.8);
     ZZZTheme.playSwitchSound();
 
-    // Phase 1: Fly to center (after a frame) — target: rectangular card (16:9-ish, ~55% of viewport width)
+    // Phase 1: Fly to center (after a frame) — target: rectangular card (~55% of viewport width)
     requestAnimationFrame(() => {
       const targetW = Math.min(window.innerWidth * 0.55, 520);
       const targetH = targetW * 0.42;  // ~2.4:1 aspect ratio
@@ -890,20 +905,20 @@ export default class SongSelect {
       if (this.three) this.three.triggerGlitch(0.3);
     }, 550);
 
-    // Phase 3: After minimum 1.5s total, burst and transition to game
+    // Phase 3: After minimum 1.5s total, fade out and transition to game
     const totalDelay = 1600;
     setTimeout(() => {
-      // Burst animation
-      card.classList.add('burst');
+      // Simple fade out
+      card.style.transition = 'opacity 0.5s ease-out';
+      card.style.opacity = '0';
       ZZZTheme.playSwitchSound();
-      if (this.three) this.three.triggerGlitch(1.0);
 
-      // After burst, clean up and transition to game
+      // After fade, clean up and transition to game
       setTimeout(() => {
         overlay.remove();
         this._transitioning = false;
         this.screens.show('game', { map });
-      }, 600);
+      }, 550);
     }, totalDelay);
   }
 
@@ -930,11 +945,32 @@ export default class SongSelect {
     // Clean up any lingering transition overlay
     const transOverlay = document.getElementById('song-transition-overlay');
     if (transOverlay) transOverlay.remove();
-    this._stopPreview();
+
+    // Restore screen container opacity
+    const screenContainer = document.getElementById('screen');
+    if (screenContainer) screenContainer.style.opacity = '';
+    const crtOverlay = document.getElementById('crt-overlay');
+    if (crtOverlay) crtOverlay.style.display = '';
+
+    if (this._leavingToGame) {
+      // When transitioning to game, don't stop audio (game needs it)
+      // and don't clear background video/image (game needs them)
+      // Just clear any pending preview timeouts without stopping audio
+      if (this._previewFadeTimeout) { clearTimeout(this._previewFadeTimeout); this._previewFadeTimeout = null; }
+      if (this._previewInterval) { clearInterval(this._previewInterval); this._previewInterval = null; }
+      // Cancel any pending audio.stop() from _stopPreview
+      if (this._previewStopTimeout) { clearTimeout(this._previewStopTimeout); this._previewStopTimeout = null; }
+      this._leavingToGame = false;
+    } else {
+      this._stopPreview();
+      if (this.three) {
+        this.three._clearBackgroundVideo();
+        this.three._clearBackgroundImage();
+      }
+    }
+
     if (this.three) {
       this.three.removeTVMonitor(); // no-op but safe
-      this.three._clearBackgroundVideo();
-      this.three._clearBackgroundImage();
       // Disable CRT effect when leaving song select
       this.three.setCrtIntensity(0);
       // Re-enable chromatic aberration for other screens (gameplay)
