@@ -182,9 +182,11 @@ export default class NoteRenderer {
       this._rebuildBackgroundCache(laneCount);
     }
 
-    // Blit cached background
+    // Blit cached background — must specify CSS dimensions because the main canvas
+    // context already has a scale(dpr*resScale) transform. Without this, the
+    // pixel-sized cache canvas would be double-scaled.
     if (this._bgCacheCanvas) {
-      this.ctx.drawImage(this._bgCacheCanvas, 0, 0);
+      this.ctx.drawImage(this._bgCacheCanvas, 0, 0, this.w, this.h);
     }
   }
 

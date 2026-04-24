@@ -20,6 +20,15 @@ export default class SongSelect {
     this._filteredIndices = [];
     this._expandedCard = -1;
     this._parallaxEls = [];
+
+    // Drag-to-scroll state (osu!-style)
+    this._dragScrolling = false;
+    this._dragStartY = 0;
+    this._dragStartScrollTop = 0;
+    this._dragMoved = false;
+    this._dragButton = 0;
+    this._dragHandler = null;
+    this._dragUpHandler = null;
   }
 
   /** Get local record for a beatmap difficulty */
@@ -90,13 +99,60 @@ export default class SongSelect {
     document.getElementById('osz-input').addEventListener('change', (e) => this._handleOszFiles(e.target.files));
     document.getElementById('song-search').addEventListener('input', (e) => this._filterSongs(e.target.value));
 
-    // Dynamic fade edges on song list scroll
+    // Dynamic fade edges on song list scroll + drag-to-scroll (osu!-style)
     const songList = document.getElementById('song-list');
     if (songList) {
       songList.addEventListener('scroll', () => this._updateFadeEdges());
       // Initial update after render
       requestAnimationFrame(() => this._updateFadeEdges());
+
+      // ── Drag-to-scroll: left-click or right-click drag ──
+      songList.addEventListener('mousedown', (e) => {
+        // Only left (0) or right (2) button
+        if (e.button !== 0 && e.button !== 2) return;
+        // Don't start drag on buttons or inputs
+        if (e.target.closest('button, input, label, a')) return;
+
+        this._dragScrolling = true;
+        this._dragStartY = e.clientY;
+        this._dragStartScrollTop = songList.scrollTop;
+        this._dragMoved = false;
+        this._dragButton = e.button;
+        songList.style.cursor = 'grabbing';
+        songList.style.userSelect = 'none';
+
+        e.preventDefault();
+      });
+
+      // Prevent context menu on right-click (for right-click drag)
+      songList.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+      });
     }
+
+    // Global move/up handlers (so drag continues even outside the list)
+    this._dragHandler = (e) => {
+      if (!this._dragScrolling) return;
+      const list = document.getElementById('song-list');
+      if (!list) return;
+
+      const dy = e.clientY - this._dragStartY;
+      if (Math.abs(dy) > 3) this._dragMoved = true;
+      list.scrollTop = this._dragStartScrollTop - dy;
+    };
+    this._dragUpHandler = (e) => {
+      if (!this._dragScrolling) return;
+      this._dragScrolling = false;
+      const list = document.getElementById('song-list');
+      if (list) {
+        list.style.cursor = '';
+        list.style.userSelect = '';
+      }
+      // Keep _dragMoved true briefly so the subsequent click event can check it
+      setTimeout(() => { this._dragMoved = false; }, 50);
+    };
+    window.addEventListener('mousemove', this._dragHandler);
+    window.addEventListener('mouseup', this._dragUpHandler);
 
     this._keyHandler = (e) => {
       if (e.target.tagName === 'INPUT') return;
@@ -260,6 +316,8 @@ export default class SongSelect {
 
     card.addEventListener('click', (e) => {
       if (e.target.closest('.song-card-actions')) return;
+      // Ignore clicks that were actually drag scrolls
+      if (this._dragMoved) return;
       const now = Date.now();
       if (this.selectedIndex === setIndex && now - this._lastSelectTime < 400) this._confirmSong();
       else if (this.selectedIndex !== setIndex) this._selectSong(setIndex);
@@ -741,6 +799,9 @@ export default class SongSelect {
   destroy() {
     this._closeContextMenu();
     if (this._keyHandler) { window.removeEventListener('keydown', this._keyHandler); this._keyHandler = null; }
+    if (this._dragHandler) { window.removeEventListener('mousemove', this._dragHandler); this._dragHandler = null; }
+    if (this._dragUpHandler) { window.removeEventListener('mouseup', this._dragUpHandler); this._dragUpHandler = null; }
+    this._dragScrolling = false;
     this._stopPreview();
     if (this.three) {
       this.three.removeTVMonitor(); // no-op but safe

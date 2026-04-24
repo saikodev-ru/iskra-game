@@ -109,6 +109,7 @@ async function boot() {
   applySafeAreaToContainers(initialSA);
 
   let gameLoop = null, currentBeatMap = null, currentJudgement = null, gameActive = false;
+  let _endingGame = false;  // guard against double-calling endGame()
   let currentMapData = null;
   let currentLaneCount = 4;
 
@@ -255,7 +256,9 @@ async function boot() {
         }
 
         // End map when audio finishes (or health depleted)
-        if (!audio.isPlaying || health <= 0) {
+        // Use both isPlaying and time-based check for reliability
+        const songFinished = !audio.isPlaying || (audioDuration > 0 && ct >= audioDuration - 0.1);
+        if (songFinished || health <= 0) {
           // Don't end if audio hasn't actually started yet (currentTime ~0)
           if (ct > 0.5 || health <= 0) {
             if (health <= 0 && hitSounds) hitSounds.fail();
@@ -282,6 +285,8 @@ async function boot() {
   };
 
   const endGame = () => {
+    if (_endingGame) return;  // prevent double-call
+    _endingGame = true;
     gameActive = false;
     input.disable();
     if (gameLoop) { gameLoop.stop(); gameLoop = null; }
@@ -308,7 +313,12 @@ async function boot() {
       } catch (_) {}
     }
     EventBus.emit('game:over', stats);
-    screens.show('result', { stats, map: currentMapData });
+    // Use a small delay to ensure ScreenManager transition completes
+    // and avoid race conditions with the game loop's requestAnimationFrame
+    requestAnimationFrame(() => {
+      _endingGame = false;
+      screens.show('result', { stats, map: currentMapData });
+    });
   };
 
   let _pauseOverlay = null;
