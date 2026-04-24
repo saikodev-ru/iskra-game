@@ -208,16 +208,28 @@ export default class ThreeScene {
 
   /** Set a background image for song select — full-screen cover, audio-reactive glow + zoom */
   setBackgroundImage(url) {
-    this._clearBackgroundImage();
-    if (!url) return;
+    if (!url) {
+      this._clearBackgroundImage();
+      return;
+    }
 
     new THREE.TextureLoader().load(url, (texture) => {
       if (this._disposed) return;
-      this._bgImageTexture = texture;
 
-      // Calculate "cover" UV offset based on image vs plane aspect ratio
       const imgAspect = texture.image ? texture.image.width / texture.image.height : 16 / 9;
-      this._bgImageCoverScale = imgAspect;
+
+      // ── Crossfade transition: keep old image, create new one on top ──
+      // Save reference to old mesh for fade-out
+      const oldMesh = this._bgImageMesh;
+      const oldMaterial = this._bgImageMaterial;
+      const oldTexture = this._bgImageTexture;
+
+      // Clear references so _clearBackgroundImage doesn't remove the old one yet
+      this._bgImageMesh = null;
+      this._bgImageMaterial = null;
+      this._bgImageTexture = null;
+
+      this._bgImageTexture = texture;
 
       this._bgImageMaterial = new THREE.ShaderMaterial({
         uniforms: {
@@ -225,7 +237,7 @@ export default class ThreeScene {
           uBass: { value: 0 },
           uAudioIntensity: { value: 0 },
           uCoverScale: { value: imgAspect },
-          uPlaneAspect: { value: 1.0 }, // will be set when creating mesh
+          uPlaneAspect: { value: 1.0 },
         },
         vertexShader: `
           varying vec2 vUv;
@@ -241,15 +253,13 @@ export default class ThreeScene {
           void main() {
             vec2 uv = vUv;
 
-            // ── Cover-fit: adjust UVs so image fills the plane (like background-size: cover) ──
+            // ── Cover-fit ──
             float planeAspect = uPlaneAspect;
             float imgAspect = uCoverScale;
             if (planeAspect > imgAspect) {
-              // Plane is wider than image → scale UVs vertically, crop top/bottom
               float scale = planeAspect / imgAspect;
               uv.y = (uv.y - 0.5) / scale + 0.5;
             } else {
-              // Plane is taller than image → scale UVs horizontally, crop left/right
               float scale = imgAspect / planeAspect;
               uv.x = (uv.x - 0.5) / scale + 0.5;
             }
@@ -261,10 +271,10 @@ export default class ThreeScene {
             vec4 tex = texture2D(uTexture, uv);
 
             // ── Darken base so UI is readable ──
-            vec3 color = tex.rgb * 0.35;
+            vec3 color = tex.rgb * 0.25;
 
             // ── Glow: brighten on audio ──
-            float glow = uBass * 0.25 + uAudioIntensity * 0.1;
+            float glow = uBass * 0.2 + uAudioIntensity * 0.08;
             color += tex.rgb * glow;
 
             // ── Subtle vignette overlay for depth ──
@@ -278,18 +288,61 @@ export default class ThreeScene {
         depthWrite: false,
       });
 
-      // Create a plane that covers the full camera viewport
+      // Create a plane — oversized by 10% so edges never show through
       const cam = this.camera;
-      const meshZ = -6;
-      const dist = cam.position.z - meshZ; // actual distance from camera to plane
+      const meshZ = -4;
+      const dist = cam.position.z - meshZ;
       const vFov = cam.fov * Math.PI / 180;
-      const planeH = 2 * Math.tan(vFov / 2) * dist;
+      const planeH = 2 * Math.tan(vFov / 2) * dist * 1.1; // 10% oversized
       const planeW = planeH * cam.aspect;
-      this._bgImageMaterial.uniforms.uPlaneAspect.value = planeW / planeH;
+      this._bgImageMaterial.uniforms.uPlaneAspect.value = (planeW / planeH);
 
       this._bgImageMesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), this._bgImageMaterial);
       this._bgImageMesh.position.z = meshZ;
+      // Start fully transparent for crossfade
+      this._bgImageMesh.material.opacity = 0;
+      this._bgImageMesh.material.transparent = true;
       this.scene.add(this._bgImageMesh);
+
+      // ── Animate crossfade ──
+      const fadeDuration = 600; // ms
+      const startTime = performance.now();
+      const animateFade = () => {
+        if (this._disposed) return;
+        const elapsed = performance.now() - startTime;
+        const t = Math.min(1, elapsed / fadeDuration);
+        // Ease out cubic
+        const ease = 1 - Math.pow(1 - t, 3);
+
+        // New image fades in
+        if (this._bgImageMesh && this._bgImageMesh.material) {
+          this._bgImageMesh.material.opacity = ease;
+        }
+
+        // Old image fades out
+        if (oldMesh && oldMesh.material) {
+          oldMesh.material.opacity = 1 - ease;
+          oldMesh.material.transparent = true;
+        }
+
+        if (t < 1) {
+          requestAnimationFrame(animateFade);
+        } else {
+          // Transition complete — remove old mesh
+          if (oldMesh) {
+            this.scene.remove(oldMesh);
+            oldMesh.geometry.dispose();
+          }
+          if (oldMaterial) oldMaterial.dispose();
+          if (oldTexture) oldTexture.dispose();
+          // Make new mesh fully opaque
+          if (this._bgImageMesh && this._bgImageMesh.material) {
+            this._bgImageMesh.material.opacity = 1;
+            this._bgImageMesh.material.transparent = false;
+          }
+        }
+      };
+      requestAnimationFrame(animateFade);
     });
   }
 
