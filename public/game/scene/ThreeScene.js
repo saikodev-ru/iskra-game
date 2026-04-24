@@ -280,14 +280,15 @@ export default class ThreeScene {
 
       // Create a plane that covers the full camera viewport
       const cam = this.camera;
-      const dist = 9;
+      const meshZ = -9;
+      const dist = cam.position.z - meshZ; // actual distance from camera to plane
       const vFov = cam.fov * Math.PI / 180;
       const planeH = 2 * Math.tan(vFov / 2) * dist;
       const planeW = planeH * cam.aspect;
       this._bgImageMaterial.uniforms.uPlaneAspect.value = planeW / planeH;
 
       this._bgImageMesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), this._bgImageMaterial);
-      this._bgImageMesh.position.z = -dist;
+      this._bgImageMesh.position.z = meshZ;
       this.scene.add(this._bgImageMesh);
     });
   }
