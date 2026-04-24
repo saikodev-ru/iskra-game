@@ -78,7 +78,10 @@ export default class SongSelect {
     };
     window.addEventListener('keydown', this._keyHandler);
 
-    if (this.three) this.three.createTVMonitor();
+    if (this.three) {
+      // Don't create TV — use background image instead
+      // three.createTVMonitor();
+    }
 
     // Add parallax
     const info = document.getElementById('ss-song-info');
@@ -350,7 +353,7 @@ export default class SongSelect {
         <span style="color:${starColor};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;">${diffName}</span>
         <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${bpm} BPM · ${durationStr}</span>
       </div>
-      <button id="song-play-btn" class="zzz-btn zzz-btn--primary zzz-btn--sm" style="margin-top:12px;pointer-events:auto;">▶ PLAY</button>
+      <button id="song-play-btn" class="zzz-btn zzz-btn--primary" style="margin-top:16px;pointer-events:auto;font-size:20px;padding:16px 40px;letter-spacing:0.1em;">▶ PLAY</button>
     `;
     document.getElementById('song-play-btn')?.addEventListener('click', () => this._confirmSong());
   }
@@ -423,7 +426,10 @@ export default class SongSelect {
   destroy() {
     if (this._keyHandler) { window.removeEventListener('keydown', this._keyHandler); this._keyHandler = null; }
     this._stopPreview();
-    if (this.three) this.three.removeTVMonitor();
+    if (this.three) {
+      this.three.removeTVMonitor(); // no-op but safe
+      this.three._clearBackgroundImage();
+    }
     // Clean up parallax
     for (const el of this._parallaxEls) ZZZTheme.removeParallax(el);
     this._parallaxEls = [];

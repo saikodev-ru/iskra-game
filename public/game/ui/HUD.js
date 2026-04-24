@@ -23,15 +23,15 @@ export default class HUD {
       <div id="hud-inner" style="position:relative;width:100%;height:100%;pointer-events:none;display:none;">
         <!-- Score + Accuracy — left side of playfield, vertically centered -->
         <div style="position:absolute;left:4%;top:50%;transform:translateY(-50%);text-align:right;min-width:130px;">
-          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:700;font-size:30px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;transition:transform 0.08s;line-height:1;">0</div>
-          <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-size:13px;color:var(--zzz-muted);font-variant-numeric:tabular-nums;margin-top:4px;">100.00%</div>
+          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:700;font-size:30px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;transition:transform 0.08s;line-height:1;text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 0 12px rgba(0,0,0,0.9),0 0 24px rgba(0,0,0,0.7),0 4px 8px rgba(0,0,0,0.8);-webkit-text-stroke:1px rgba(0,0,0,0.6);">0</div>
+          <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-size:13px;color:var(--zzz-muted);font-variant-numeric:tabular-nums;margin-top:4px;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 0 8px rgba(0,0,0,0.9);">100.00%</div>
         </div>
 
         <!-- Combo + Grade — right side, above the HP bar -->
         <div style="position:absolute;right:5%;top:38%;transform:translateY(-50%);text-align:left;">
           <div style="display:flex;align-items:baseline;gap:10px;">
-            <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:52px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;text-shadow:0 0 16px rgba(255,255,255,0.25);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0x</div>
-            <div id="hud-rank" style="font-family:var(--zzz-font);font-weight:900;font-size:28px;color:var(--zzz-lime);text-shadow:0 0 16px rgba(170,255,0,0.4);opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;"></div>
+            <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:52px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;text-shadow:-3px -3px 0 #000,3px -3px 0 #000,-3px 3px 0 #000,3px 3px 0 #000,0 0 16px rgba(0,0,0,0.9),0 0 32px rgba(0,0,0,0.7),0 6px 12px rgba(0,0,0,0.8);-webkit-text-stroke:1.5px rgba(0,0,0,0.5);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0x</div>
+            <div id="hud-rank" style="font-family:var(--zzz-font);font-weight:900;font-size:28px;color:var(--zzz-lime);text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 0 16px rgba(170,255,0,0.4),0 0 8px rgba(0,0,0,0.9);-webkit-text-stroke:1px rgba(0,0,0,0.5);opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;"></div>
           </div>
         </div>
 

@@ -21,6 +21,7 @@ export default class ThreeScene {
     this._bgMaterial = null;
     this._tvSpinAnim = null;
     this._particles = null;
+    this._particlesVisible = true; // control particle visibility
     this._aspectRatio = '16:9';
     this._disposed = false;
     this._contextLost = false;
@@ -31,7 +32,11 @@ export default class ThreeScene {
     // Camera animation state
     this._baseFOV = 70;
     this._fovPulse = 0;
-    this._glowHue = 0; // animated hue shift
+    this._glowHue = 0;
+    // Background image for song select
+    this._bgImageMesh = null;
+    this._bgImageMaterial = null;
+    this._bgImageTexture = null;
 
     this._init();
     this._setupListeners();
@@ -186,24 +191,64 @@ export default class ThreeScene {
     this.scene.add(this._particles);
   }
 
+  /** Show/hide particles — used to hide them outside main menu */
+  setParticlesVisible(visible) {
+    this._particlesVisible = visible;
+    if (this._particles) {
+      this._particles.visible = visible;
+    }
+  }
+
+  /** Set a background image for song select — reactive to audio */
+  setBackgroundImage(url) {
+    this._clearBackgroundImage();
+    if (!url) return;
+
+    new THREE.TextureLoader().load(url, (texture) => {
+      if (this._disposed) return;
+      this._bgImageTexture = texture;
+      this._bgImageMaterial = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0.25,
+        side: THREE.DoubleSide,
+      });
+      this._bgImageMesh = new THREE.Mesh(new THREE.PlaneGeometry(16, 9), this._bgImageMaterial);
+      this._bgImageMesh.position.z = -8;
+      this.scene.add(this._bgImageMesh);
+    });
+  }
+
+  _clearBackgroundImage() {
+    if (this._bgImageMesh) {
+      this.scene.remove(this._bgImageMesh);
+      this._bgImageMesh = null;
+    }
+    if (this._bgImageMaterial) {
+      this._bgImageMaterial.dispose();
+      this._bgImageMaterial = null;
+    }
+    if (this._bgImageTexture) {
+      this._bgImageTexture.dispose();
+      this._bgImageTexture = null;
+    }
+  }
+
   _setupListeners() {
     EventBus.on('note:hit', ({ judgement }) => {
       if (this._disposed) return;
       if (judgement === 'perfect') {
         this._bloomTarget = 1.4;
-        this._fovPulse = 2.5;
         this.pointLight.intensity = 5;
         this._bassLight.intensity = 3;
         this._bassLight.color.set(0xAAFF00);
       } else if (judgement === 'great') {
         this._bloomTarget = 1.0;
-        this._fovPulse = 1.5;
         this.pointLight.intensity = 3.5;
         this._bassLight.intensity = 2;
         this._bassLight.color.set(0x88DD00);
       } else if (judgement === 'good') {
         this._bloomTarget = 0.7;
-        this._fovPulse = 0.8;
         this.pointLight.intensity = 2.5;
         this._bassLight.intensity = 1;
         this._bassLight.color.set(0x669900);
@@ -221,48 +266,12 @@ export default class ThreeScene {
         this._bloomTarget = 0.3;
       }
     });
-    EventBus.on('beat:pulse', () => {
-      if (!this._disposed) {
-        this._beatIntensity = 0.5;
-        this._fovPulse = Math.max(this._fovPulse, 0.8);
-      }
-    });
+    // NO beat:pulse listener — removed flash effect per user request
   }
 
   createTVMonitor() {
-    if (this._disposed || this._tvGroup) return;
-    this._tvGroup = new THREE.Group();
-
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7, metalness: 0.3 });
-    this._tvGroup.add(new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.0, 0.25), frameMat));
-
-    const bezelMat = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.9, metalness: 0.1 });
-    const bezel = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.75, 0.04), bezelMat);
-    bezel.position.z = 0.14;
-    this._tvGroup.add(bezel);
-
-    this._tvScreenMaterial = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide });
-    this._tvScreen = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.55), this._tvScreenMaterial);
-    this._tvScreen.position.z = 0.17;
-    this._tvGroup.add(this._tvScreen);
-
-    const glowLight = new THREE.PointLight(0xAAFF00, 0.4, 3);
-    glowLight.position.set(0, 0, 0.5);
-    this._tvGroup.add(glowLight);
-    this._tvGlowLight = glowLight;
-
-    const standMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8, metalness: 0.2 });
-    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.12, 0.5), standMat);
-    stand.position.set(0, -1.1, 0.1);
-    this._tvGroup.add(stand);
-    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.45, 0.15), standMat);
-    neck.position.set(0, -0.85, 0.05);
-    this._tvGroup.add(neck);
-
-    this._tvGroup.position.set(-1.2, -1.8, 0.5);
-    this._tvGroup.rotation.y = 0.25;
-    this._tvGroup.rotation.x = -0.05;
-    this.scene.add(this._tvGroup);
+    // TV monitor is temporarily disabled
+    return;
   }
 
   removeTVMonitor() {
@@ -275,28 +284,12 @@ export default class ThreeScene {
   }
 
   setTVTexture(imageUrl) {
-    if (this._disposed || !this._tvScreenMaterial) return;
-    new THREE.TextureLoader().load(imageUrl, (texture) => {
-      if (this._disposed) return;
-      if (this._currentTexture) this._currentTexture.dispose();
-      this._currentTexture = texture;
-      this._tvScreenMaterial.map = texture;
-      this._tvScreenMaterial.color.set(0xffffff);
-      this._tvScreenMaterial.needsUpdate = true;
-      if (this._tvGroup) this._tvSpinAnim = { start: performance.now(), duration: 200, startRot: this._tvGroup.rotation.y };
-      if (this._tvGlowLight) {
-        this._tvGlowLight.intensity = 1.5;
-        setTimeout(() => { if (this._tvGlowLight && !this._disposed) this._tvGlowLight.intensity = 0.4; }, 300);
-      }
-    });
+    // TV disabled — use background image instead for song select
+    this.setBackgroundImage(imageUrl);
   }
 
   setTVStatic() {
-    if (this._disposed || !this._tvScreenMaterial) return;
-    if (this._currentTexture) { this._currentTexture.dispose(); this._currentTexture = null; }
-    this._tvScreenMaterial.map = null;
-    this._tvScreenMaterial.color.set(0x111111);
-    this._tvScreenMaterial.needsUpdate = true;
+    this._clearBackgroundImage();
   }
 
   setAspectRatio(ar) { this._aspectRatio = ar; this.resize(); }
@@ -314,7 +307,6 @@ export default class ThreeScene {
       this.camera.aspect = w / h;
     }
     this.camera.updateProjectionMatrix();
-    // Three.js always renders at full viewport resolution
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
     this.renderer.setClearColor(0x000000, 1);
@@ -341,8 +333,18 @@ export default class ThreeScene {
       this._beatIntensity *= 0.88;
     }
 
-    // ── Particles — audio-reactive ──
-    if (this._particles) {
+    // ── Background image — audio-reactive opacity pulse ──
+    if (this._bgImageMesh && this._bgImageMaterial) {
+      const baseOpacity = 0.2;
+      const audioOpacity = baseOpacity + bassPulse * 0.3 + audioPulse * 0.15;
+      this._bgImageMaterial.opacity = Math.min(0.6, audioOpacity);
+      // Subtle scale pulse on bass
+      const scale = 1.0 + bassPulse * 0.05;
+      this._bgImageMesh.scale.set(scale, scale, 1);
+    }
+
+    // ── Particles — audio-reactive (only when visible) ──
+    if (this._particles && this._particlesVisible) {
       const pos = this._particles.geometry.attributes.position.array;
       const drift = 0.001 + bassPulse * 0.004;
       for (let i = 0; i < pos.length; i += 3) {
@@ -351,17 +353,11 @@ export default class ThreeScene {
       }
       this._particles.geometry.attributes.position.needsUpdate = true;
       this._particles.material.opacity = 0.15 + bassPulse * 0.35 + this._beatIntensity * 0.2;
-      // Subtle size pulse on bass
       this._particles.material.size = 0.04 + bassPulse * 0.03;
     }
 
-    // ── Camera FOV pulse — reactive to beats + audio ──
-    if (this._fovPulse > 0.01) {
-      this.camera.fov = this._baseFOV + this._fovPulse;
-      this.camera.updateProjectionMatrix();
-      this._fovPulse *= 0.88; // decay
-    } else {
-      // Subtle continuous bass-reactive FOV
+    // ── Camera FOV — smooth audio-reactive, NO hit-driven FOV pulse ──
+    {
       const targetFOV = this._baseFOV + bassPulse * 1.5;
       this.camera.fov += (targetFOV - this.camera.fov) * 0.1;
       this.camera.updateProjectionMatrix();
@@ -369,18 +365,14 @@ export default class ThreeScene {
     }
 
     // ── Bloom — reactive to audio + hits ──
-    // Audio-driven base bloom
     const audioBloom = this._bloomBase + audioPulse * 0.3 + bassPulse * 0.4;
     this._bloomTarget = Math.max(this._bloomTarget, audioBloom);
     this.bloomPass.strength += (this._bloomTarget - this.bloomPass.strength) * 0.12;
-    // Decay bloom target back to base
     this._bloomTarget += (this._bloomBase - this._bloomTarget) * 0.06;
 
     // ── Point light — reactive glow ──
-    // Return light color and intensity to baseline
     const targetIntensity = 1.5 + bassPulse * 2.0 + audioPulse * 1.0;
     this.pointLight.intensity += (targetIntensity - this.pointLight.intensity) * 0.1;
-    // Return color to lime green gradually
     if (this.pointLight.color.r > 0.67 || this.pointLight.color.b > 0.1) {
       this.pointLight.color.lerp(new THREE.Color(0xAAFF00), 0.08);
     }
@@ -398,17 +390,6 @@ export default class ThreeScene {
       this.camera.position.x = this._shakeFrames.shift();
     } else {
       this.camera.position.x *= 0.8;
-    }
-
-    // ── TV animation ──
-    if (this._tvGroup && !this._tvSpinAnim) {
-      this._tvGroup.rotation.y = 0.25 + Math.sin(time * 0.001 * 0.3 * Math.PI) * 0.03;
-    }
-    if (this._tvSpinAnim) {
-      const elapsed = performance.now() - this._tvSpinAnim.start;
-      const progress = Math.min(1, elapsed / this._tvSpinAnim.duration);
-      this._tvGroup.rotation.y = this._tvSpinAnim.startRot + (1 - Math.pow(1 - progress, 3)) * Math.PI * 2;
-      if (progress >= 1) { this._tvGroup.rotation.y = this._tvSpinAnim.startRot; this._tvSpinAnim = null; }
     }
 
     try {
@@ -429,6 +410,7 @@ export default class ThreeScene {
     }
 
     this.removeTVMonitor();
+    this._clearBackgroundImage();
 
     if (this._particles) {
       this._particles.geometry.dispose();

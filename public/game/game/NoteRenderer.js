@@ -207,17 +207,11 @@ export default class NoteRenderer {
     }
   }
 
-  /* ── Lane Glows — strip near judge line ────────────────────────── */
+  /* ── Lane Glows — horizontal flash at judge line (Project Sekai style) */
 
   _drawLaneGlows(laneCount) {
     const ctx = this.ctx;
     const judgeLineY = this._getJudgeLineY();
-    const sa = this.safeArea;
-
-    // Glow strip: centered on judge line, height = 15% of safe area
-    const stripHalfH = sa.h * 0.075;
-    const stripTopY = judgeLineY - stripHalfH;
-    const stripBotY = judgeLineY + stripHalfH;
 
     for (const [lane, glow] of this._laneGlows) {
       if (glow.intensity <= 0.01) {
@@ -225,41 +219,50 @@ export default class NoteRenderer {
         continue;
       }
 
-      const tg = this._getLaneGeometry(lane, stripTopY, laneCount);
-      const bg = this._getLaneGeometry(lane, stripBotY, laneCount);
+      const geom = this._getLaneGeometry(lane, judgeLineY, laneCount);
+      const cx = geom.centerX;
+      const hw = geom.width / 2;
+
+      // Flash expands outward from center over time
+      const expandProgress = 1 - glow.intensity; // 0→1 as glow fades
+      const halfW = hw * (1 + expandProgress * 0.5);
+      const barH = 8 + expandProgress * 12;
 
       ctx.save();
 
-      // Glow fill — gradient fading from edges
-      const grad = ctx.createLinearGradient(0, stripTopY, 0, stripBotY);
-      grad.addColorStop(0, 'transparent');
-      grad.addColorStop(0.2, glow.color);
-      grad.addColorStop(0.5, glow.color);
-      grad.addColorStop(0.8, glow.color);
-      grad.addColorStop(1, 'transparent');
-
-      ctx.globalAlpha = glow.intensity * 0.35;
-      ctx.beginPath();
-      ctx.moveTo(tg.x, stripTopY);
-      ctx.lineTo(tg.x + tg.width, stripTopY);
-      ctx.lineTo(bg.x + bg.width, stripBotY);
-      ctx.lineTo(bg.x, stripBotY);
-      ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.shadowBlur = 25 * glow.intensity;
+      // ── Outer glow: wide, soft ──
+      const outerGrad = ctx.createRadialGradient(cx, judgeLineY, 0, cx, judgeLineY, halfW * 1.8);
+      outerGrad.addColorStop(0, this._withAlpha(glow.color, 0.5 * glow.intensity));
+      outerGrad.addColorStop(0.4, this._withAlpha(glow.color, 0.2 * glow.intensity));
+      outerGrad.addColorStop(1, 'transparent');
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = outerGrad;
+      ctx.shadowBlur = 40 * glow.intensity;
       ctx.shadowColor = glow.color;
-      ctx.fill();
+      ctx.fillRect(cx - halfW * 1.8, judgeLineY - barH * 2, halfW * 3.6, barH * 4);
 
-      // Bright center line at judge line
-      const midGeom = this._getLaneGeometry(lane, judgeLineY, laneCount);
-      ctx.globalAlpha = glow.intensity * 0.7;
-      ctx.shadowBlur = 15 * glow.intensity;
+      // ── Core bar: bright horizontal flash ──
+      const coreGrad = ctx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
+      coreGrad.addColorStop(0, 'transparent');
+      coreGrad.addColorStop(0.15, glow.color);
+      coreGrad.addColorStop(0.5, '#ffffff');
+      coreGrad.addColorStop(0.85, glow.color);
+      coreGrad.addColorStop(1, 'transparent');
+      ctx.globalAlpha = glow.intensity * 0.8;
+      ctx.shadowBlur = 20 * glow.intensity;
       ctx.shadowColor = glow.color;
-      ctx.strokeStyle = glow.color;
-      ctx.lineWidth = 2;
+      ctx.fillStyle = coreGrad;
+      ctx.fillRect(cx - halfW, judgeLineY - barH / 2, halfW * 2, barH);
+
+      // ── White hot center line ──
+      ctx.globalAlpha = glow.intensity * 0.9;
+      ctx.shadowBlur = 12 * glow.intensity;
+      ctx.shadowColor = '#ffffff';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2 * glow.intensity;
       ctx.beginPath();
-      ctx.moveTo(midGeom.x + 3, judgeLineY);
-      ctx.lineTo(midGeom.x + midGeom.width - 3, judgeLineY);
+      ctx.moveTo(geom.x + 4, judgeLineY);
+      ctx.lineTo(geom.x + geom.width - 4, judgeLineY);
       ctx.stroke();
 
       ctx.restore();
@@ -283,29 +286,19 @@ export default class NoteRenderer {
 
   /* ── Notes ──────────────────────────────────────────────────────── */
 
+  // Minimum duration (seconds) to render as hold note; shorter holds render as tap notes
+  static MIN_HOLD_DURATION = 0.05; // 50ms
+
   _drawNotes(notes, currentTime, laneCount) {
     const judgeLineY = this._getJudgeLineY();
     const topY = this._getTopY();
-
-    // Debug: log hold note presence once
-    if (!this._holdNoteDebugLogged) {
-      const holdCount = notes.filter(n => n.type === 'hold' && n.duration > 0).length;
-      const totalCount = notes.length;
-      if (totalCount > 0) {
-        console.log(`[NoteRenderer] Notes in window: ${totalCount}, hold notes: ${holdCount}`);
-        if (holdCount > 0) {
-          const sample = notes.find(n => n.type === 'hold' && n.duration > 0);
-          console.log(`[NoteRenderer] Sample hold note:`, JSON.stringify({ lane: sample.lane, time: sample.time, duration: sample.duration, type: sample.type, hit: sample.hit, released: sample.released }));
-        }
-        this._holdNoteDebugLogged = true;
-      }
-    }
 
     const holdNotes = [];
     const tapNotes = [];
 
     for (const note of notes) {
-      if (note.type === 'hold' && note.duration > 0) {
+      // Treat very short holds as tap notes visually
+      if (note.type === 'hold' && note.duration >= NoteRenderer.MIN_HOLD_DURATION) {
         holdNotes.push(note);
       } else {
         tapNotes.push(note);
@@ -716,10 +709,17 @@ export default class NoteRenderer {
     ctx.closePath();
   }
 
-  _withAlpha(hex, a) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r},${g},${b},${a})`;
+  _withAlpha(color, a) {
+    // Handle hex colors
+    if (color.startsWith('#')) {
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+      return `rgba(${r},${g},${b},${a})`;
+    }
+    // Handle rgba/rgb colors — extract rgb values and reapply alpha
+    const m = color.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (m) return `rgba(${m[1]},${m[2]},${m[3]},${a})`;
+    return color;
   }
 }

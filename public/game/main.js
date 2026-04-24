@@ -193,7 +193,7 @@ async function boot() {
       } else {
         // Empty key press — still play quiet sound and show subtle visual feedback
         if (hitSounds) hitSounds.emptyHit();
-        noteRenderer.addLaneGlow(lane, currentLaneCount, 'rgba(255,255,255,0.3)');
+        noteRenderer.addLaneGlow(lane, currentLaneCount, '#FFFFFF');
       }
     };
 
@@ -325,12 +325,13 @@ async function boot() {
   const _openPauseSettings = () => {
     if (!_pauseOverlay) return;
     const sa = calcSafeArea();
+    const panelWidth = Math.max(Math.min(380, sa.w * 0.7), Math.min(240, sa.w * 0.5));
     const settingsPanel = document.createElement('div');
     settingsPanel.id = 'pause-settings';
-    settingsPanel.style.cssText = `position:fixed;left:${sa.x}px;top:${sa.y}px;width:${sa.w}px;height:${sa.h}px;z-index:60;display:flex;`;
+    settingsPanel.style.cssText = `position:fixed;left:${sa.x}px;top:${sa.y}px;width:${sa.w}px;height:${sa.h}px;z-index:60;display:flex;overflow:hidden;`;
     settingsPanel.innerHTML = `
-      <div id="pause-settings-inner" style="width:380px;height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 24px;animation:settings-slide-in 0.25s ease-out forwards;"></div>
-      <div id="pause-settings-bg" style="flex:1;"></div>
+      <div id="pause-settings-inner" style="width:${panelWidth}px;min-width:${Math.min(240, sa.w * 0.5)}px;height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 20px;animation:settings-slide-in 0.25s ease-out forwards;" class="zzz-scroll"></div>
+      <div id="pause-settings-bg" style="flex:1;min-width:0;"></div>
     `;
     _pauseOverlay.style.display = 'none';
     document.body.appendChild(settingsPanel);
@@ -340,7 +341,7 @@ async function boot() {
     const inner = document.getElementById('pause-settings-inner');
     inner.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
-        <h2 class="zzz-title" style="font-size:28px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
+        <h2 class="zzz-title" style="font-size:24px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
         <button id="pause-settings-close" class="zzz-btn zzz-btn--sm" style="pointer-events:all;">✕</button>
       </div>
     `;
@@ -386,6 +387,12 @@ async function boot() {
       if (_pauseOverlay) { _closePause(); resumeGame(); return; }
       if (gameActive) { pauseGame(); }
     }
+  });
+
+  // Particle visibility control: only show on main menu
+  three.setParticlesVisible(true);
+  EventBus.on('screen:change', ({ to }) => {
+    three.setParticlesVisible(to === 'main-menu');
   });
 
   screens.register('main-menu', () => new MainMenu({ audio, screens }));

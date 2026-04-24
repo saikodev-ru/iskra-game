@@ -5,7 +5,7 @@ import DifficultyAnalyzer from './DifficultyAnalyzer.js';
 class BeatmapStore {
   static DB_NAME = 'rhythm-os-db';
   static STORE_NAME = 'beatmaps';
-  static DB_VERSION = 2;
+  static DB_VERSION = 3; // v3: invalidate cached beatmaps with wrong hold note durations
 
   /** Open (or create) the database */
   static async open() {
@@ -16,7 +16,17 @@ class BeatmapStore {
         if (!db.objectStoreNames.contains(BeatmapStore.STORE_NAME)) {
           db.createObjectStore(BeatmapStore.STORE_NAME, { keyPath: 'id' });
         }
-        // v1→v2: no structural change, just handling backgroundData
+        // v2→v3: clear all stored beatmaps (hold note duration fix)
+        if (e.oldVersion < 3) {
+          try {
+            const tx = e.target.transaction;
+            const store = tx.objectStore(BeatmapStore.STORE_NAME);
+            store.clear();
+            console.log('[BeatmapStore] Cleared cached beatmaps (v3 migration: hold note fix)');
+          } catch (err) {
+            console.warn('[BeatmapStore] v3 migration clear failed:', err);
+          }
+        }
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -521,11 +531,12 @@ export default class OszLoader {
 
         if ((type & 2) && parts.length >= 8) {
           const tp = this._findTimingPoint(result.timingPoints, time);
-          const sv = tp ? (tp.msPerBeat / 1000) : 1;
+          const msPerBeat = tp ? tp.msPerBeat : 1000; // keep in ms
           const length = parseFloat(parts[7]) || 0;
           const sliderMult = result.difficulty.SliderMultiplier || 1.4;
           const repeats = parseInt(parts[6], 10) || 1;
-          endTime = time + (length * sv * repeats) / (sliderMult * 100);
+          // duration_ms = (length / (sliderMult * 100)) beats * msPerBeat * repeats
+          endTime = time + (length / (sliderMult * 100)) * msPerBeat * repeats;
         }
         else if ((type & 8) && parts.length >= 6) {
           endTime = parseFloat(parts[5]);

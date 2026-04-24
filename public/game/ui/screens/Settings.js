@@ -5,9 +5,10 @@ export default class Settings {
     this.audio = audio;
     this.input = input;
     this.screens = screens;
-    this.overlayMode = overlayMode; // when true, render as overlay (from pause menu)
+    this.overlayMode = overlayMode;
     this._keyHandler = null;
     this._rebinding = null;
+    this._resizeObserver = null;
   }
 
   build() {
@@ -16,26 +17,24 @@ export default class Settings {
     const savedResScale = localStorage.getItem('rhythm-os-res-scale') || '100';
 
     if (this.overlayMode) {
-      // Overlay mode: slide-in panel from left, constrained to safe area
       return `
-        <div id="settings-overlay" style="position:absolute;inset:0;z-index:100;background:rgba(0,0,0,0.6);display:flex;">
-          <div style="width:min(380px, 80%);height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 24px;animation:settings-slide-in 0.25s ease-out forwards;">
+        <div id="settings-overlay" style="position:absolute;inset:0;z-index:100;background:rgba(0,0,0,0.6);display:flex;overflow:hidden;">
+          <div id="settings-panel" style="width:min(380px,70%);min-width:240px;height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 20px;animation:settings-slide-in 0.25s ease-out forwards;" class="zzz-scroll">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
-              <h2 class="zzz-title" style="font-size:28px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
+              <h2 class="zzz-title" style="font-size:24px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
               <button id="settings-close" class="zzz-btn zzz-btn--sm" style="pointer-events:all;">✕</button>
             </div>
             ${this._buildSettingsContent(aspectRatios, savedAspect, savedResScale)}
           </div>
-          <div id="settings-overlay-bg" style="flex:1;"></div>
+          <div id="settings-overlay-bg" style="flex:1;min-width:0;"></div>
         </div>
       `;
     }
 
-    // Full-screen mode
     return `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:28px;background:transparent;">
-        <h2 class="zzz-title" style="font-size:40px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
-        <div class="zzz-panel" style="padding:28px;width:480px;">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:28px;background:transparent;padding:16px;">
+        <h2 class="zzz-title" style="font-size:36px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
+        <div class="zzz-panel" style="padding:24px;width:min(480px,90%);">
           ${this._buildSettingsContent(aspectRatios, savedAspect, savedResScale)}
         </div>
         <button class="zzz-btn" data-action="back">← BACK</button>
@@ -45,34 +44,34 @@ export default class Settings {
 
   _buildSettingsContent(aspectRatios, savedAspect, savedResScale) {
     return `
-      <div style="margin-bottom:22px;">
+      <div style="margin-bottom:20px;">
         <div class="zzz-label" style="margin-bottom:8px;">AUDIO OFFSET (ms)</div>
         <div style="display:flex;gap:10px;align-items:center;">
           <input type="range" id="settings-offset" min="-100" max="100" value="${this._getSavedOffset()}" style="flex:1;" />
           <span id="settings-offset-val" class="zzz-value" style="min-width:50px;text-align:center;">${this._getSavedOffset()}</span>
         </div>
       </div>
-      <div style="margin-bottom:22px;">
+      <div style="margin-bottom:20px;">
         <div class="zzz-label" style="margin-bottom:8px;">VOLUME</div>
         <div style="display:flex;gap:10px;align-items:center;">
           <input type="range" id="settings-volume" min="0" max="100" value="${this._getSavedVolume()}" style="flex:1;" />
           <span id="settings-volume-val" class="zzz-value" style="min-width:40px;text-align:center;">${this._getSavedVolume()}%</span>
         </div>
       </div>
-      <div style="margin-bottom:22px;">
+      <div style="margin-bottom:20px;">
         <div class="zzz-label" style="margin-bottom:8px;">SCROLL SPEED</div>
         <div style="display:flex;gap:10px;align-items:center;">
           <input type="range" id="settings-scroll" min="200" max="800" value="${this._getSavedScrollSpeed()}" step="50" style="flex:1;" />
           <span id="settings-scroll-val" class="zzz-value" style="min-width:50px;text-align:center;">${this._getSavedScrollSpeed()}</span>
         </div>
       </div>
-      <div style="margin-bottom:22px;">
+      <div style="margin-bottom:20px;">
         <div class="zzz-label" style="margin-bottom:8px;">ASPECT RATIO</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="aspect-ratio-btns">
-          ${aspectRatios.map(ar => `<button class="zzz-btn zzz-btn--sm ${ar === savedAspect ? 'zzz-btn--primary' : ''}" data-aspect="${ar}" style="flex:1;min-width:60px;">${ar}</button>`).join('')}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="aspect-ratio-btns">
+          ${aspectRatios.map(ar => `<button class="zzz-btn zzz-btn--sm ${ar === savedAspect ? 'zzz-btn--primary' : ''}" data-aspect="${ar}" style="flex:1;min-width:48px;font-size:11px;padding:6px 8px;">${ar}</button>`).join('')}
         </div>
       </div>
-      <div style="margin-bottom:22px;">
+      <div style="margin-bottom:20px;">
         <div class="zzz-label" style="margin-bottom:8px;">RESOLUTION SCALE (%)</div>
         <div style="display:flex;gap:10px;align-items:center;">
           <input type="range" id="settings-res-scale" min="50" max="150" value="${savedResScale}" step="10" style="flex:1;" />
@@ -117,6 +116,17 @@ export default class Settings {
     // Full-screen mode back button
     document.querySelectorAll('[data-action="back"]').forEach(b => b.addEventListener('click', () => this.screens.show('main-menu')));
 
+    // Watch for safe area changes and adjust panel width
+    this._settingsChangedHandler = ({ key }) => {
+      if (key === 'aspectRatio') {
+        this._adjustPanelWidth();
+      }
+    };
+    EventBus.on('settings:changed', this._settingsChangedHandler);
+
+    // Initial adjustment
+    this._adjustPanelWidth();
+
     this._keyHandler = (e) => {
       if (e.code === 'Escape') {
         e.preventDefault();
@@ -129,12 +139,46 @@ export default class Settings {
     window.addEventListener('keydown', this._keyHandler);
   }
 
+  /** Adjust panel width when safe area changes (aspect ratio) */
+  _adjustPanelWidth() {
+    const panel = document.getElementById('settings-panel') || document.getElementById('pause-settings-inner');
+    if (!panel) return;
+
+    // Get current safe area
+    const sa = this._calcSafeArea();
+    const maxWidth = Math.min(380, sa.w * 0.7);
+    const minWidth = Math.min(240, sa.w * 0.5);
+
+    panel.style.width = Math.max(minWidth, maxWidth) + 'px';
+    panel.style.minWidth = minWidth + 'px';
+  }
+
+  _calcSafeArea() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const ar = localStorage.getItem('rhythm-os-aspect-ratio') || '16:9';
+
+    let targetW, targetH;
+    if (ar === 'Fill') {
+      targetW = w; targetH = h;
+    } else {
+      const parts = ar.split(':');
+      const arW = parseInt(parts[0]) || 16;
+      const arH = parseInt(parts[1]) || 9;
+      const targetAR = arW / arH;
+      const screenAR = w / h;
+      if (screenAR > targetAR) { targetH = h; targetW = h * targetAR; }
+      else { targetW = w; targetH = w / targetAR; }
+    }
+    targetW = Math.round(targetW);
+    targetH = Math.round(targetH);
+    return { x: Math.round((w - targetW) / 2), y: Math.round((h - targetH) / 2), w: targetW, h: targetH };
+  }
+
   _closeOverlay() {
     if (this.screens) {
-      // Return to the previous screen without transition
       const container = document.getElementById('screen');
       if (container) container.innerHTML = '';
-      // Emit event so main.js can restore the pause menu
       EventBus.emit('settings:close-overlay');
     }
   }
@@ -142,12 +186,24 @@ export default class Settings {
   _renderKeybinds() {
     const c = document.getElementById('keybinds'); if (!c) return;
     const km = this.input ? this.input.getKeyMap() : { KeyD: 0, KeyF: 1, KeyJ: 2, KeyK: 3 };
-    const labels = ['Lane 1 (D)', 'Lane 2 (F)', 'Lane 3 (J)', 'Lane 4 (K)'];
+    const labels = ['Lane 1', 'Lane 2', 'Lane 3', 'Lane 4'];
+    const laneCount = this.input ? this.input.laneCount : 4;
     c.innerHTML = '';
-    for (const [code, lane] of Object.entries(km)) {
+    // Always show one button per lane
+    for (let lane = 0; lane < laneCount; lane++) {
+      // Find which key is bound to this lane
+      let boundKey = null;
+      for (const [code, l] of Object.entries(km)) {
+        if (l === lane) { boundKey = code; break; }
+      }
       const btn = document.createElement('button');
       btn.className = 'zzz-btn zzz-btn--sm'; btn.style.width = '100%';
-      btn.textContent = `${labels[lane] || `Lane ${lane + 1}`}: ${code.replace('Key', '')}`;
+      const keyName = boundKey ? boundKey.replace('Key', '') : '—';
+      btn.textContent = `${labels[lane]}: ${keyName}`;
+      if (!boundKey) {
+        btn.style.borderColor = 'var(--zzz-red)';
+        btn.style.color = 'var(--zzz-red)';
+      }
       btn.addEventListener('click', () => this._startRebind(lane, btn));
       c.appendChild(btn);
     }
@@ -157,7 +213,11 @@ export default class Settings {
   _finishRebind(code) {
     if (!this._rebinding) return;
     const km = this.input ? this.input.getKeyMap() : {};
+    // 1. Remove the new key from ALL lanes it might be bound to
+    delete km[code];
+    // 2. Remove old keys bound to this lane
     for (const [k, v] of Object.entries(km)) { if (v === this._rebinding.lane) delete km[k]; }
+    // 3. Assign the new key
     km[code] = this._rebinding.lane;
     if (this.input) this.input.setKeyMap(4, km);
     this._rebinding = null; this._renderKeybinds();
@@ -167,5 +227,8 @@ export default class Settings {
   _getSavedVolume() { return parseInt(localStorage.getItem('rhythm-os-volume') || '70'); }
   _getSavedScrollSpeed() { return parseInt(localStorage.getItem('rhythm-os-scroll-speed') || '400'); }
 
-  destroy() { if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler); }
+  destroy() {
+    if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler);
+    if (this._settingsChangedHandler) EventBus.off('settings:changed', this._settingsChangedHandler);
+  }
 }
