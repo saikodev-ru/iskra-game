@@ -779,7 +779,7 @@ export default class ThreeScene {
     }
   }
 
-  setTVTexture(imageUrl, useSwipe = true) {
+  setTVTexture(imageUrl, useSwipe = false) {
     // TV disabled — use background image instead for song select
     this.setBackgroundImage(imageUrl, useSwipe);
   }
