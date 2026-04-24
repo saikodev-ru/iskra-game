@@ -967,14 +967,18 @@ export default class ThreeScene {
     if (this._videoActive && this._videoElement && this._videoMaterial) {
       // Sync video position to audio time
       if (this._audioEngineRef && this._audioEngineRef.isPlaying) {
-        const audioTime = this._audioEngineRef.currentTime;
+        // The audio buffer has 1s of silence prepended (lead-in), so
+        // audio.currentTime includes this offset. Video starts at its own t=0,
+        // so we subtract the lead-in to get the correct video position.
+        const LEAD_IN = 1.0;
+        const audioContentTime = Math.max(0, this._audioEngineRef.currentTime - LEAD_IN);
         const videoTime = this._videoElement.currentTime;
-        const drift = audioTime - videoTime;
+        const drift = audioContentTime - videoTime;
         const absDrift = Math.abs(drift);
 
         if (absDrift > 0.5) {
           // Large drift: hard seek to correct position
-          this._videoElement.currentTime = audioTime;
+          this._videoElement.currentTime = audioContentTime;
           this._videoElement.playbackRate = 1.0;
         } else if (absDrift > 0.05) {
           // Moderate drift: gradual correction via playback rate adjustment

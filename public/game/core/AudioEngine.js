@@ -11,6 +11,7 @@ export default class AudioEngine {
     this._pausedAt = 0;
     this._playing = false;
     this._currentBuffer = null;
+    this._leadInBuffer = null;  // buffer with silence prepended
     this._beatTimer = null;
     this._beatIndex = 0;
     this._bpm = 0;
@@ -43,6 +44,31 @@ export default class AudioEngine {
   async decodeBuffer(arrayBuffer) {
     this._ensureCtx();
     return this._ctx.decodeAudioData(arrayBuffer);
+  }
+
+  /**
+   * Create a new AudioBuffer with `leadInSeconds` of silence prepended.
+   * This allows the game clock to start at 0 and advance during the
+   * lead-in period while the player hears silence. Notes stay at their
+   * ORIGINAL times — no shift needed, no desync.
+   */
+  createLeadInBuffer(originalBuffer, leadInSeconds) {
+    this._ensureCtx();
+    const sampleRate = originalBuffer.sampleRate;
+    const channels = originalBuffer.numberOfChannels;
+    const leadInSamples = Math.round(leadInSeconds * sampleRate);
+    const totalSamples = leadInSamples + originalBuffer.length;
+
+    const newBuffer = this._ctx.createBuffer(channels, totalSamples, sampleRate);
+
+    for (let ch = 0; ch < channels; ch++) {
+      const srcData = originalBuffer.getChannelData(ch);
+      const dstData = newBuffer.getChannelData(ch);
+      // First `leadInSamples` samples are already 0 (silence)
+      dstData.set(srcData, leadInSamples);
+    }
+
+    return newBuffer;
   }
 
   play(buffer, startOffset = 0) {

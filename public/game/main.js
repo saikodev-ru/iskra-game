@@ -155,14 +155,21 @@ async function boot() {
 
     currentMapData = map;
 
-    // Shift all notes by LEAD_IN so the first second of audio has no notes
-    // This gives the player time to prepare without breaking hit detection
-    // (game time stays equal to audio.currentTime)
+    // Shift all notes by LEAD_IN so the first second has no notes (player prep time).
+    // CRITICAL: We also prepend LEAD_IN seconds of silence to the audio buffer so that
+    // audio content time aligns with note times. Without this, notes would be 1s late!
+    //   audio.currentTime = 6.0 → audio content at original t=5.0 (due to 1s silence prefix)
+    //   note shifted from t=5.0 to t=6.0 → at judgeLine when currentTime = 6.0 → SYNC ✓
     const shiftedMap = {
       ...map,
       notes: map.notes.map(n => ({ ...n, time: n.time + LEAD_IN })),
       bpmChanges: (map.bpmChanges || []).map(b => ({ ...b, time: b.time + LEAD_IN }))
     };
+
+    // Create audio buffer with silence prepended — this is what makes note shifting work
+    if (map.audioBuffer) {
+      shiftedMap.audioBuffer = audio.createLeadInBuffer(map.audioBuffer, LEAD_IN);
+    }
 
     currentBeatMap = new BeatMap(shiftedMap);
     currentJudgement = new JudgementSystem(currentBeatMap);
@@ -189,7 +196,7 @@ async function boot() {
 
     // Start the game immediately — the song-select transition already
     // provides the visual delay. Audio starts only in _actuallyStartGame.
-    _actuallyStartGame(map);
+    _actuallyStartGame(shiftedMap);
   };
 
   const _actuallyStartGame = (map) => {
@@ -246,9 +253,12 @@ async function boot() {
     gameActive = true;
 
     // Get audio duration for progress bar + end-of-map detection
+    // Use the shiftedMap's audioBuffer (with lead-in silence) so duration includes lead-in
     const audioDuration = map.audioBuffer ? map.audioBuffer.duration : 0;
 
     if (map.audioBuffer) {
+      // Play the LEAD-IN buffer (1s silence prepended) — this is critical for sync!
+      // Without it, notes shifted by +1s would arrive 1 second late relative to audio.
       audio.play(map.audioBuffer);
       const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
       audio.fadeTo(vol, 0.1);
