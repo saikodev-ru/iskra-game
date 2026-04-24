@@ -16,6 +16,9 @@ export default class ThreeScene {
     this._currentTexture = null;
     this._bgMaterial = null;
     this._tvSpinAnim = null;
+    this._particles = null;
+    this._aspectRatio = '16:9';
+    this._resScale = 1.0;
     this._init();
     this._setupListeners();
   }
@@ -28,20 +31,24 @@ export default class ThreeScene {
     this.renderer.toneMappingExposure = 1.0;
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x0A0A0A, 0.015);
 
-    // Wider FOV so the TV monitor is visible in the corner
-    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
     this.camera.position.set(0, 0, 5);
 
-    // Lighting — lime accent
-    const ambient = new THREE.AmbientLight(0x111111, 0.4);
+    // Lighting
+    const ambient = new THREE.AmbientLight(0x222222, 0.6);
     this.scene.add(ambient);
     this.pointLight = new THREE.PointLight(0xAAFF00, 1.5, 50);
     this.pointLight.position.set(0, 0, 4);
     this.scene.add(this.pointLight);
 
+    // Secondary accent light
+    this._accentLight = new THREE.PointLight(0x00E5FF, 0.4, 30);
+    this._accentLight.position.set(3, -2, 3);
+    this.scene.add(this._accentLight);
+
     this._createBackground();
+    this._createParticles();
 
     // Post-processing
     this.composer = new EffectComposer(this.renderer);
@@ -61,21 +68,20 @@ export default class ThreeScene {
       uniform float uTime;
       uniform float uBeatIntensity;
       varying vec2 vUv;
-      float grid(vec2 uv, float size) {
-        vec2 g = abs(fract(uv * size - 0.5) - 0.5) / fwidth(uv * size);
-        return 1.0 - min(min(g.x, g.y), 1.0);
-      }
       void main() {
         vec2 uv = vUv;
-        float g1 = grid(uv, 8.0);
-        float g2 = grid(uv + 0.03 * uTime, 16.0) * 0.2;
-        float pulse = uBeatIntensity * 0.4;
-        vec3 baseColor = vec3(0.04, 0.04, 0.04);
-        vec3 gridColor = vec3(0.3, 0.5, 0.0);
-        vec3 beatColor = vec3(0.67, 1.0, 0.0);
-        vec3 color = baseColor + gridColor * (g1 + g2) * 0.2 + beatColor * pulse;
+        float pulse = uBeatIntensity * 0.3;
+        // Deep dark background with subtle radial gradient
+        vec3 baseColor = vec3(0.03, 0.03, 0.05);
+        // Subtle vignette
         float vig = distance(vUv, vec2(0.5));
-        color *= smoothstep(0.8, 0.3, vig);
+        baseColor *= smoothstep(0.9, 0.3, vig);
+        // Beat pulse — lime glow from center
+        vec3 beatColor = vec3(0.4, 0.7, 0.0) * pulse * smoothstep(0.7, 0.0, vig);
+        // Subtle noise-like shimmer
+        float shimmer = fract(sin(dot(uv * 100.0 + uTime * 0.1, vec2(12.9898, 78.233))) * 43758.5453);
+        baseColor += vec3(0.01) * shimmer;
+        vec3 color = baseColor + beatColor;
         gl_FragColor = vec4(color, 1.0);
       }
     `;
@@ -83,9 +89,35 @@ export default class ThreeScene {
       uniforms: { uTime: { value: 0 }, uBeatIntensity: { value: 0 } },
       vertexShader, fragmentShader, side: THREE.DoubleSide
     });
-    const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(20, 15), this._bgMaterial);
-    bgMesh.position.z = -8;
+    const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(30, 20), this._bgMaterial);
+    bgMesh.position.z = -10;
     this.scene.add(bgMesh);
+  }
+
+  _createParticles() {
+    const count = 200;
+    const positions = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 20;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 14;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 10 - 3;
+      sizes[i] = Math.random() * 3 + 1;
+    }
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    const mat = new THREE.PointsMaterial({
+      color: 0xAAFF00,
+      size: 0.04,
+      transparent: true,
+      opacity: 0.3,
+      sizeAttenuation: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this._particles = new THREE.Points(geom, mat);
+    this.scene.add(this._particles);
   }
 
   _setupListeners() {
@@ -111,56 +143,41 @@ export default class ThreeScene {
     EventBus.on('beat:pulse', () => { this._beatIntensity = 1; });
   }
 
-  /**
-   * Create the 3D TV monitor in the bottom-left corner.
-   * With FOV 75 and camera at (0,0,5), at z=1 the visible area is:
-   *   Vertical:  ±4*tan(37.5°) = ±3.07
-   *   Horizontal: ±3.07*(16/9) = ±5.46
-   * Position (-4.0, -2.2, 1) is well within view.
-   */
+  /** Create the 3D TV monitor in the bottom-left corner */
   createTVMonitor() {
     if (this._tvGroup) return;
     this._tvGroup = new THREE.Group();
 
-    // TV frame — retro CRT style
     const frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7, metalness: 0.3 });
-
-    // Main body
-    const body = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.2, 0.3), frameMat);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.0, 0.25), frameMat);
     this._tvGroup.add(body);
 
-    // Screen bezel — slightly recessed
-    const bezelMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.9, metalness: 0.1 });
-    const bezel = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.95, 0.05), bezelMat);
-    bezel.position.z = 0.16;
+    const bezelMat = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.9, metalness: 0.1 });
+    const bezel = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.75, 0.04), bezelMat);
+    bezel.position.z = 0.14;
     this._tvGroup.add(bezel);
 
-    // Screen surface
     this._tvScreenMaterial = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide });
-    this._tvScreen = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 1.75), this._tvScreenMaterial);
-    this._tvScreen.position.z = 0.19;
+    this._tvScreen = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.55), this._tvScreenMaterial);
+    this._tvScreen.position.z = 0.17;
     this._tvGroup.add(this._tvScreen);
 
-    // Glow light in front of screen
-    const glowLight = new THREE.PointLight(0xAAFF00, 0.5, 4);
-    glowLight.position.set(0, 0, 0.6);
+    const glowLight = new THREE.PointLight(0xAAFF00, 0.4, 3);
+    glowLight.position.set(0, 0, 0.5);
     this._tvGroup.add(glowLight);
     this._tvGlowLight = glowLight;
 
-    // Small stand/base
     const standMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8, metalness: 0.2 });
-    const stand = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.15, 0.6), standMat);
-    stand.position.set(0, -1.2, 0.1);
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.12, 0.5), standMat);
+    stand.position.set(0, -1.1, 0.1);
     this._tvGroup.add(stand);
-
-    // Neck
-    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.2), standMat);
-    neck.position.set(0, -0.95, 0.05);
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.45, 0.15), standMat);
+    neck.position.set(0, -0.85, 0.05);
     this._tvGroup.add(neck);
 
-    // Position in bottom-left corner, angled as if sitting in front of it
-    this._tvGroup.position.set(-3.8, -2.0, 1.0);
-    this._tvGroup.rotation.y = 0.4;
+    // Position in bottom-left
+    this._tvGroup.position.set(-3.5, -1.8, 0.5);
+    this._tvGroup.rotation.y = 0.35;
     this._tvGroup.rotation.x = -0.05;
 
     this.scene.add(this._tvGroup);
@@ -183,13 +200,10 @@ export default class ThreeScene {
       this._tvScreenMaterial.map = texture;
       this._tvScreenMaterial.color.set(0xffffff);
       this._tvScreenMaterial.needsUpdate = true;
-      // Spin animation on texture change
       if (this._tvGroup) this._tvSpinAnim = { start: performance.now(), duration: 200, startRot: this._tvGroup.rotation.y };
-      // Brighten the glow light
       if (this._tvGlowLight) {
         this._tvGlowLight.intensity = 1.5;
-        this._tvGlowLight.color.set(0xAAFF00);
-        setTimeout(() => { if (this._tvGlowLight) this._tvGlowLight.intensity = 0.5; }, 300);
+        setTimeout(() => { if (this._tvGlowLight) this._tvGlowLight.intensity = 0.4; }, 300);
       }
     });
   }
@@ -202,9 +216,23 @@ export default class ThreeScene {
     this._tvScreenMaterial.needsUpdate = true;
   }
 
+  setAspectRatio(ar) { this._aspectRatio = ar; this.resize(); }
+  setResScale(scale) { this._resScale = scale; this.resize(); }
+
   resize() {
-    const w = window.innerWidth, h = window.innerHeight;
-    this.camera.aspect = w / h;
+    let w = window.innerWidth, h = window.innerHeight;
+    const ar = this._aspectRatio;
+    if (ar !== 'Fill') {
+      // Render at the aspect ratio, center the viewport
+      // Camera aspect matches the target area
+      const parts = ar.split(':');
+      const arW = parseInt(parts[0]) || 16;
+      const arH = parseInt(parts[1]) || 9;
+      const targetAR = arW / arH;
+      this.camera.aspect = targetAR;
+    } else {
+      this.camera.aspect = w / h;
+    }
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
@@ -216,15 +244,26 @@ export default class ThreeScene {
       this._bgMaterial.uniforms.uBeatIntensity.value = this._beatIntensity;
       this._beatIntensity *= 0.9;
     }
+
+    // Particle drift
+    if (this._particles) {
+      const pos = this._particles.geometry.attributes.position.array;
+      for (let i = 0; i < pos.length; i += 3) {
+        pos[i + 1] += Math.sin(time * 0.0003 + i) * 0.002;
+        pos[i] += Math.cos(time * 0.0002 + i * 0.5) * 0.001;
+      }
+      this._particles.geometry.attributes.position.needsUpdate = true;
+      this._particles.material.opacity = 0.15 + this._beatIntensity * 0.2;
+    }
+
     this.bloomPass.strength += (this._bloomTarget - this.bloomPass.strength) * 0.15;
     if (this._shakeFrames.length > 0) this.camera.position.x = this._shakeFrames.shift();
     else this.camera.position.x *= 0.8;
 
-    // Subtle idle sway for TV
+    // TV idle sway
     if (this._tvGroup && !this._tvSpinAnim) {
-      this._tvGroup.rotation.y = 0.4 + Math.sin(time * 0.001 * 0.3 * Math.PI) * 0.03;
+      this._tvGroup.rotation.y = 0.35 + Math.sin(time * 0.001 * 0.3 * Math.PI) * 0.03;
     }
-    // Spin animation on texture change
     if (this._tvSpinAnim) {
       const elapsed = performance.now() - this._tvSpinAnim.start;
       const progress = Math.min(1, elapsed / this._tvSpinAnim.duration);

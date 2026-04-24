@@ -42,12 +42,13 @@ body.zzz-active::before {
 
 /* PANEL - graphite with lime corner accents */
 .zzz-panel {
-  background: var(--zzz-panel);
+  background: rgba(26,26,26,0.85);
   border: 2px solid var(--zzz-graphite);
   border-radius: 16px;
   position: relative;
   overflow: hidden;
   transition: border-color 0.2s, box-shadow 0.2s;
+  backdrop-filter: blur(12px);
 }
 .zzz-panel:hover {
   border-color: var(--zzz-graphite-2);
@@ -83,7 +84,7 @@ body.zzz-active::before {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 12px 32px;
-  background: var(--zzz-panel);
+  background: rgba(26,26,26,0.85);
   border: 3px solid var(--zzz-graphite);
   border-radius: 9999px;
   color: var(--zzz-text);
@@ -93,6 +94,7 @@ body.zzz-active::before {
   font-size: 14px;
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(8px);
 }
 .zzz-btn::after {
   content: '';
@@ -339,12 +341,13 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   gap: 0;
   border-radius: 12px;
   overflow: hidden;
-  background: var(--zzz-panel);
+  background: rgba(26,26,26,0.85);
   border: 2px solid var(--zzz-graphite);
   cursor: pointer;
   transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   min-height: 72px;
+  backdrop-filter: blur(8px);
 }
 .song-card:hover {
   border-color: var(--zzz-graphite-2);
@@ -435,6 +438,37 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   color: var(--zzz-bg);
 }
 
+/* SONG CARD DELETE BUTTON */
+.song-card-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,61,61,0.15);
+  color: var(--zzz-red);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s ease;
+  z-index: 2;
+  padding: 0;
+  line-height: 1;
+}
+.song-card:hover .song-card-delete {
+  opacity: 0.6;
+}
+.song-card-delete:hover {
+  opacity: 1 !important;
+  background: rgba(255,61,61,0.3);
+  transform: scale(1.1);
+}
+
 /* SONG CARD WRAPPER — container for card + dropdown */
 .song-card-wrapper {
   display: flex;
@@ -489,7 +523,7 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 
 /* SEARCH INPUT */
 .zzz-search {
-  background: var(--zzz-panel);
+  background: rgba(26,26,26,0.85);
   border: 2px solid var(--zzz-graphite);
   border-radius: 9999px;
   padding: 10px 20px;
@@ -499,6 +533,7 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   color: var(--zzz-text);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
+  backdrop-filter: blur(8px);
 }
 .zzz-search:focus {
   border-color: var(--zzz-lime);

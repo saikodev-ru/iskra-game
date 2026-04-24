@@ -1,12 +1,12 @@
 export default class ResultScreen {
   constructor({ screens }) { this.screens = screens; this._stats = null; this._lastMap = null; this._keyHandler = null; }
-  
+
   build() {
     const s = this._stats || { score: 0, accuracy: 100, maxCombo: 0, rank: 'D', hitCounts: { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 } };
     const rc = { SS: '#AAFF00', S: '#AAFF00', A: '#00E5FF', B: '#F5C518', C: '#FF8C00', D: '#FF3D3D' };
     const c = rc[s.rank] || '#FF3D3D';
     return `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:28px;background:rgba(17,17,17,0.85);">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:28px;background:transparent;">
         <div style="font-family:var(--zzz-font);font-weight:900;font-size:120px;color:${c};text-shadow:0 0 50px ${c};letter-spacing:0.1em;line-height:1;">${s.rank}</div>
         <div class="zzz-panel" style="padding:24px;width:480px;text-align:center;">
           <div class="zzz-label" style="margin-bottom:6px;">SCORE</div>

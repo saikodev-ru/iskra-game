@@ -6,24 +6,16 @@ export default class MainMenu {
 
   build() {
     return `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:48px;background:rgba(17,17,17,0.85);">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:48px;background:transparent;">
         <div style="text-align:center;">
-          <h1 class="zzz-title" style="font-size:72px;color:var(--zzz-lime);letter-spacing:0.25em;margin:0;text-shadow:0 0 40px rgba(170,255,0,0.4),0 0 80px rgba(170,255,0,0.2);">
-            RHYTHM::OS
-          </h1>
+          <h1 class="zzz-title" style="font-size:72px;color:var(--zzz-lime);letter-spacing:0.25em;margin:0;text-shadow:0 0 40px rgba(170,255,0,0.4),0 0 80px rgba(170,255,0,0.2);">RHYTHM::OS</h1>
           <div class="zzz-label" style="margin-top:12px;letter-spacing:0.4em;font-size:13px;">PRESS START</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:16px;align-items:center;">
-          <button class="zzz-btn zzz-btn--primary" data-action="play" style="min-width:260px;font-size:16px;">
-            ▶ PLAY
-          </button>
-          <button class="zzz-btn" data-action="settings" style="min-width:260px;">
-            SETTINGS
-          </button>
+          <button class="zzz-btn zzz-btn--primary" data-action="play" style="min-width:260px;font-size:16px;">▶ PLAY</button>
+          <button class="zzz-btn" data-action="settings" style="min-width:260px;">SETTINGS</button>
         </div>
-        <div class="zzz-label" style="position:absolute;bottom:28px;">
-          v0.3.0 — PERSPECTIVE EDITION
-        </div>
+        <div class="zzz-label" style="position:absolute;bottom:28px;">v0.4.0 — NEON EDITION</div>
       </div>
     `;
   }

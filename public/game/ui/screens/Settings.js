@@ -12,7 +12,7 @@ export default class Settings {
     const savedResScale = localStorage.getItem('rhythm-os-res-scale') || '100';
 
     return `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:28px;background:rgba(17,17,17,0.85);">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:28px;background:transparent;">
         <h2 class="zzz-title" style="font-size:40px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
         <div class="zzz-panel" style="padding:28px;width:480px;">
           <div style="margin-bottom:24px;">
@@ -49,7 +49,7 @@ export default class Settings {
               <span id="settings-res-scale-val" class="zzz-value" style="min-width:50px;text-align:center;">${savedResScale}%</span>
             </div>
           </div>
-          <div style="margin-bottom:24px;">
+          <div>
             <div class="zzz-label" style="margin-bottom:10px;">KEY BINDINGS (4-KEY)</div>
             <div id="keybinds" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
           </div>
@@ -66,17 +66,14 @@ export default class Settings {
     vi.addEventListener('input', () => { const v = parseInt(vi.value); vv.textContent = v + '%'; localStorage.setItem('rhythm-os-volume', v.toString()); if (this.audio) this.audio.setVolume(v / 100); });
     const si = document.getElementById('settings-scroll'), sv = document.getElementById('settings-scroll-val');
     si.addEventListener('input', () => { const v = parseInt(si.value); sv.textContent = v; localStorage.setItem('rhythm-os-scroll-speed', v.toString()); EventBus.emit('settings:changed', { key: 'scrollSpeed', value: v }); });
-    
-    // Resolution scale
+
     const ri = document.getElementById('settings-res-scale'), rv = document.getElementById('settings-res-scale-val');
     ri.addEventListener('input', () => { const v = parseInt(ri.value); rv.textContent = v + '%'; localStorage.setItem('rhythm-os-res-scale', v.toString()); EventBus.emit('settings:changed', { key: 'resScale', value: v }); });
 
-    // Aspect ratio buttons
     document.querySelectorAll('[data-aspect]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const ar = e.currentTarget.dataset.aspect;
         localStorage.setItem('rhythm-os-aspect-ratio', ar);
-        // Update button states
         document.querySelectorAll('[data-aspect]').forEach(b => b.classList.remove('zzz-btn--primary'));
         e.currentTarget.classList.add('zzz-btn--primary');
         EventBus.emit('settings:changed', { key: 'aspectRatio', value: ar });

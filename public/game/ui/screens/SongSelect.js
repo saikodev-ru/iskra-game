@@ -17,38 +17,30 @@ export default class SongSelect {
     this._previewFadeTimeout = null;
     this._filterText = '';
     this._filteredIndices = [];
-    this._expandedCard = -1; // Which song card has its difficulties expanded
+    this._expandedCard = -1;
   }
 
   build() {
     return `
-      <div style="width:100%;height:100%;position:relative;">
-        <!-- Blurred background — semi-transparent so 3D TV shows through in bottom-left -->
-        <div id="ss-bg" style="position:absolute;inset:0;background-size:cover;background-position:center;filter:blur(40px) brightness(0.25);transform:scale(1.1);background-color:#111;opacity:0.85;"></div>
-        <!-- Dark overlay — transparent in bottom-left for 3D TV visibility -->
-        <div style="position:absolute;inset:0;background:linear-gradient(135deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.1) 85%, rgba(0,0,0,0) 100%);"></div>
-
-        <!-- Top-left song info overlay -->
-        <div id="ss-song-info" style="position:absolute;top:24px;left:24px;z-index:2;max-width:45%;pointer-events:none;">
-          <!-- Populated by JS -->
-        </div>
-
-        <!-- Top bar with back button + search -->
-        <div style="position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:3;display:flex;align-items:center;gap:12px;">
+      <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;">
+        <!-- Top bar -->
+        <div style="display:flex;align-items:center;gap:12px;padding:16px 24px;flex-shrink:0;">
           <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
-          <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." style="width:280px;" />
+          <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." style="flex:1;max-width:320px;" />
         </div>
 
-        <!-- Import button (top right) -->
-        <div style="position:absolute;top:16px;right:24px;z-index:3;">
-          <label class="zzz-btn zzz-btn--primary zzz-btn--sm" style="cursor:pointer;display:inline-block;" for="osz-input">IMPORT .OSZ</label>
-          <input type="file" id="osz-input" accept=".osz" style="display:none;" multiple />
-        </div>
+        <!-- Song info (top-left) -->
+        <div id="ss-song-info" style="position:absolute;top:64px;left:24px;z-index:2;max-width:40%;pointer-events:none;"></div>
 
-        <!-- Song list — centered, full height -->
-        <div style="position:relative;z-index:1;display:flex;justify-content:center;height:100%;padding:72px 24px 24px 24px;box-sizing:border-box;">
-          <div style="width:100%;max-width:680px;display:flex;flex-direction:column;gap:10px;">
-            <div id="song-list" class="zzz-scroll" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;"></div>
+        <!-- Song list -->
+        <div style="flex:1;display:flex;justify-content:center;overflow:hidden;padding:0 24px;">
+          <div style="width:100%;max-width:640px;display:flex;flex-direction:column;gap:6px;min-height:0;">
+            <div id="song-list" class="zzz-scroll" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px;"></div>
+            <!-- Import button at bottom of list -->
+            <div style="flex-shrink:0;padding:8px 0;text-align:center;">
+              <label class="zzz-btn zzz-btn--primary zzz-btn--sm" style="cursor:pointer;display:inline-block;" for="osz-input">IMPORT .OSZ</label>
+              <input type="file" id="osz-input" accept=".osz" style="display:none;" multiple />
+            </div>
           </div>
         </div>
       </div>
@@ -56,7 +48,6 @@ export default class SongSelect {
   }
 
   async init() {
-    // Load stored beatmaps from IndexedDB
     try {
       const stored = await this.oszLoader.loadFromStore();
       this.beatmapSets = Array.isArray(stored) ? stored : [];
@@ -79,32 +70,18 @@ export default class SongSelect {
 
     this._keyHandler = (e) => {
       if (e.target.tagName === 'INPUT') return;
-      if (e.code === 'ArrowUp') {
-        e.preventDefault();
-        this._navigateUp();
-      } else if (e.code === 'ArrowDown') {
-        e.preventDefault();
-        this._navigateDown();
-      } else if (e.code === 'ArrowLeft') {
-        e.preventDefault();
-        this._navigateDiffLeft();
-      } else if (e.code === 'ArrowRight') {
-        e.preventDefault();
-        this._navigateDiffRight();
-      } else if (e.code === 'Enter') {
-        e.preventDefault();
-        this._confirmSong();
-      } else if (e.code === 'Escape') {
-        e.preventDefault();
-        this.screens.show('main-menu');
-      }
+      if (e.code === 'ArrowUp') { e.preventDefault(); this._navigateUp(); }
+      else if (e.code === 'ArrowDown') { e.preventDefault(); this._navigateDown(); }
+      else if (e.code === 'ArrowLeft') { e.preventDefault(); this._navigateDiffLeft(); }
+      else if (e.code === 'ArrowRight') { e.preventDefault(); this._navigateDiffRight(); }
+      else if (e.code === 'Enter') { e.preventDefault(); this._confirmSong(); }
+      else if (e.code === 'Escape') { e.preventDefault(); this.screens.show('main-menu'); }
+      else if (e.code === 'Delete') { e.preventDefault(); this._deleteSelected(); }
     };
     window.addEventListener('keydown', this._keyHandler);
 
     if (this.three) this.three.createTVMonitor();
   }
-
-  // ─── Filtering ────────────────────────────────────────────────────
 
   _buildFilteredIndices() {
     const lf = this._filterText.toLowerCase();
@@ -126,36 +103,21 @@ export default class SongSelect {
     }
   }
 
-  // ─── Navigation ───────────────────────────────────────────────────
-
   _navigateUp() {
     const pos = this._filteredIndices.indexOf(this.selectedIndex);
-    if (pos > 0) {
-      this._selectSong(this._filteredIndices[pos - 1]);
-    }
+    if (pos > 0) this._selectSong(this._filteredIndices[pos - 1]);
   }
-
   _navigateDown() {
     const pos = this._filteredIndices.indexOf(this.selectedIndex);
-    if (pos < this._filteredIndices.length - 1) {
-      this._selectSong(this._filteredIndices[pos + 1]);
-    }
+    if (pos < this._filteredIndices.length - 1) this._selectSong(this._filteredIndices[pos + 1]);
   }
-
   _navigateDiffLeft() {
-    if (this.selectedDiffIndex > 0) {
-      this._selectDifficulty(this.selectedDiffIndex - 1);
-    }
+    if (this.selectedDiffIndex > 0) this._selectDifficulty(this.selectedDiffIndex - 1);
   }
-
   _navigateDiffRight() {
     const set = this.beatmapSets[this.selectedIndex];
-    if (set && this.selectedDiffIndex < set.difficulties.length - 1) {
-      this._selectDifficulty(this.selectedDiffIndex + 1);
-    }
+    if (set && this.selectedDiffIndex < set.difficulties.length - 1) this._selectDifficulty(this.selectedDiffIndex + 1);
   }
-
-  // ─── Song List Rendering ──────────────────────────────────────────
 
   _renderSongList() {
     const list = document.getElementById('song-list');
@@ -166,7 +128,6 @@ export default class SongSelect {
       list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--zzz-muted);font-family:var(--zzz-font);font-size:14px;">NO MATCHES FOUND</div>`;
       return;
     }
-
     if (this._filteredIndices.length === 0 && this.beatmapSets.length === 0) {
       this._renderEmptyState();
       return;
@@ -189,7 +150,6 @@ export default class SongSelect {
     const card = document.createElement('div');
     card.className = 'song-card' + (isSelected ? ' active' : '');
 
-    // Determine display difficulty
     const dispDiff = isSelected && set.difficulties[this.selectedDiffIndex]
       ? set.difficulties[this.selectedDiffIndex]
       : set.difficulties[0] || { difficulty: { stars: 0 } };
@@ -205,13 +165,14 @@ export default class SongSelect {
         <div class="song-card-diff-row">
           <span class="song-card-stars" style="color:${starColor};">★ ${stars.toFixed(1)}</span>
           <span class="song-card-diff-name" style="color:${starColor};">${diffName}</span>
-          ${set.difficulties.length > 1 ? `<span class="song-card-diff-count">${isExpanded ? '▲' : '▼'} ${set.difficulties.length} diffs</span>` : ''}
+          ${set.difficulties.length > 1 ? `<span class="song-card-diff-count">${isExpanded ? '▲' : '▼'} ${set.difficulties.length}</span>` : ''}
         </div>
       </div>
+      <button class="song-card-delete" data-delete="${setIndex}" title="Delete">✕</button>
     `;
 
     card.addEventListener('click', (e) => {
-      // If clicking on the diff count badge, toggle expansion
+      if (e.target.classList.contains('song-card-delete') || e.target.closest('.song-card-delete')) return;
       if (e.target.classList.contains('song-card-diff-count') && set.difficulties.length > 1) {
         e.stopPropagation();
         this._toggleExpand(setIndex);
@@ -226,45 +187,41 @@ export default class SongSelect {
       this._lastSelectTime = now;
     });
 
+    // Delete button
+    const deleteBtn = card.querySelector('.song-card-delete');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._deleteMap(setIndex);
+      });
+    }
+
     wrapper.appendChild(card);
 
-    // Difficulty dropdown (osu!lazer style — expands below the card)
+    // Difficulty dropdown (simplified: stars + name only)
     if (isExpanded && set.difficulties.length > 1) {
       const diffList = document.createElement('div');
       diffList.className = 'diff-dropdown';
-      diffList.style.cssText = `
-        display:flex;flex-direction:column;gap:2px;
-        padding:4px 8px 8px 8px;
-        margin-left:80px;
-        border-left:2px solid var(--zzz-graphite);
-      `;
+      diffList.style.cssText = `display:flex;flex-direction:column;gap:2px;padding:4px 8px 8px 80px;border-left:2px solid var(--zzz-graphite);`;
+
       set.difficulties.forEach((diff, diffIdx) => {
         const s = diff.difficulty?.stars || 0;
         const c = DifficultyAnalyzer.getStarColor(s);
         const n = DifficultyAnalyzer.getDiffName(s);
         const isActive = isSelected && diffIdx === this.selectedDiffIndex;
+
         const diffRow = document.createElement('div');
         diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
         diffRow.style.cssText = `
           display:flex;align-items:center;gap:10px;
-          padding:8px 12px;border-radius:8px;cursor:pointer;
+          padding:7px 12px;border-radius:8px;cursor:pointer;
           transition:all 0.12s ease;
-          background:${isActive ? 'rgba(170,255,0,0.08)' : 'var(--zzz-panel)'};
+          background:${isActive ? 'rgba(170,255,0,0.08)' : 'rgba(26,26,26,0.8)'};
           border:2px solid ${isActive ? c : 'var(--zzz-graphite)'};
         `;
-        const bpm = diff.metadata?.bpm || 0;
-        const duration = diff.metadata?.duration || 0;
-        const durationSec = Math.floor(duration / 1000);
-        const durationStr = `${Math.floor(durationSec / 60)}:${(durationSec % 60).toString().padStart(2, '0')}`;
-        const pattern = diff.difficulty?.pattern || '—';
-        const density = diff.difficulty?.density || 0;
-
         diffRow.innerHTML = `
-          <span style="color:${c};font-family:var(--zzz-font);font-weight:900;font-size:14px;min-width:52px;">★ ${s.toFixed(1)}</span>
-          <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:0.04em;min-width:90px;">${this._escHtml(diff.version || n)}</span>
-          <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;min-width:50px;">${bpm} BPM</span>
-          <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;min-width:40px;">${durationStr}</span>
-          <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:11px;">${pattern} · ${density.toFixed(1)} NPS</span>
+          <span style="color:${c};font-family:var(--zzz-font);font-weight:900;font-size:13px;min-width:48px;">★ ${s.toFixed(1)}</span>
+          <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;">${this._escHtml(diff.version || n)}</span>
         `;
 
         diffRow.addEventListener('click', (e) => {
@@ -272,18 +229,11 @@ export default class SongSelect {
           this._selectSong(setIndex);
           this._selectDifficulty(diffIdx);
         });
-
         diffRow.addEventListener('mouseenter', () => {
-          if (!isActive) {
-            diffRow.style.background = 'rgba(170,255,0,0.04)';
-            diffRow.style.borderColor = 'var(--zzz-graphite-2)';
-          }
+          if (!isActive) { diffRow.style.background = 'rgba(170,255,0,0.04)'; diffRow.style.borderColor = 'var(--zzz-graphite-2)'; }
         });
         diffRow.addEventListener('mouseleave', () => {
-          if (!isActive) {
-            diffRow.style.background = 'var(--zzz-panel)';
-            diffRow.style.borderColor = 'var(--zzz-graphite)';
-          }
+          if (!isActive) { diffRow.style.background = 'rgba(26,26,26,0.8)'; diffRow.style.borderColor = 'var(--zzz-graphite)'; }
         });
 
         diffList.appendChild(diffRow);
@@ -295,12 +245,7 @@ export default class SongSelect {
   }
 
   _toggleExpand(setIndex) {
-    if (this._expandedCard === setIndex) {
-      this._expandedCard = -1;
-    } else {
-      this._expandedCard = setIndex;
-    }
-    // Re-render the list to update expansion state
+    this._expandedCard = this._expandedCard === setIndex ? -1 : setIndex;
     this._renderSongList();
   }
 
@@ -310,45 +255,66 @@ export default class SongSelect {
     return div.innerHTML;
   }
 
+  // ─── Delete ──────────────────────────────────────────────────────
+
+  async _deleteMap(setIndex) {
+    const set = this.beatmapSets[setIndex];
+    if (!set) return;
+    try {
+      const { BeatmapStore } = await import('../../game/OszLoader.js');
+      await BeatmapStore.delete(set.id);
+    } catch (err) {
+      console.warn('Failed to delete from IndexedDB:', err);
+    }
+    this.beatmapSets.splice(setIndex, 1);
+    if (this.selectedIndex === setIndex) {
+      this.selectedIndex = -1;
+      this.selectedDiffIndex = 0;
+      this._expandedCard = -1;
+    } else if (this.selectedIndex > setIndex) {
+      this.selectedIndex--;
+    }
+    this._buildFilteredIndices();
+    this._renderSongList();
+    if (this.beatmapSets.length > 0 && this.selectedIndex >= 0) {
+      this._selectSong(Math.min(this.selectedIndex, this.beatmapSets.length - 1));
+    } else if (this.beatmapSets.length > 0) {
+      this._selectSong(0);
+    } else {
+      this._renderEmptyState();
+      const info = document.getElementById('ss-song-info');
+      if (info) info.innerHTML = '';
+    }
+  }
+
+  _deleteSelected() {
+    if (this.selectedIndex >= 0 && this.selectedIndex < this.beatmapSets.length) {
+      this._deleteMap(this.selectedIndex);
+    }
+  }
+
   // ─── Song Selection ───────────────────────────────────────────────
 
   _selectSong(setIndex) {
     if (setIndex < 0 || setIndex >= this.beatmapSets.length) return;
     this.selectedIndex = setIndex;
     this.selectedDiffIndex = 0;
-
-    // Auto-expand the selected card
     this._expandedCard = setIndex;
-
     const set = this.beatmapSets[setIndex];
 
-    // Update card highlights
     this._renderSongList();
 
-    // Scroll selected card into view
     const activeCard = document.querySelector(`.song-card-wrapper[data-index="${setIndex}"]`);
-    if (activeCard) {
-      activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    if (activeCard) activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-    // Update background
-    this._updateBackground(set.backgroundUrl);
-
-    // Update TV monitor
+    // Update TV
     if (this.three) {
-      if (set.backgroundUrl) {
-        this.three.setTVTexture(set.backgroundUrl);
-      } else {
-        this.three.setTVStatic();
-      }
+      if (set.backgroundUrl) this.three.setTVTexture(set.backgroundUrl);
+      else this.three.setTVStatic();
     }
 
-    // Update top-left song info
     this._renderSongInfo(set);
-
-    // Play preview
     this._playPreview(set);
-
     EventBus.emit('song:select', { map: set });
   }
 
@@ -357,10 +323,10 @@ export default class SongSelect {
     if (!set || diffIndex < 0 || diffIndex >= set.difficulties.length) return;
     this.selectedDiffIndex = diffIndex;
     this._renderSongInfo(set);
-    this._renderSongList(); // Re-render to update active difficulty in dropdown
+    this._renderSongList();
   }
 
-  // ─── Song Info (top-left overlay) ─────────────────────────────
+  // ─── Song Info (top-left) ────────────────────────────────────
 
   _renderSongInfo(set) {
     const info = document.getElementById('ss-song-info');
@@ -376,35 +342,23 @@ export default class SongSelect {
     const duration = diff.metadata?.duration || 0;
     const durationSec = Math.floor(duration / 1000);
     const durationStr = `${Math.floor(durationSec / 60)}:${(durationSec % 60).toString().padStart(2, '0')}`;
-    const pattern = diff.difficulty?.pattern || '—';
-    const density = diff.difficulty?.density || 0;
-    const stamina = diff.difficulty?.stamina || 0;
 
     info.innerHTML = `
-      <div style="font-family:var(--zzz-font);font-weight:900;font-size:28px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.1;word-break:break-word;text-shadow:0 2px 16px rgba(0,0,0,0.8);">${this._escHtml(set.title)}</div>
-      <div style="font-family:var(--zzz-font);font-weight:500;font-size:15px;color:var(--zzz-muted);margin-top:4px;text-shadow:0 1px 8px rgba(0,0,0,0.8);">${this._escHtml(set.artist)}${set.creator ? ' // ' + this._escHtml(set.creator) : ''}</div>
-      <div style="display:flex;gap:20px;margin-top:10px;flex-wrap:wrap;align-items:baseline;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span style="color:${starColor};font-family:var(--zzz-font);font-weight:900;font-size:20px;text-shadow:0 0 12px ${starColor}40;">★ ${stars.toFixed(1)}</span>
-          <span style="color:${starColor};font-family:var(--zzz-font);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:0.06em;">${diffName}</span>
-          <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">· ${this._escHtml(diff.version || '')}</span>
-        </div>
-        <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:13px;"><span style="color:var(--zzz-text);font-weight:700;">${bpm}</span> BPM</span>
-        <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:13px;"><span style="color:var(--zzz-text);font-weight:700;">${durationStr}</span></span>
-        <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${pattern} · ${density.toFixed(1)} NPS · ${stamina}%</span>
+      <div style="font-family:var(--zzz-font);font-weight:900;font-size:26px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.1;word-break:break-word;text-shadow:0 2px 16px rgba(0,0,0,0.9);">${this._escHtml(set.title)}</div>
+      <div style="font-family:var(--zzz-font);font-weight:500;font-size:14px;color:var(--zzz-muted);margin-top:3px;text-shadow:0 1px 8px rgba(0,0,0,0.9);">${this._escHtml(set.artist)}</div>
+      <div style="display:flex;gap:16px;margin-top:8px;align-items:baseline;flex-wrap:wrap;">
+        <span style="color:${starColor};font-family:var(--zzz-font);font-weight:900;font-size:18px;text-shadow:0 0 12px ${starColor}40;">★ ${stars.toFixed(1)}</span>
+        <span style="color:${starColor};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;">${diffName}</span>
+        <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${bpm} BPM · ${durationStr}</span>
       </div>
-      <button id="song-play-btn" class="zzz-btn zzz-btn--primary zzz-btn--sm" style="margin-top:12px;pointer-events:auto;">▶ PLAY</button>
+      <button id="song-play-btn" class="zzz-btn zzz-btn--primary zzz-btn--sm" style="margin-top:10px;pointer-events:auto;">▶ PLAY</button>
     `;
-
-    // Rebind play button
     document.getElementById('song-play-btn')?.addEventListener('click', () => this._confirmSong());
   }
 
   _renderEmptyState() {
     const info = document.getElementById('ss-song-info');
-    if (info) {
-      info.innerHTML = '';
-    }
+    if (info) info.innerHTML = '';
 
     const list = document.getElementById('song-list');
     if (!list) return;
@@ -418,50 +372,27 @@ export default class SongSelect {
     `;
   }
 
-  // ─── Background ───────────────────────────────────────────────────
-
-  _updateBackground(url) {
-    const bg = document.getElementById('ss-bg');
-    if (!bg) return;
-    if (url) {
-      bg.style.backgroundImage = `url('${url}')`;
-    } else {
-      bg.style.backgroundImage = 'none';
-      bg.style.backgroundColor = '#111';
-    }
-  }
-
   // ─── Audio Preview ────────────────────────────────────────────────
 
   _playPreview(set) {
     this._stopPreview();
-
     if (!set.audioBuffer) return;
 
     const previewTime = set.difficulties[this.selectedDiffIndex]?.metadata?.previewTime || 0;
-
     this.audio._ensureCtx();
     this.audio.fadeTo(0, 0.2);
     this._previewFadeTimeout = setTimeout(() => {
       if (set !== this.beatmapSets[this.selectedIndex]) return;
       this.audio.play(set.audioBuffer, Math.max(0, previewTime));
-      this.audio.fadeTo(0.5, 0.4);
+      this.audio.fadeTo(0.4, 0.4);
     }, 250);
   }
 
   _stopPreview() {
-    if (this._previewFadeTimeout) {
-      clearTimeout(this._previewFadeTimeout);
-      this._previewFadeTimeout = null;
-    }
-    if (this._previewInterval) {
-      clearInterval(this._previewInterval);
-      this._previewInterval = null;
-    }
+    if (this._previewFadeTimeout) { clearTimeout(this._previewFadeTimeout); this._previewFadeTimeout = null; }
+    if (this._previewInterval) { clearInterval(this._previewInterval); this._previewInterval = null; }
     this.audio.fadeTo(0, 0.15);
-    setTimeout(() => {
-      this.audio.stop();
-    }, 200);
+    setTimeout(() => { this.audio.stop(); }, 200);
   }
 
   // ─── Confirm / Play ───────────────────────────────────────────────
@@ -469,21 +400,13 @@ export default class SongSelect {
   _confirmSong() {
     const set = this.beatmapSets[this.selectedIndex];
     if (!set) return;
-
     const diff = set.difficulties[this.selectedDiffIndex];
     if (!diff) return;
 
     this._stopPreview();
 
     const map = {
-      metadata: {
-        ...(set.metadata || {}),
-        ...diff.metadata,
-        title: set.title,
-        artist: set.artist,
-        version: diff.version,
-        creator: set.creator
-      },
+      metadata: { ...(set.metadata || {}), ...diff.metadata, title: set.title, artist: set.artist, version: diff.version, creator: set.creator },
       audioBuffer: set.audioBuffer,
       backgroundUrl: set.backgroundUrl,
       notes: diff.notes,
@@ -499,33 +422,21 @@ export default class SongSelect {
 
   async _handleOszFiles(files) {
     if (!files || files.length === 0) return;
-
     for (const file of files) {
-      try {
-        const beatmapSet = await this.oszLoader.load(file);
-        this.beatmapSets.push(beatmapSet);
-      } catch (err) {
-        console.error('Failed to load .osz:', err);
-      }
+      try { this.beatmapSets.push(await this.oszLoader.load(file)); }
+      catch (err) { console.error('Failed to load .osz:', err); }
     }
-
     const oszInput = document.getElementById('osz-input');
     if (oszInput) oszInput.value = '';
-
     this._buildFilteredIndices();
     this._renderSongList();
-    if (this.beatmapSets.length > 0) {
-      this._selectSong(this.beatmapSets.length - 1);
-    }
+    if (this.beatmapSets.length > 0) this._selectSong(this.beatmapSets.length - 1);
   }
 
   // ─── Destroy ──────────────────────────────────────────────────────
 
   destroy() {
-    if (this._keyHandler) {
-      window.removeEventListener('keydown', this._keyHandler);
-      this._keyHandler = null;
-    }
+    if (this._keyHandler) { window.removeEventListener('keydown', this._keyHandler); this._keyHandler = null; }
     this._stopPreview();
     if (this.three) this.three.removeTVMonitor();
   }
