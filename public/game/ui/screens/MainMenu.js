@@ -30,13 +30,13 @@ export default class MainMenu {
             <!-- Glitch title -->
             <div style="position:relative;display:inline-block;">
               <h1 id="mm-title" class="mm-title" style="font-family:var(--zzz-font);font-weight:900;font-size:clamp(42px,9vw,80px);letter-spacing:0.2em;line-height:1;margin:0;position:relative;">
-                <span style="color:var(--zzz-lime);text-shadow:0 0 60px rgba(170,255,0,0.35),0 0 120px rgba(170,255,0,0.15);">RHYTHM</span><span style="color:rgba(255,255,255,0.9);">::</span><span style="color:var(--zzz-text);text-shadow:0 0 40px rgba(240,240,240,0.2);">OS</span>
+                <span style="color:var(--zzz-lime);text-shadow:0 0 60px rgba(170,255,0,0.35),0 0 120px rgba(170,255,0,0.15);">RHYMIX</span>
               </h1>
               <!-- Glitch overlay layer -->
               <div id="mm-glitch-layer" style="position:absolute;inset:0;pointer-events:none;overflow:hidden;" aria-hidden="true"></div>
             </div>
             <!-- Subtitle -->
-            <div id="mm-subtitle" style="margin-top:12px;font-family:var(--zzz-font);font-weight:500;font-size:12px;color:var(--zzz-muted);letter-spacing:0.6em;text-transform:uppercase;opacity:0;animation:mm-fade-up 0.6s 0.3s ease-out forwards;">Neural Rhythm Interface</div>
+            <div id="mm-subtitle" style="margin-top:12px;font-family:var(--zzz-font);font-weight:500;font-size:12px;color:var(--zzz-muted);letter-spacing:0.6em;text-transform:uppercase;opacity:0;animation:mm-fade-up 0.6s 0.3s ease-out forwards;">БЕСПЛАТНАЯ WEB РИТМ-ИГРА</div>
             <!-- Animated underline -->
             <div style="margin:16px auto 0;width:0;height:2px;background:linear-gradient(90deg,transparent,var(--zzz-lime),transparent);animation:mm-line-expand 0.8s 0.5s ease-out forwards;border-radius:1px;box-shadow:0 0 12px rgba(170,255,0,0.3);"></div>
           </div>
@@ -219,10 +219,10 @@ export default class MainMenu {
 
       layer.innerHTML = `
         <div style="position:absolute;inset:0;transform:translate(${offset()}px, ${offset()}px);clip-path:inset(${Math.random()*30}% 0 ${Math.random()*30}% 0);color:var(--zzz-lime);opacity:${intensity};font-family:var(--zzz-font);font-weight:900;font-size:clamp(42px,9vw,80px);letter-spacing:0.2em;line-height:1;pointer-events:none;">
-          <span>RHYTHM</span><span style="color:rgba(255,255,255,0.9);">::</span><span style="color:var(--zzz-text);">OS</span>
+          <span>RHYMIX</span>
         </div>
         <div style="position:absolute;inset:0;transform:translate(${offset()}px, ${offset()}px);clip-path:inset(${Math.random()*40}% 0 ${Math.random()*40}% 0);color:var(--zzz-red);opacity:${intensity * 0.7};font-family:var(--zzz-font);font-weight:900;font-size:clamp(42px,9vw,80px);letter-spacing:0.2em;line-height:1;pointer-events:none;">
-          <span>RHYTHM</span><span style="color:rgba(255,255,255,0.9);">::</span><span style="color:var(--zzz-text);">OS</span>
+          <span>RHYMIX</span>
         </div>
       `;
       setTimeout(() => { if (layer) layer.innerHTML = ''; }, duration);

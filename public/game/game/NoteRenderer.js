@@ -283,7 +283,7 @@ export default class NoteRenderer {
     // Draw background image
     if (this._bgImage) {
       cctx.save();
-      cctx.globalAlpha = 0.15;
+      cctx.globalAlpha = 0.08;
       const ia = this._bgImage.width / this._bgImage.height;
       const ca = this.w / this.h;
       let dw, dh, dx, dy;

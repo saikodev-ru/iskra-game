@@ -61,7 +61,7 @@ export default class SongSelect {
         <!-- Loading overlay -->
         <div id="ss-loading" class="ss-loading">
           <div class="ss-loading-spinner"></div>
-          <div class="ss-loading-text">RHYTHM::OS</div>
+          <div class="ss-loading-text">RHYMIX</div>
         </div>
 
         <!-- Darken background by 30% -->
@@ -315,11 +315,31 @@ export default class SongSelect {
       ? '<span style="font-size:8px;color:var(--zzz-purple);background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);border-radius:6px;padding:1px 5px;vertical-align:middle;margin-left:4px;font-weight:700;letter-spacing:0.05em;">MANIA</span>'
       : '';
 
+    // Best grade badge from all difficulties
+    const bestGrade = set.difficulties.reduce((best, diff) => {
+      const rec = this._getRecord(set.id, diff.version);
+      if (!rec || !rec.rank) return best;
+      const gradeOrder = ['X','SS','S','A','B','C','D','?'];
+      return gradeOrder.indexOf(rec.rank) < gradeOrder.indexOf(best) ? rec.rank : best;
+    }, '?');
+
+    const gradeGradients = {
+      X: 'linear-gradient(180deg, #FFD700, #FFA500)',
+      SS: 'linear-gradient(180deg, #67E8F9, #FDA4AF)',
+      S: 'linear-gradient(180deg, #FDE68A, #F97316)',
+      A: 'linear-gradient(180deg, #86EFAC, #22D3EE)',
+      B: 'linear-gradient(180deg, #60A5FA, #A855F7)',
+      C: 'linear-gradient(180deg, #C4B5FD, #991B1B)',
+      D: 'linear-gradient(180deg, #EF4444, #7F1D1D)',
+    };
+
+    const gradeGrad = gradeGradients[bestGrade] || gradeGradients.D;
+
     card.innerHTML = `
       <div class="song-card-thumb" style="${set.backgroundUrl ? `background-image:url('${set.backgroundUrl}')` : set.videoUrl ? 'background:linear-gradient(135deg,#1a1a2e,#16213e);' : 'background:var(--zzz-graphite);'}">${set.videoUrl && !set.backgroundUrl ? '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;opacity:0.4;">▶</span>' : ''}</div>
       <div class="song-card-info">
         <div class="song-card-title-row">
-          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(set.title)}${set.videoUrl ? ' <span style="font-size:9px;color:var(--zzz-muted);vertical-align:middle;opacity:0.5;">🎬</span>' : ''}${maniaBadge}</span>
+          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(set.title)}${set.videoUrl ? ' <span style="font-size:9px;color:var(--zzz-muted);vertical-align:middle;opacity:0.5;">🎬</span>' : ''}${maniaBadge}${bestGrade !== '?' ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;font-family:var(--zzz-font);font-weight:900;font-size:11px;color:transparent;-webkit-text-fill-color:transparent;background:${gradeGrad};-webkit-background-clip:text;background-clip:text;-webkit-text-stroke:1px rgba(0,0,0,0.6);margin-left:4px;flex-shrink:0;transform:rotate(-25deg);">${bestGrade}</span>` : ''}</span>
         </div>
         <div class="song-card-artist">${this._escHtml(set.artist)}</div>
       </div>
@@ -394,7 +414,7 @@ export default class SongSelect {
         ${isActive ? 'box-shadow:0 0 14px rgba(170,255,0,0.15),inset 0 0 24px rgba(170,255,0,0.04);' : ''}
       `;
       diffRow.innerHTML = `
-        <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;flex-shrink:0;">${this._escHtml(diff.version || 'NORMAL')}</span>
+        <span data-version="${this._escHtml(diff.version || 'NORMAL')}" style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;flex-shrink:0;">${this._escHtml(diff.version || 'NORMAL')}</span>
         <div style="flex:1;display:flex;justify-content:flex-end;min-width:0;">
           ${starSpectrumHtml}
         </div>
@@ -718,7 +738,7 @@ export default class SongSelect {
         item.style.boxShadow = isActive ? '0 0 14px rgba(170,255,0,0.15),inset 0 0 24px rgba(170,255,0,0.04)' : 'none';
 
         // Update version name color
-        const nameSpan = item.querySelector('span[style*="font-weight:700"]');
+        const nameSpan = item.querySelector('span[data-version]');
         if (nameSpan) nameSpan.style.color = isActive ? c : 'var(--zzz-text)';
       });
     });
@@ -1047,12 +1067,36 @@ export default class SongSelect {
 
       // Start the game after burst animation
       setTimeout(() => {
+        // Clean up transition overlay
         overlay.remove();
         this._transitioning = false;
         this._leavingToGame = false;
+        // Force-clear any screen transition animations that might block visibility
+        const sc = document.getElementById('screen');
+        if (sc) {
+          sc.classList.remove('screen-exit', 'screen-enter');
+          sc.style.opacity = '';
+          sc.style.animation = 'none';
+        }
         this.screens.show('game', { map });
       }, 600);
     }, 1200);
+
+    // Backup: force-start game if transition fails
+    setTimeout(() => {
+      // Fallback: if screens are still transitioning, force cleanup
+      const sc = document.getElementById('screen');
+      if (sc) {
+        sc.classList.remove('screen-exit', 'screen-enter');
+        sc.style.opacity = '';
+        sc.style.animation = 'none';
+      }
+      if (this.screens._transitioning) {
+        this.screens._transitioning = false;
+        this.screens._currentName = '';
+        this.screens.show('game', { map });
+      }
+    }, 3000);
   }
 
   async _handleOszFiles(files) {

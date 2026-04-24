@@ -611,6 +611,7 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 .result-grade {
   font-family: var(--zzz-font); font-weight: 900; font-size: 140px;
   line-height: 1; letter-spacing: 0.08em;
+  transform: rotate(-25deg);
 }
 
 .result-song-info {

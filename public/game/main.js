@@ -53,7 +53,7 @@ function getResScale() {
 }
 
 async function boot() {
-  console.log('[RHYTHM::OS] Booting...');
+  console.log('[RHYMIX] Booting...');
 
   if (window.__rhythmOsBooted) {
     try {
@@ -194,7 +194,8 @@ async function boot() {
     noteRenderer.scrollSpeed = scrollSpeed;
     noteRenderer.resize();
 
-    if (map.backgroundUrl) noteRenderer.setBackgroundImage(map.backgroundUrl);
+    // Only use canvas background when ThreeScene has no background
+    if (!map.videoUrl && !map.backgroundUrl) noteRenderer.clearBackground();
     else noteRenderer.clearBackground();
 
     // Enable lead-in offset for video sync (game has 1s silence prepended to audio)
@@ -605,7 +606,7 @@ async function boot() {
     if (!gameActive) noteRenderer.clear();
   });
 
-  console.log('[RHYTHM::OS] Ready!');
+  console.log('[RHYMIX] Ready!');
 }
 
-boot().catch(err => console.error('[RHYTHM::OS] Boot failed:', err));
+boot().catch(err => console.error('[RHYMIX] Boot failed:', err));

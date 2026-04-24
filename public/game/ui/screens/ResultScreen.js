@@ -50,7 +50,7 @@ export default class ResultScreen {
 
         <!-- Grade letter -->
         <div class="result-grade grade-gradient"
-             style="--gg-grad: ${grade.bg}; --gg-stroke: 4px rgba(0,0,0,0.55);">
+             style="--gg-grad: ${grade.bg}; --gg-stroke: 4px rgba(0,0,0,0.55);transform:rotate(-25deg);">
           ${s.rank}<span class="gg-fill">${s.rank}</span>
         </div>
 

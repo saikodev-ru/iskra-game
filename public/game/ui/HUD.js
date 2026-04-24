@@ -42,7 +42,7 @@ export default class HUD {
           <div style="display:flex;align-items:baseline;gap:8px;">
             <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:64px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0</div>
             <div style="font-family:var(--zzz-font);font-weight:700;font-size:16px;color:rgba(255,255,255,0.5);letter-spacing:0.05em;text-shadow:0 2px 8px rgba(0,0,0,0.9);">x</div>
-            <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="X" style="font-family:var(--zzz-font);font-weight:900;font-size:36px;opacity:1;transform:scale(1);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
+            <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="X" style="font-family:var(--zzz-font);font-weight:900;font-size:36px;opacity:1;transform:scale(1) rotate(-25deg);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
           </div>
           <!-- Combo label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px;text-shadow:0 0 8px rgba(0,0,0,0.9);">COMBO</div>
