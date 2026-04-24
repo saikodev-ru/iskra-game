@@ -11,8 +11,8 @@ export default class ThreeScene {
   constructor(canvas) {
     this.canvas = canvas;
     this._beatIntensity = 0;
-    this._bloomBase = 0.4;
-    this._bloomTarget = 0.4;
+    this._bloomBase = 0.18;
+    this._bloomTarget = 0.18;
     this._shakeFrames = [];
     this._tvGroup = null;
     this._tvScreen = null;
@@ -79,9 +79,9 @@ export default class ThreeScene {
       this._bloomBase = 0;
       this.bloomPass.strength = 0;
     } else if (preset === 'standard') {
-      this._bloomBase = 0.15;
+      this._bloomBase = 0.08;
     } else {
-      this._bloomBase = 0.4;
+      this._bloomBase = 0.18;
     }
     // Toggle particles visibility based on preset
     if (this._particles) {
@@ -153,7 +153,7 @@ export default class ThreeScene {
     // Post-processing
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.4, 0.5);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.18, 0.3, 0.6);
     this.composer.addPass(this.bloomPass);
 
     this._resizeHandler = () => this.resize();
@@ -208,13 +208,13 @@ export default class ThreeScene {
         float bassPulse = uBassIntensity;
 
         // Green glow that pulses with overall audio
-        vec3 audioColor = vec3(0.4, 0.7, 0.0) * audioPulse * 0.6 * smoothstep(0.8, 0.0, vig);
+        vec3 audioColor = vec3(0.4, 0.7, 0.0) * audioPulse * 0.3 * smoothstep(0.8, 0.0, vig);
 
-        // Bass-reactive deep glow — more intense
-        vec3 bassColor = vec3(0.2, 0.4, 0.0) * bassPulse * 0.8 * smoothstep(0.9, 0.0, vig);
+        // Bass-reactive deep glow — subtle
+        vec3 bassColor = vec3(0.2, 0.4, 0.0) * bassPulse * 0.35 * smoothstep(0.9, 0.0, vig);
 
         // Beat-reactive flash (from hit judgements)
-        vec3 beatColor = vec3(0.5, 0.8, 0.0) * uBeatIntensity * 0.4 * smoothstep(0.7, 0.0, vig);
+        vec3 beatColor = vec3(0.5, 0.8, 0.0) * uBeatIntensity * 0.18 * smoothstep(0.7, 0.0, vig);
 
         // Subtle shimmer
         float shimmer = fract(sin(dot(uv * 100.0 + uTime * 0.1, vec2(12.9898, 78.233))) * 43758.5453);
@@ -222,7 +222,7 @@ export default class ThreeScene {
 
         // Edge glow on bass
         float edge = smoothstep(0.3, 0.7, vig);
-        vec3 edgeColor = vec3(0.1, 0.2, 0.0) * bassPulse * edge * 0.5;
+        vec3 edgeColor = vec3(0.1, 0.2, 0.0) * bassPulse * edge * 0.2;
 
         vec3 color = baseColor + audioColor + bassColor + beatColor + edgeColor;
 
@@ -785,14 +785,14 @@ export default class ThreeScene {
       if (this._disposed) return;
       // Subtle bloom boost on hit — no harsh flash
       if (judgement === 'perfect') {
-        this._bloomTarget = 0.9;
-        this._beatIntensity = 0.6;
+        this._bloomTarget = 0.5;
+        this._beatIntensity = 0.3;
       } else if (judgement === 'great') {
-        this._bloomTarget = 0.75;
-        this._beatIntensity = 0.4;
+        this._bloomTarget = 0.38;
+        this._beatIntensity = 0.18;
       } else if (judgement === 'good') {
-        this._bloomTarget = 0.6;
-        this._beatIntensity = 0.2;
+        this._bloomTarget = 0.28;
+        this._beatIntensity = 0.08;
       }
     });
     EventBus.on('note:miss', () => {
@@ -918,38 +918,38 @@ export default class ThreeScene {
         pos[i] += Math.cos(time * 0.0002 + i * 0.5) * drift * 0.5;
       }
       this._particles.geometry.attributes.position.needsUpdate = true;
-      this._particles.material.opacity = 0.15 + rawBass * 0.35 + this._beatIntensity * 0.2;
-      this._particles.material.size = 0.04 + rawBass * 0.03;
+      this._particles.material.opacity = 0.1 + rawBass * 0.2 + this._beatIntensity * 0.1;
+      this._particles.material.size = 0.04 + rawBass * 0.02;
     }
 
     // ── Camera FOV — smooth audio-reactive ──
     {
-      const targetFOV = this._baseFOV + bassPulse * 1.5;
+      const targetFOV = this._baseFOV + bassPulse * 0.6;
       this.camera.fov += (targetFOV - this.camera.fov) * 0.1;
       this.camera.updateProjectionMatrix();
       this._fovPulse = 0;
     }
 
     // ── Bloom — reactive to audio + hits ──
-    const audioBloom = this._bloomBase + audioPulse * 0.3 + bassPulse * 0.4;
+    const audioBloom = this._bloomBase + audioPulse * 0.12 + bassPulse * 0.18;
     this._bloomTarget = Math.max(this._bloomTarget, audioBloom);
     this.bloomPass.strength += (this._bloomTarget - this.bloomPass.strength) * 0.12;
     this._bloomTarget += (this._bloomBase - this._bloomTarget) * 0.06;
 
     // ── Point light — reactive glow ──
-    const targetIntensity = 1.5 + bassPulse * 2.0 + audioPulse * 1.0;
+    const targetIntensity = 0.6 + bassPulse * 0.8 + audioPulse * 0.4;
     this.pointLight.intensity += (targetIntensity - this.pointLight.intensity) * 0.1;
     if (this.pointLight.color.r > 0.67 || this.pointLight.color.b > 0.1) {
       this.pointLight.color.lerp(new THREE.Color(0xAAFF00), 0.08);
     }
 
     // ── Bass light ──
-    const bassLightTarget = bassPulse * 3.0;
+    const bassLightTarget = bassPulse * 1.2;
     this._bassLight.intensity += (bassLightTarget - this._bassLight.intensity) * 0.15;
     this._bassLight.color.lerp(new THREE.Color(0xAAFF00), 0.05);
 
     // ── Accent light pulse ──
-    this._accentLight.intensity = 0.4 + audioPulse * 0.8;
+    this._accentLight.intensity = 0.15 + audioPulse * 0.3;
 
     // ── Miss flash — decay the red overlay ──
     if (this._missFlash > 0.005) {
