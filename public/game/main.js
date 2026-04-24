@@ -201,6 +201,10 @@ async function boot() {
     // Enable lead-in offset for video sync (game has 1s silence prepended to audio)
     three._leadInOffset = LEAD_IN;
 
+    // Hide Three.js dark gradient bg mesh to prevent "double background"
+    // (NoteRenderer's lane fills will be the only visible background)
+    three.hideBgMesh();
+
     // Use video background if available, otherwise use image background
     if (map.videoUrl) {
       three.setBackgroundVideo(map.videoUrl, audio);
@@ -385,6 +389,7 @@ async function boot() {
     three._clearBackgroundImage();
     three._clearBackgroundVideo();
     three._leadInOffset = 0; // Reset lead-in offset for preview mode
+    three.showBgMesh(); // Restore dark gradient bg mesh for menus
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
     // Save local record

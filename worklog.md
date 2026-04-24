@@ -621,3 +621,26 @@ Stage Summary:
 - z-index:3 ensures buttons are always above right column (z-index:2)
 - No more pointer-events hacks needed
 - Files modified: `public/game/ui/screens/SongSelect.js`
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix critical map launch bug + 6 other issues in RHYMIX rhythm game
+
+Work Log:
+- Diagnosed map launch failure: SongSelect.destroy() calls _stopPreview() which schedules audio.stop() 200ms later. This kills the game's audio that startGame() just started playing, making the game appear frozen.
+- Fixed by: keeping _leavingToGame=true in _playTransition (don't reset it before screens.show), and checking _leavingToGame in destroy() to skip _stopPreview() when transitioning to game (just clear timers instead).
+- Fixed double background: ThreeScene has a permanent _bgMesh (dark gradient plane at z=-10) always visible. During gameplay, this showed through the NoteRenderer's 88%-opacity lane fills, creating "two backgrounds". Fixed by adding hideBgMesh()/showBgMesh() to ThreeScene and calling them in startGame()/endGame().
+- Made lane fills fully opaque (1.0 instead of 0.88) to eliminate remaining bleed-through.
+- Doubled system sounds volume: crtClick 0.24→0.48, crtSwitch pop 0.36→0.72, sweep 0.16→0.32.
+- Fixed difficulty text color revert: added explicit color update loop in _selectDifficulty() that updates ALL diff items' nameSpan colors (belt-and-suspenders approach).
+- Fixed grade rotation bug: HUD.js setRank() and _animateNumbers() were overwriting transform with only scale(), losing the -25deg rotation. Added rotate(-25deg) to all transform assignments.
+- Verified title is already "RHYMIX" with subtitle "БЕСПЛАТНАЯ WEB РИТМ-ИГРА". Song select loading text also updated.
+
+Stage Summary:
+- Map now launches correctly after song select transition (audio.stop race condition fixed)
+- Double background eliminated during gameplay (bg mesh hidden + lanes fully opaque)
+- System sounds (clicks, difficulty switch) doubled in volume
+- Difficulty text color properly reverts when switching away
+- In-game grade display tilted -25 degrees permanently
+- Lint passes clean

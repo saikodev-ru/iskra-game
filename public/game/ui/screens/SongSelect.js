@@ -681,6 +681,14 @@ export default class SongSelect {
     const wrapper = document.querySelector(`.song-card-wrapper[data-index="${this.selectedIndex}"]`);
     if (wrapper) {
       const items = wrapper.querySelectorAll('.diff-dropdown-item');
+      // Explicitly update ALL diff item colors (belt-and-suspenders fix for color revert bug)
+      items.forEach((item, idx) => {
+        const isActive = idx === diffIndex;
+        const s = set.difficulties[idx]?.difficulty?.stars || 0;
+        const itemColor = DifficultyAnalyzer.getStarColor(s);
+        const nameSpan = item.querySelector('span[data-version]');
+        if (nameSpan) nameSpan.style.color = isActive ? itemColor : 'var(--zzz-text)';
+      });
       const activeItem = items[diffIndex];
       if (activeItem) {
         const c = DifficultyAnalyzer.getStarColor(set.difficulties[diffIndex]?.difficulty?.stars || 0);
@@ -1070,7 +1078,8 @@ export default class SongSelect {
         // Clean up transition overlay
         overlay.remove();
         this._transitioning = false;
-        this._leavingToGame = false;
+        // NOTE: Keep _leavingToGame = true so destroy() knows NOT to call _stopPreview()
+        // which would schedule audio.stop() and kill the game's audio
         // Force-clear any screen transition animations that might block visibility
         const sc = document.getElementById('screen');
         if (sc) {
@@ -1132,8 +1141,17 @@ export default class SongSelect {
     if (this._dragHandler) window.removeEventListener('mousemove', this._dragHandler);
     if (this._dragUpHandler) window.removeEventListener('mouseup', this._dragUpHandler);
 
-    // Stop preview
-    this._stopPreview();
+    // Stop preview — but if we're leaving to game, DON'T call _stopPreview()
+    // because it would schedule audio.stop() 200ms later, which would kill
+    // the game's audio that startGame() just started playing.
+    if (this._leavingToGame) {
+      // Just clean up timers/intervals without scheduling new audio.stop()
+      if (this._previewFadeTimeout) { clearTimeout(this._previewFadeTimeout); this._previewFadeTimeout = null; }
+      if (this._previewInterval) { clearInterval(this._previewInterval); this._previewInterval = null; }
+      if (this._previewStopTimeout) { clearTimeout(this._previewStopTimeout); this._previewStopTimeout = null; }
+    } else {
+      this._stopPreview();
+    }
 
     // Clean up CRT
     if (this.three) {

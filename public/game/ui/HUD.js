@@ -131,10 +131,10 @@ export default class HUD {
     // Rank scale
     if (this._rankScale > 1.01) {
       this._rankScale += (1 - this._rankScale) * 0.12;
-      if (this.els.rank) this.els.rank.style.transform = `scale(${this._rankScale})`;
+      if (this.els.rank) this.els.rank.style.transform = `scale(${this._rankScale}) rotate(-25deg)`;
     } else if (this._rankScale !== 1) {
       this._rankScale = 1;
-      if (this.els.rank) this.els.rank.style.transform = '';
+      if (this.els.rank) this.els.rank.style.transform = 'rotate(-25deg)';
     }
 
     // Accuracy
@@ -192,6 +192,7 @@ export default class HUD {
       }
       fill.textContent = rank;
       this.els.rank.style.opacity = '1';
+      this.els.rank.style.transform = 'scale(1.5) rotate(-25deg)';
       this._rankScale = 1.5;
     }
   }

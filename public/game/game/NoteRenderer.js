@@ -306,8 +306,8 @@ export default class NoteRenderer {
       const judgeGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
 
       cctx.fillStyle = i % 2 === 0
-        ? 'rgba(10,7,5,0.88)'
-        : 'rgba(18,13,9,0.88)';
+        ? 'rgba(10,7,5,1)'
+        : 'rgba(18,13,9,1)';
       cctx.beginPath();
       cctx.moveTo(topGeom.x, topY);
       cctx.lineTo(topGeom.x + topGeom.width, topY);

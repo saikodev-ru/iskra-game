@@ -545,6 +545,16 @@ export default class ThreeScene {
     }
   }
 
+  /** Hide the dark animated gradient background mesh (used during gameplay to prevent double background) */
+  hideBgMesh() {
+    if (this._bgMesh) this._bgMesh.visible = false;
+  }
+
+  /** Show the dark animated gradient background mesh */
+  showBgMesh() {
+    if (this._bgMesh) this._bgMesh.visible = true;
+  }
+
   /** Set a video as the background — synced to audio playback time */
   setBackgroundVideo(url, audioEngine) {
     // Increment generation counter to invalidate any pending loads

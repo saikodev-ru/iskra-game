@@ -187,7 +187,7 @@ export default class HitSounds {
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'highpass'; filt.frequency.value = 3000;
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.24, this._ctx.currentTime);
+      g.gain.setValueAtTime(0.48, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start();
       src.stop(this._ctx.currentTime + dur);
@@ -212,7 +212,7 @@ export default class HitSounds {
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'lowpass'; filt.frequency.value = 1200; filt.Q.value = 0.7;
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.36, this._ctx.currentTime);
+      g.gain.setValueAtTime(0.72, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start();
       src.stop(this._ctx.currentTime + dur);
@@ -235,7 +235,7 @@ export default class HitSounds {
       filt.frequency.setValueAtTime(5000, this._ctx.currentTime);
       filt.frequency.exponentialRampToValueAtTime(1500, this._ctx.currentTime + dur);
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.16, this._ctx.currentTime);
+      g.gain.setValueAtTime(0.32, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start();
       src.stop(this._ctx.currentTime + dur);
