@@ -317,6 +317,12 @@ async function boot() {
           const deathEl = document.createElement('div');
           deathEl.className = 'death-overlay';
           deathEl.id = 'death-overlay';
+          // Constrain to safe area
+          const dSa = calcSafeArea();
+          deathEl.style.left = dSa.x + 'px';
+          deathEl.style.top = dSa.y + 'px';
+          deathEl.style.width = dSa.w + 'px';
+          deathEl.style.height = dSa.h + 'px';
           document.body.appendChild(deathEl);
           // After music finishes slowing, show result
           _deathTimeout = setTimeout(() => endGame(), 2800);
@@ -483,6 +489,11 @@ async function boot() {
 
   EventBus.on('settings:close-overlay', () => { _closePauseSettings(); });
 
+  EventBus.on('settings:open-overlay', () => {
+    const settings = new Settings({ audio, input, screens, overlayMode: true });
+    screens._showOverlay(settings);
+  });
+
   const resumeGame = () => {
     // Show countdown before resuming — map stays paused during countdown
     const sa = calcSafeArea();
@@ -563,7 +574,7 @@ async function boot() {
 
   screens.register('main-menu', () => new MainMenu({ audio, screens }));
   screens.register('song-select', () => new SongSelect({ audio, three, screens }));
-  screens.register('settings', () => new Settings({ audio, input, screens }));
+  screens.register('settings', () => new Settings({ audio, input, screens, overlayMode: true }));
   screens.register('result', (data) => { const rs = new ResultScreen({ screens }); if (data && data.stats) rs.setStats(data.stats, data.map); return rs; });
   screens.register('game', (data) => { if (data && data.map) startGame(data.map); return { build: () => '', init: () => {}, destroy: () => {} }; });
 

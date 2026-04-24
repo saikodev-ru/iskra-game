@@ -32,4 +32,33 @@ export default class ScreenManager {
   }
   get currentName() { return this._currentName; }
   get current() { return this._current; }
+
+  /** Show a screen as an overlay on top of the current screen */
+  _showOverlay(screen) {
+    if (screen.build) {
+      const el = screen.build();
+      if (typeof el === 'string') {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = el;
+        const overlayEl = wrapper.firstElementChild;
+        if (overlayEl) this.container.appendChild(overlayEl);
+      } else {
+        this.container.appendChild(el);
+      }
+    }
+    if (screen.init) screen.init();
+    // Store reference so the overlay can be cleaned up later
+    this._overlay = screen;
+  }
+
+  /** Close the current overlay and clean it up */
+  _closeOverlay() {
+    if (this._overlay) {
+      if (this._overlay.destroy) this._overlay.destroy();
+      this._overlay = null;
+    }
+    // Remove the settings overlay DOM element
+    const overlay = document.getElementById('settings-overlay');
+    if (overlay) overlay.remove();
+  }
 }

@@ -344,3 +344,26 @@ Stage Summary:
 - PERFECT text now renders as gradient (cyan→pink) with glow/shadow outline, properly centered via existing `.judgement-text` positioning
 - Files modified: `public/game/theme/ZZZTheme.js`, `public/game/ui/JudgementDisplay.js`
 
+---
+Task ID: 2-a
+Agent: main (via subagent full-stack-developer)
+Task: Red screen effects adapt to aspect ratio, remove fullscreen settings, redesign main menu
+
+Work Log:
+- Removed `inset: 0` from `.combo-break-flash` and `.death-overlay` in ZZZTheme.js
+- Added inline style safe-area bounds to combo-break-flash in JudgementDisplay.js showMiss()
+- Added inline style safe-area bounds to death-overlay in main.js death sequence using calcSafeArea()
+- Removed fullscreen settings mode from Settings.js build() — only overlay/side-panel mode remains
+- Removed fullscreen back button handler and simplified Escape key handler in Settings.js
+- Changed settings screen registration in main.js to always use overlayMode: true
+- Added _showOverlay() and _closeOverlay() methods to ScreenManager.js for overlay-on-top behavior
+- Added EventBus listener for settings:open-overlay in main.js to open settings side panel from anywhere
+- Completely redesigned MainMenu.js: ZZZ-themed dashboard with title, PLAY/SETTINGS buttons, stats panel (beatmaps loaded from IndexedDB, best score placeholder, play time placeholder), featured section with gradient card, bottom bar with version info, parallax layers
+- MainMenu SETTINGS button now emits EventBus settings:open-overlay instead of navigating to fullscreen settings screen
+
+Stage Summary:
+- Combo-break-flash and death-overlay now respect aspect ratio safe area bounds
+- Settings always opens as side panel overlay, never fullscreen
+- Main menu is now a stylish content-rich dashboard with real beatmap count, stats placeholders, featured section
+- Files modified: ZZZTheme.js, JudgementDisplay.js, main.js, Settings.js, ScreenManager.js, MainMenu.js
+

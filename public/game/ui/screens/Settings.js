@@ -16,28 +16,16 @@ export default class Settings {
     const savedAspect = localStorage.getItem('rhythm-os-aspect-ratio') || '16:9';
     const savedResScale = localStorage.getItem('rhythm-os-res-scale') || '100';
 
-    if (this.overlayMode) {
-      return `
-        <div id="settings-overlay" style="position:absolute;inset:0;z-index:100;background:rgba(0,0,0,0.6);display:flex;overflow:hidden;">
-          <div id="settings-panel" style="width:min(380px,70%);min-width:240px;height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 20px;animation:settings-slide-in 0.25s ease-out forwards;" class="zzz-scroll">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
-              <h2 class="zzz-title" style="font-size:24px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
-              <button id="settings-close" class="zzz-btn zzz-btn--sm" style="pointer-events:all;">✕</button>
-            </div>
-            ${this._buildSettingsContent(aspectRatios, savedAspect, savedResScale)}
-          </div>
-          <div id="settings-overlay-bg" style="flex:1;min-width:0;"></div>
-        </div>
-      `;
-    }
-
     return `
-      <div style="display:flex;flex-direction:column;align-items:center;height:100%;background:transparent;padding:16px;overflow-y:auto;" class="zzz-scroll">
-        <h2 class="zzz-title" style="font-size:36px;color:var(--zzz-lime);margin:0 0 28px 0;flex-shrink:0;">SETTINGS</h2>
-        <div class="zzz-panel" style="padding:24px;width:min(480px,90%);flex-shrink:0;">
+      <div id="settings-overlay" style="position:absolute;inset:0;z-index:100;background:rgba(0,0,0,0.6);display:flex;overflow:hidden;">
+        <div id="settings-panel" style="width:min(380px,70%);min-width:240px;height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 20px;animation:settings-slide-in 0.25s ease-out forwards;" class="zzz-scroll">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
+            <h2 class="zzz-title" style="font-size:24px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
+            <button id="settings-close" class="zzz-btn zzz-btn--sm" style="pointer-events:all;">✕</button>
+          </div>
           ${this._buildSettingsContent(aspectRatios, savedAspect, savedResScale)}
         </div>
-        <button class="zzz-btn" data-action="back" style="flex-shrink:0;margin-top:28px;">← BACK</button>
+        <div id="settings-overlay-bg" style="flex:1;min-width:0;"></div>
       </div>
     `;
   }
@@ -135,8 +123,7 @@ export default class Settings {
     if (closeBtn) closeBtn.addEventListener('click', () => this._closeOverlay());
     if (overlayBg) overlayBg.addEventListener('click', () => this._closeOverlay());
 
-    // Full-screen mode back button
-    document.querySelectorAll('[data-action="back"]').forEach(b => b.addEventListener('click', () => this.screens.show('main-menu')));
+
 
     // Watch for safe area changes and adjust panel width
     this._settingsChangedHandler = ({ key }) => {
@@ -153,8 +140,7 @@ export default class Settings {
       if (e.code === 'Escape') {
         e.preventDefault();
         if (this._rebinding) { this._rebinding = null; this._renderKeybinds(); }
-        else if (this.overlayMode) this._closeOverlay();
-        else this.screens.show('main-menu');
+        else this._closeOverlay();
       }
       else if (this._rebinding) { e.preventDefault(); this._finishRebind(e.code); }
     };
@@ -199,9 +185,8 @@ export default class Settings {
 
   _closeOverlay() {
     if (this.screens) {
-      const container = document.getElementById('screen');
-      if (container) container.innerHTML = '';
       EventBus.emit('settings:close-overlay');
+      if (this.screens._closeOverlay) this.screens._closeOverlay();
     }
   }
 

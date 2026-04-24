@@ -58,6 +58,25 @@ export default class JudgementDisplay {
     // Red vignette flash on combo break (DOM overlay, not body class)
     const flash = document.createElement('div');
     flash.className = 'combo-break-flash';
+    // Constrain to safe area
+    const ar = localStorage.getItem('rhythm-os-aspect-ratio') || '16:9';
+    let sa;
+    if (ar === 'Fill') {
+      sa = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+    } else {
+      const [arW, arH] = ar.split(':').map(Number);
+      const targetAR = arW / arH;
+      const screenAR = window.innerWidth / window.innerHeight;
+      let tw, th;
+      if (screenAR > targetAR) { th = window.innerHeight; tw = th * targetAR; }
+      else { tw = window.innerWidth; th = tw / targetAR; }
+      tw = Math.round(tw); th = Math.round(th);
+      sa = { x: Math.round((window.innerWidth - tw) / 2), y: Math.round((window.innerHeight - th) / 2), w: tw, h: th };
+    }
+    flash.style.left = sa.x + 'px';
+    flash.style.top = sa.y + 'px';
+    flash.style.width = sa.w + 'px';
+    flash.style.height = sa.h + 'px';
     document.body.appendChild(flash);
     setTimeout(() => { if (flash.parentNode) flash.remove(); }, 400);
     clearTimeout(this._outTimer);

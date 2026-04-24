@@ -187,7 +187,7 @@ body.zzz-active::before {
 /* COMBO BREAK — red vignette overlay on game canvas */
 @keyframes combo-fly { to { transform: translateY(-50px); opacity:0; } }
 .combo-break-flash {
-  position: fixed; inset: 0; z-index: 4;
+  position: fixed; z-index: 4;
   pointer-events: none;
   box-shadow: inset 0 0 120px rgba(255,61,61,0.5);
   animation: combo-break-fade 0.35s ease-out forwards;
@@ -230,7 +230,7 @@ body.zzz-active::before {
 
 /* Red scanline overlay */
 .death-overlay {
-  position: fixed; inset: 0; z-index: 4;
+  position: fixed; z-index: 4;
   pointer-events: none;
   animation: death-sequence 2.5s ease-in forwards;
 }
