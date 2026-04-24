@@ -62,6 +62,7 @@ export default class ThreeScene {
     this._bgOffsetX = 0; // smoothed offset
     this._bgOffsetY = 0;
     this._parallaxIntensity = 0.15; // how far the bg shifts (world units at z=-4)
+    this._cachedBgGeom = null; // cached bg plane geometry
 
     this._init();
     this._setupListeners();
@@ -99,6 +100,7 @@ export default class ThreeScene {
   /** Set the safe area for background image positioning */
   setSafeArea(x, y, w, h) {
     this._safeArea = { x, y, w, h };
+    this._invalidateBgGeom();
     this._resizeBackgroundImage();
   }
 
@@ -497,8 +499,9 @@ export default class ThreeScene {
     });
   }
 
-  /** Calculate background plane geometry to match safe area */
+  /** Calculate background plane geometry to match safe area (cached) */
   _calcBgPlaneGeometry() {
+    if (this._cachedBgGeom) return this._cachedBgGeom;
     const cam = this.camera;
     const dist = cam.position.z - (-4);
     const vFov = cam.fov * Math.PI / 180;
@@ -515,12 +518,16 @@ export default class ThreeScene {
     // 3D at z=-4
     const rawW = (r - l) * halfW;
     const rawH = (t - b) * halfH;
-    return {
+    const result = {
       width: rawW * 1.12, height: rawH * 1.12,
       cx: ((l + r) / 2) * halfW, cy: ((t + b) / 2) * halfH,
       safeAreaAspect: sa.w / sa.h, viewWidth: rawW
     };
+    this._cachedBgGeom = result;
+    return result;
   }
+
+  _invalidateBgGeom() { this._cachedBgGeom = null; }
 
   _clearBackgroundImage() {
     if (this._bgImageMesh) {
@@ -854,6 +861,7 @@ export default class ThreeScene {
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
     this.renderer.setClearColor(0x000000, 1);
+    this._invalidateBgGeom();
     this._resizeBackgroundImage();
   }
 

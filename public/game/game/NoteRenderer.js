@@ -155,7 +155,7 @@ export default class NoteRenderer {
   /** Add hold-note spark — uses flat pool for performance */
   addHoldSpark(x, y, color) {
     if (this._graphicsPreset === 'low') return;
-    if (this._holdSparkCount >= 40) return; // hard cap
+    if (this._holdSparkCount >= 12) return; // hard cap (perf)
     const rgb = this._hexToRgb(color);
     // 1-2 sparks per call
     const n = 1 + Math.floor(Math.random() * 2);
@@ -466,16 +466,14 @@ export default class NoteRenderer {
 
       ctx.save();
 
+      // Outer glow via pre-rendered sprite (no shadowBlur)
       if (this._graphicsPreset === 'disco') {
-        const outerGrad = ctx.createRadialGradient(cx, judgeLineY, 0, cx, judgeLineY, halfW * 1.8);
-        outerGrad.addColorStop(0, this._withAlpha(glow.color, 0.5 * glow.intensity));
-        outerGrad.addColorStop(0.4, this._withAlpha(glow.color, 0.2 * glow.intensity));
-        outerGrad.addColorStop(1, 'transparent');
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = outerGrad;
-        ctx.shadowBlur = 40 * glow.intensity * gfx;
-        ctx.shadowColor = glow.color;
-        ctx.fillRect(cx - halfW * 1.8, judgeLineY - barH * 2, halfW * 3.6, barH * 4);
+        const glowSprite = this._getGlowSprite(glow.color);
+        if (glowSprite) {
+          const gs = halfW * 3.6;
+          ctx.globalAlpha = glow.intensity * 0.6;
+          ctx.drawImage(glowSprite, cx - gs / 2, judgeLineY - gs / 2, gs, gs);
+        }
       }
 
       const coreGrad = ctx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
@@ -485,14 +483,10 @@ export default class NoteRenderer {
       coreGrad.addColorStop(0.85, glow.color);
       coreGrad.addColorStop(1, 'transparent');
       ctx.globalAlpha = glow.intensity * 0.8;
-      ctx.shadowBlur = 20 * glow.intensity * gfx;
-      ctx.shadowColor = glow.color;
       ctx.fillStyle = coreGrad;
       ctx.fillRect(cx - halfW, judgeLineY - barH / 2, halfW * 2, barH);
 
       ctx.globalAlpha = glow.intensity * 0.9;
-      ctx.shadowBlur = 12 * glow.intensity * gfx;
-      ctx.shadowColor = '#ffffff';
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2 * glow.intensity;
       ctx.beginPath();
@@ -597,14 +591,18 @@ export default class NoteRenderer {
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur = 14 * this._gfx() * scale;
-    ctx.shadowColor = color;
     ctx.fillStyle = color;
     this._roundRect(ctx, x, noteY - h / 2, w, h, r);
     ctx.fill();
 
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = 'transparent';
+    // Glow via pre-rendered sprite (no shadowBlur)
+    const glowSprite = this._getGlowSprite(color);
+    if (glowSprite) {
+      const gs = Math.max(w, h) * 2.5 * scale;
+      ctx.globalAlpha = alpha * 0.35;
+      ctx.drawImage(glowSprite, x + w / 2 - gs / 2, noteY - gs / 2, gs, gs);
+      ctx.globalAlpha = alpha;
+    }
     const grad = ctx.createLinearGradient(x, noteY - h / 2, x, noteY + h / 2);
     grad.addColorStop(0, 'rgba(255,255,255,0.4)');
     grad.addColorStop(0.3, 'rgba(255,255,255,0.05)');
@@ -676,7 +674,7 @@ export default class NoteRenderer {
     const gfx = this._gfx();
 
     // Draw in N segments, each with its own alpha based on _fadeIn at that Y position
-    const segments = Math.max(1, Math.ceil((bottomY - topY) / 4)); // one segment per ~4px
+    const segments = Math.max(1, Math.ceil((bottomY - topY) / 12)); // one segment per ~12px (perf)
     const segH = (bottomY - topY) / segments;
 
     for (let s = 0; s < segments; s++) {
@@ -705,10 +703,8 @@ export default class NoteRenderer {
       ctx.save();
       ctx.globalAlpha = avgAlpha;
 
-      // Body fill
+      // Body fill (no shadowBlur — major perf gain)
       ctx.fillStyle = isHolding ? this._withAlpha(color, 0.30) : this._withAlpha(color, 0.18);
-      ctx.shadowBlur = (isHolding ? 20 : 8) * gfx * scale;
-      ctx.shadowColor = color;
       ctx.beginPath();
       ctx.moveTo(topX, segTop);
       ctx.lineTo(topX + topW, segTop);
@@ -723,11 +719,9 @@ export default class NoteRenderer {
       ctx.stroke();
       ctx.restore();
 
-      // Center glow line for this segment (draw separately with its own alpha)
+      // Center glow line for this segment (no shadowBlur)
       ctx.save();
       ctx.globalAlpha = avgAlpha * (isHolding ? 0.4 : 0.2);
-      ctx.shadowBlur = (isHolding ? 20 : 12) * gfx * scale;
-      ctx.shadowColor = color;
       ctx.strokeStyle = isHolding ? '#ffffff' : this._withAlpha(color, 0.8);
       ctx.lineWidth = (isHolding ? 4 : 2) * scale;
       ctx.beginPath();
@@ -752,14 +746,18 @@ export default class NoteRenderer {
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur = 12 * this._gfx() * scale;
-    ctx.shadowColor = color;
     ctx.fillStyle = color;
     this._roundRect(ctx, x, y - h / 2, w, h, r);
     ctx.fill();
 
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = 'transparent';
+    // Glow via pre-rendered sprite (no shadowBlur)
+    const glowSprite = this._getGlowSprite(color);
+    if (glowSprite) {
+      const gs = Math.max(w, h) * 2.5 * scale;
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.drawImage(glowSprite, x + w / 2 - gs / 2, y - gs / 2, gs, gs);
+      ctx.globalAlpha = alpha;
+    }
     const grad = ctx.createLinearGradient(x, y - h / 2, x, y + h / 2);
     grad.addColorStop(0, 'rgba(255,255,255,0.4)');
     grad.addColorStop(0.35, 'rgba(255,255,255,0)');
@@ -785,17 +783,21 @@ export default class NoteRenderer {
     grad.addColorStop(0.4, this._withAlpha(color, 0.12));
     grad.addColorStop(1, this._withAlpha(color, 0.45));
     ctx.fillStyle = grad;
-    ctx.shadowBlur = 30 * gfx;
-    ctx.shadowColor = color;
     ctx.fillRect(x - 3, judgeLineY - columnH, w + 6, columnH);
+
+    // Glow via pre-rendered sprite instead of shadowBlur
+    const holdGlowSprite = this._getGlowSprite(color);
+    if (holdGlowSprite) {
+      const gs = Math.max(w, columnH) * 1.5;
+      ctx.globalAlpha = 0.25;
+      ctx.drawImage(holdGlowSprite, x + w / 2 - gs / 2, judgeLineY - gs / 3, gs, gs);
+    }
 
     const barH = 10;
     ctx.globalAlpha = 0.95;
-    ctx.shadowBlur = 30 * gfx;
     ctx.fillStyle = color;
     ctx.fillRect(x, judgeLineY - barH / 2, w, barH);
 
-    ctx.shadowBlur = 0;
     ctx.globalAlpha = 0.7;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 2, judgeLineY - 1.5, w - 4, 3);
@@ -873,8 +875,6 @@ export default class NoteRenderer {
       }
 
       ctx.fillStyle = fillColor;
-      ctx.shadowBlur = 16 * gfx;
-      ctx.shadowColor = glowColor;
       ctx.beginPath();
       ctx.moveTo(fillTopBarX, fillTopY);
       ctx.lineTo(fillTopBarX + fillTopBarWidth, fillTopY);
@@ -926,15 +926,11 @@ export default class NoteRenderer {
 
     ctx.save();
     ctx.globalAlpha = 0.18;
-    ctx.shadowBlur = 45 * gfx;
-    ctx.shadowColor = 'rgba(255,255,255,0.7)';
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(startX - 4, judgeLineY - 6, totalWidth + 8, 12);
     ctx.restore();
 
     ctx.save();
-    ctx.shadowBlur = 25 * gfx;
-    ctx.shadowColor = 'rgba(255,255,255,0.8)';
     const grad = ctx.createLinearGradient(startX, judgeLineY, startX + totalWidth, judgeLineY);
     grad.addColorStop(0, 'rgba(255,255,255,0)');
     grad.addColorStop(0.04, 'rgba(255,255,255,0.7)');
@@ -947,8 +943,6 @@ export default class NoteRenderer {
 
     ctx.save();
     ctx.globalAlpha = 0.6;
-    ctx.shadowBlur = 40 * gfx;
-    ctx.shadowColor = 'rgba(255,255,255,0.6)';
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(startX + 2, judgeLineY - 1.5, totalWidth - 4, 3);
     ctx.restore();
@@ -991,18 +985,17 @@ export default class NoteRenderer {
         ctx.restore();
       }
 
-      // ── Layer 3: Expanding ring (single stroke) ──
+      // ── Layer 3: Expanding ring (single stroke, no shadowBlur) ──
       ctx.save();
       ctx.globalAlpha = fade * 0.45;
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = Math.max(0.5, 2.5 * (1 - p));
-      if (gfx > 0) { ctx.shadowBlur = 10 * gfx; ctx.shadowColor = e.color; }
       ctx.beginPath();
       ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
-      // ── Layer 4: Colored ring (single stroke) ──
+      // ── Layer 4: Colored ring (single stroke, no shadowBlur) ──
       ctx.save();
       ctx.globalAlpha = fade * 0.3;
       ctx.strokeStyle = e.color;
@@ -1017,7 +1010,6 @@ export default class NoteRenderer {
         ctx.save();
         ctx.globalAlpha = fade * 0.75;
         ctx.fillStyle = '#ffffff';
-        if (gfx > 0) { ctx.shadowBlur = 8 * gfx; ctx.shadowColor = e.color; }
         ctx.beginPath();
         for (let i = 0; i < e.dots.length; i += 4) {
           const angle = e.dots[i];
