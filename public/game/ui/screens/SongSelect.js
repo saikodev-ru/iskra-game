@@ -181,8 +181,11 @@ export default class SongSelect {
     card.innerHTML = `
       <div class="song-card-thumb" style="${set.backgroundUrl ? `background-image:url('${set.backgroundUrl}')` : set.videoUrl ? 'background:linear-gradient(135deg,#1a1a2e,#16213e);' : 'background:var(--zzz-graphite);'}">${set.videoUrl && !set.backgroundUrl ? '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;opacity:0.4;">▶</span>' : ''}</div>
       <div class="song-card-info">
-        <div class="song-card-title">${this._escHtml(set.title)} <span style="font-size:10px;font-weight:500;color:var(--zzz-muted);text-transform:none;letter-spacing:0;">— ${this._escHtml(set.artist)}</span>${set.videoUrl ? ' <span style="font-size:9px;color:var(--zzz-muted);vertical-align:middle;opacity:0.5;">🎬</span>' : ''}</div>
-        ${set.difficulties.length > 1 ? `<span class="song-card-diff-count">${isExpanded ? '▲' : '▼'} ${set.difficulties.length}</span>` : ''}
+        <div class="song-card-title-row">
+          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(set.title)}${set.videoUrl ? ' <span style="font-size:9px;color:var(--zzz-muted);vertical-align:middle;opacity:0.5;">🎬</span>' : ''}</span>
+          ${set.difficulties.length > 1 ? `<span class="song-card-diff-count">${isExpanded ? '▲' : '▼'} ${set.difficulties.length}</span>` : ''}
+        </div>
+        <div class="song-card-artist">${this._escHtml(set.artist)}</div>
       </div>
       <button class="song-card-delete" data-delete="${setIndex}" title="Delete">✕</button>
     `;
@@ -214,8 +217,10 @@ export default class SongSelect {
       set.difficulties.forEach((diff, diffIdx) => {
         const s = diff.difficulty?.stars || 0;
         const c = DifficultyAnalyzer.getStarColor(s);
-        const n = DifficultyAnalyzer.getDiffName(s);
         const isActive = isSelected && diffIdx === this.selectedDiffIndex;
+
+        // Build 10-star spectrum
+        const starSpectrumHtml = this._buildStarSpectrum(s, c);
 
         // Get local record
         const record = this._getRecord(set.id, diff.version);
@@ -226,18 +231,17 @@ export default class SongSelect {
         const diffRow = document.createElement('div');
         diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
         diffRow.style.cssText = `
-          display:flex;align-items:center;gap:10px;
-          padding:10px 14px;border-radius:14px;cursor:pointer;
+          display:flex;align-items:center;gap:8px;
+          padding:7px 12px;border-radius:16px;cursor:pointer;
           transition:all 0.15s cubic-bezier(0.4,0,0.2,1);
           background:${isActive ? 'rgba(170,255,0,0.08)' : 'rgba(0,0,0,0.6)'};
           border:2px solid ${isActive ? 'var(--zzz-lime)' : 'transparent'};
           ${isActive ? 'box-shadow:0 0 12px rgba(170,255,0,0.12),inset 0 0 20px rgba(170,255,0,0.03);' : ''}
         `;
         diffRow.innerHTML = `
-          <span style="color:${c};font-family:var(--zzz-font);font-weight:900;font-size:13px;min-width:44px;">★ ${s.toFixed(1)}</span>
-          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
-            <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(diff.version || n)}</span>
-            <span style="color:${c};font-family:var(--zzz-font);font-weight:900;font-size:10px;letter-spacing:0.02em;opacity:0.7;">${n}</span>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
+            <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(diff.version || 'NORMAL')}</span>
+            ${starSpectrumHtml}
           </div>
           ${recordHtml}
         `;
@@ -271,6 +275,30 @@ export default class SongSelect {
     const div = document.createElement('div');
     div.textContent = str || '';
     return div.innerHTML;
+  }
+
+  /** Build a 10-star spectrum bar HTML string */
+  _buildStarSpectrum(stars, color, large = false) {
+    const partial = stars - Math.floor(stars); // e.g. 0.7 for ★3.7
+    const starSize = large ? 16 : 10;
+    const numSize = large ? 14 : 10;
+    const gap = large ? 2 : 1;
+    let html = `<div class="star-spectrum" style="gap:${gap}px;">`;
+    for (let i = 1; i <= 10; i++) {
+      if (i <= Math.floor(stars)) {
+        // Fully filled star
+        html += `<span class="star filled" style="color:${color};font-size:${starSize}px;">★</span>`;
+      } else if (i === Math.ceil(stars) && partial >= 0.3) {
+        // Partially filled star — show filled but slightly dimmer
+        html += `<span class="star filled" style="color:${color};opacity:${0.4 + partial * 0.6};font-size:${starSize}px;">★</span>`;
+      } else {
+        // Empty star
+        html += `<span class="star empty" style="color:${color};font-size:${starSize}px;">★</span>`;
+      }
+    }
+    html += `<span style="font-family:var(--zzz-font);font-weight:700;font-size:${numSize}px;color:${color};margin-left:4px;opacity:0.8;">${stars.toFixed(1)}</span>`;
+    html += '</div>';
+    return html;
   }
 
   async _deleteMap(setIndex) {
@@ -348,7 +376,6 @@ export default class SongSelect {
 
     const stars = diff.difficulty?.stars || 0;
     const starColor = DifficultyAnalyzer.getStarColor(stars);
-    const diffName = DifficultyAnalyzer.getDiffName(stars);
     const bpm = diff.metadata?.bpm || 0;
     const duration = diff.metadata?.duration || 0;
     const durationSec = Math.floor(duration / 1000);
@@ -360,12 +387,14 @@ export default class SongSelect {
       ? `<span style="color:var(--zzz-lime);font-family:var(--zzz-font);font-weight:900;font-size:14px;">${record.score.toLocaleString()}</span><span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:11px;margin-left:6px;">BEST</span>`
       : `<span style="color:rgba(255,255,255,0.15);font-family:var(--zzz-font);font-weight:700;font-size:14px;">—</span><span style="color:rgba(255,255,255,0.15);font-family:var(--zzz-font);font-size:11px;margin-left:6px;">NO RECORD</span>`;
 
+    // Star spectrum for the info panel (larger stars)
+    const infoStarSpectrum = this._buildStarSpectrum(stars, starColor, true);
+
     info.innerHTML = `
       <div style="font-family:var(--zzz-font);font-weight:900;font-size:40px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.06em;line-height:1.05;word-break:break-word;text-shadow:0 2px 20px rgba(0,0,0,0.9);">${this._escHtml(set.title)}</div>
       <div style="font-family:var(--zzz-font);font-weight:500;font-size:15px;color:var(--zzz-muted);margin-top:4px;text-shadow:0 1px 10px rgba(0,0,0,0.9);">${this._escHtml(set.artist)}</div>
-      <div style="display:flex;gap:14px;margin-top:10px;align-items:baseline;flex-wrap:wrap;">
-        <span style="color:${starColor};font-family:var(--zzz-font);font-weight:900;font-size:18px;text-shadow:0 0 10px ${starColor}40;">★ ${stars.toFixed(1)}</span>
-        <span style="color:${starColor};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;">${diffName}</span>
+      <div style="margin-top:10px;">${infoStarSpectrum}</div>
+      <div style="display:flex;gap:14px;margin-top:6px;align-items:baseline;flex-wrap:wrap;">
         <span style="color:var(--zzz-muted);font-family:var(--zzz-font);font-size:12px;">${bpm} BPM · ${durationStr}</span>
       </div>
       <div style="margin-top:8px;display:flex;align-items:baseline;gap:4px;">${recordHtml}</div>

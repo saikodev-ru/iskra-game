@@ -245,10 +245,10 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 
 .song-card {
   display: flex; align-items: center; gap: 0;
-  border-radius: 16px; overflow: hidden;
+  border-radius: 20px; overflow: hidden;
   background: rgba(0,0,0,0.8); border: none; cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative; height: 48px;
+  position: relative; height: 64px;
   backdrop-filter: blur(12px);
   max-width: 100%; box-sizing: border-box;
 }
@@ -265,32 +265,40 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 
 /* Active card left accent bar */
 .song-card.active::before {
-  content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
+  content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
   background: var(--zzz-lime); border-radius: 0 2px 2px 0;
   box-shadow: 0 0 8px rgba(170,255,0,0.4);
 }
 
 .song-card-thumb {
-  flex: 0 0 88px; height: 100%; background-size: cover; background-position: center;
-  position: relative; border-radius: 16px 0 0 16px;
+  flex: 0 0 100px; height: 100%; background-size: cover; background-position: center;
+  position: relative; border-radius: 20px 0 0 20px;
 }
 .song-card-thumb::after {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent 30%, rgba(0,0,0,0.95) 100%);
-  border-radius: 16px 0 0 16px;
+  background: linear-gradient(90deg, transparent 20%, rgba(0,0,0,0.98) 100%);
+  border-radius: 20px 0 0 20px;
 }
 
 .song-card-info {
-  flex: 1; display: flex; align-items: center; gap: 8px;
-  padding: 0 12px; overflow: hidden; height: 100%;
+  flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  padding: 6px 12px; overflow: hidden; height: 100%;
 }
-.song-card-title {
+.song-card-title-row {
   font-family: var(--zzz-font); font-weight: 900; font-size: 13px; color: var(--zzz-text);
   text-transform: uppercase; letter-spacing: 0.04em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: color 0.2s; flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 8px;
 }
-.song-card.active .song-card-title { color: #ffffff; }
+.song-card.active .song-card-title-row { color: #ffffff; }
+
+.song-card-artist {
+  font-family: var(--zzz-font); font-weight: 500; font-size: 11px; color: var(--zzz-muted);
+  letter-spacing: 0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
 
 .song-card-diff-count {
   font-family: var(--zzz-font); font-size: 11px; font-weight: 700; color: var(--zzz-lime);
@@ -349,6 +357,20 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   box-shadow: 0 0 12px rgba(170,255,0,0.12), inset 0 0 20px rgba(170,255,0,0.03);
 }
 
+/* Star spectrum bar — 10 stars */
+.star-spectrum {
+  display: flex; gap: 1px; align-items: center;
+}
+.star-spectrum .star {
+  font-size: 10px; line-height: 1; transition: all 0.2s;
+}
+.star-spectrum .star.filled {
+  text-shadow: 0 0 4px currentColor;
+}
+.star-spectrum .star.empty {
+  opacity: 0.2;
+}
+
 /* Local record badge in diff panel */
 .diff-record {
   font-family: var(--zzz-font); font-weight: 700; font-size: 11px;
@@ -371,10 +393,11 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 
 @media (max-width: 768px) {
   .song-list-column { width: 100% !important; max-width: 100% !important; }
-  .song-card { height: 40px; }
-  .song-card-thumb { flex: 0 0 56px; }
-  .song-card-title { font-size: 11px; }
-  .song-card-info { padding: 0 8px; }
+  .song-card { height: 52px; }
+  .song-card-thumb { flex: 0 0 72px; }
+  .song-card-title-row { font-size: 11px; }
+  .song-card-artist { font-size: 10px; }
+  .song-card-info { padding: 4px 8px; }
 }
 
 /* TEXT STYLES */
