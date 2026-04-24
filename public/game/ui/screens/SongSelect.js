@@ -208,67 +208,98 @@ export default class SongSelect {
 
     wrapper.appendChild(card);
 
-    // Difficulty dropdown
-    if (isExpanded && set.difficulties.length > 1) {
-      const diffList = document.createElement('div');
-      diffList.className = 'diff-dropdown';
-      diffList.style.cssText = `display:flex;flex-direction:column;gap:4px;padding:4px 8px 6px;`;
-
-      set.difficulties.forEach((diff, diffIdx) => {
-        const s = diff.difficulty?.stars || 0;
-        const c = DifficultyAnalyzer.getStarColor(s);
-        const isActive = isSelected && diffIdx === this.selectedDiffIndex;
-
-        // Build 10-star spectrum
-        const starSpectrumHtml = this._buildStarSpectrum(s, c);
-
-        // Get local record
-        const record = this._getRecord(set.id, diff.version);
-        const recordHtml = record
-          ? `<span class="diff-record diff-record--has">${record.score.toLocaleString()}</span>`
-          : `<span class="diff-record diff-record--none">?</span>`;
-
-        const diffRow = document.createElement('div');
-        diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
-        diffRow.style.cssText = `
-          display:flex;align-items:center;gap:8px;
-          padding:7px 12px;border-radius:16px;cursor:pointer;
-          transition:all 0.15s cubic-bezier(0.4,0,0.2,1);
-          background:${isActive ? 'rgba(170,255,0,0.08)' : 'rgba(0,0,0,0.6)'};
-          border:2px solid ${isActive ? 'var(--zzz-lime)' : 'transparent'};
-          ${isActive ? 'box-shadow:0 0 12px rgba(170,255,0,0.12),inset 0 0 20px rgba(170,255,0,0.03);' : ''}
-        `;
-        diffRow.innerHTML = `
-          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
-            <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(diff.version || 'NORMAL')}</span>
-            ${starSpectrumHtml}
-          </div>
-          ${recordHtml}
-        `;
-
-        diffRow.addEventListener('click', (e) => {
-          e.stopPropagation();
-          // Don't call _selectSong — we're on the same track, just change difficulty
-          this._selectDifficulty(diffIdx);
-        });
-        diffRow.addEventListener('mouseenter', () => {
-          if (!isActive) diffRow.style.background = 'rgba(30,30,30,0.8)';
-        });
-        diffRow.addEventListener('mouseleave', () => {
-          if (!diffRow.classList.contains('active')) diffRow.style.background = 'rgba(0,0,0,0.6)';
-        });
-
-        diffList.appendChild(diffRow);
-      });
+    // Always create diff dropdown (collapsed if not expanded)
+    if (set.difficulties.length > 1) {
+      const diffList = this._buildDiffDropdown(set, setIndex, isSelected, isExpanded);
       wrapper.appendChild(diffList);
     }
 
     return wrapper;
   }
 
+  /** Build a diff dropdown element */
+  _buildDiffDropdown(set, setIndex, isSelected, isExpanded) {
+    const diffList = document.createElement('div');
+    diffList.className = 'diff-dropdown' + (isExpanded ? '' : ' collapsed');
+
+    set.difficulties.forEach((diff, diffIdx) => {
+      const s = diff.difficulty?.stars || 0;
+      const c = DifficultyAnalyzer.getStarColor(s);
+      const isActive = isSelected && diffIdx === this.selectedDiffIndex;
+
+      const starSpectrumHtml = this._buildStarSpectrum(s, c);
+
+      const record = this._getRecord(set.id, diff.version);
+      const recordHtml = record
+        ? `<span class="diff-record diff-record--has">${record.score.toLocaleString()}</span>`
+        : `<span class="diff-record diff-record--none">?</span>`;
+
+      const diffRow = document.createElement('div');
+      diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
+      diffRow.style.cssText = `
+        display:flex;align-items:center;gap:8px;
+        padding:7px 12px;border-radius:20px;cursor:pointer;
+        transition:all 0.15s cubic-bezier(0.4,0,0.2,1);
+        background:${isActive ? 'rgba(170,255,0,0.08)' : 'rgba(0,0,0,0.6)'};
+        border:2px solid ${isActive ? 'var(--zzz-lime)' : 'transparent'};
+        ${isActive ? 'box-shadow:0 0 12px rgba(170,255,0,0.12),inset 0 0 20px rgba(170,255,0,0.03);' : ''}
+      `;
+      diffRow.innerHTML = `
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
+          <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(diff.version || 'NORMAL')}</span>
+          ${starSpectrumHtml}
+        </div>
+        ${recordHtml}
+      `;
+
+      diffRow.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._selectDifficulty(diffIdx);
+      });
+      diffRow.addEventListener('mouseenter', () => {
+        if (!diffRow.classList.contains('active')) diffRow.style.background = 'rgba(30,30,30,0.8)';
+      });
+      diffRow.addEventListener('mouseleave', () => {
+        if (!diffRow.classList.contains('active')) diffRow.style.background = 'rgba(0,0,0,0.6)';
+      });
+
+      diffList.appendChild(diffRow);
+    });
+
+    return diffList;
+  }
+
   _toggleExpand(setIndex) {
+    const wasExpanded = this._expandedCard;
     this._expandedCard = this._expandedCard === setIndex ? -1 : setIndex;
-    this._renderSongList();
+
+    // Collapse previously expanded
+    if (wasExpanded >= 0 && wasExpanded !== setIndex) {
+      const prevWrapper = document.querySelector(`.song-card-wrapper[data-index="${wasExpanded}"]`);
+      if (prevWrapper) {
+        const dd = prevWrapper.querySelector('.diff-dropdown');
+        if (dd) dd.classList.add('collapsed');
+        const dc = prevWrapper.querySelector('.song-card-diff-count');
+        if (dc) dc.textContent = `▼ ${this.beatmapSets[wasExpanded].difficulties.length}`;
+      }
+    }
+
+    // Toggle current
+    const wrapper = document.querySelector(`.song-card-wrapper[data-index="${setIndex}"]`);
+    if (!wrapper) return;
+    const dd = wrapper.querySelector('.diff-dropdown');
+    const dc = wrapper.querySelector('.song-card-diff-count');
+    const set = this.beatmapSets[setIndex];
+
+    if (this._expandedCard === setIndex) {
+      // Expanding
+      if (dd) dd.classList.remove('collapsed');
+      if (dc) dc.textContent = `▲ ${set.difficulties.length}`;
+    } else {
+      // Collapsing
+      if (dd) dd.classList.add('collapsed');
+      if (dc) dc.textContent = `▼ ${set.difficulties.length}`;
+    }
   }
 
   _escHtml(str) {
@@ -372,7 +403,6 @@ export default class SongSelect {
     const list = document.getElementById('song-list');
     if (!list) return;
 
-    // Update active class on song cards
     const wrappers = list.querySelectorAll('.song-card-wrapper');
     wrappers.forEach((wrapper) => {
       const idx = parseInt(wrapper.dataset.index);
@@ -383,7 +413,7 @@ export default class SongSelect {
       const isExpanded = idx === this._expandedCard;
       const set = this.beatmapSets[idx];
 
-      // Toggle active class
+      // Toggle active class on card
       card.classList.toggle('active', isSelected);
 
       // Update diff count arrow
@@ -392,60 +422,29 @@ export default class SongSelect {
         diffCount.textContent = `${isExpanded ? '▲' : '▼'} ${set.difficulties.length}`;
       }
 
-      // Rebuild diff dropdown only for the relevant wrappers
-      const existingDropdown = wrapper.querySelector('.diff-dropdown');
-      if (existingDropdown) existingDropdown.remove();
-
-      if (isExpanded && set.difficulties.length > 1) {
-        const diffList = document.createElement('div');
-        diffList.className = 'diff-dropdown';
-        diffList.style.cssText = `display:flex;flex-direction:column;gap:4px;padding:4px 8px 6px;`;
-
-        set.difficulties.forEach((diff, diffIdx) => {
-          const s = diff.difficulty?.stars || 0;
-          const c = DifficultyAnalyzer.getStarColor(s);
-          const isActive = isSelected && diffIdx === this.selectedDiffIndex;
-
-          const starSpectrumHtml = this._buildStarSpectrum(s, c);
-
-          const record = this._getRecord(set.id, diff.version);
-          const recordHtml = record
-            ? `<span class="diff-record diff-record--has">${record.score.toLocaleString()}</span>`
-            : `<span class="diff-record diff-record--none">?</span>`;
-
-          const diffRow = document.createElement('div');
-          diffRow.className = 'diff-dropdown-item' + (isActive ? ' active' : '');
-          diffRow.style.cssText = `
-            display:flex;align-items:center;gap:8px;
-            padding:7px 12px;border-radius:16px;cursor:pointer;
-            transition:all 0.15s cubic-bezier(0.4,0,0.2,1);
-            background:${isActive ? 'rgba(170,255,0,0.08)' : 'rgba(0,0,0,0.6)'};
-            border:2px solid ${isActive ? 'var(--zzz-lime)' : 'transparent'};
-            ${isActive ? 'box-shadow:0 0 12px rgba(170,255,0,0.12),inset 0 0 20px rgba(170,255,0,0.03);' : ''}
-          `;
-          diffRow.innerHTML = `
-            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
-              <span style="color:${isActive ? c : 'var(--zzz-text)'};font-family:var(--zzz-font);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(diff.version || 'NORMAL')}</span>
-              ${starSpectrumHtml}
-            </div>
-            ${recordHtml}
-          `;
-
-          diffRow.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this._selectDifficulty(diffIdx);
-          });
-          diffRow.addEventListener('mouseenter', () => {
-            if (!isActive) diffRow.style.background = 'rgba(30,30,30,0.8)';
-          });
-          diffRow.addEventListener('mouseleave', () => {
-            if (!diffRow.classList.contains('active')) diffRow.style.background = 'rgba(0,0,0,0.6)';
-          });
-
-          diffList.appendChild(diffRow);
-        });
-        wrapper.appendChild(diffList);
+      // Toggle diff dropdown visibility
+      const dd = wrapper.querySelector('.diff-dropdown');
+      if (dd) {
+        if (isExpanded) dd.classList.remove('collapsed');
+        else dd.classList.add('collapsed');
       }
+
+      // Update active diff item styling
+      const diffItems = wrapper.querySelectorAll('.diff-dropdown-item');
+      diffItems.forEach((item, diffIdx) => {
+        const isActive = isSelected && diffIdx === this.selectedDiffIndex;
+        const s = set.difficulties[diffIdx]?.difficulty?.stars || 0;
+        const c = DifficultyAnalyzer.getStarColor(s);
+
+        item.classList.toggle('active', isActive);
+        item.style.background = isActive ? 'rgba(170,255,0,0.08)' : 'rgba(0,0,0,0.6)';
+        item.style.borderColor = isActive ? 'var(--zzz-lime)' : 'transparent';
+        item.style.boxShadow = isActive ? '0 0 12px rgba(170,255,0,0.12),inset 0 0 20px rgba(170,255,0,0.03)' : 'none';
+
+        // Update version name color
+        const nameSpan = item.querySelector('span[style*="font-weight:700"]');
+        if (nameSpan) nameSpan.style.color = isActive ? c : 'var(--zzz-text)';
+      });
     });
   }
 

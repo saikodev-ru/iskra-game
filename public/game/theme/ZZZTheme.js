@@ -245,8 +245,8 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 
 .song-card {
   display: flex; align-items: center; gap: 0;
-  border-radius: 20px; overflow: hidden;
-  background: rgba(0,0,0,0.8); border: none; cursor: pointer;
+  border-radius: 24px; overflow: hidden;
+  background: rgba(0,0,0,0.65); border: none; cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative; height: 64px;
   backdrop-filter: blur(12px);
@@ -269,13 +269,13 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 }
 
 .song-card-thumb {
-  flex: 0 0 100px; height: 100%; background-size: cover; background-position: center;
-  position: relative; border-radius: 20px 0 0 20px;
+  flex: 0 0 110px; height: 100%; background-size: cover; background-position: center;
+  position: relative; border-radius: 24px 0 0 24px;
+  -webkit-mask-image: linear-gradient(90deg, black 25%, transparent 100%);
+  mask-image: linear-gradient(90deg, black 25%, transparent 100%);
 }
 .song-card-thumb::after {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent 20%, rgba(0,0,0,0.98) 100%);
-  border-radius: 20px 0 0 20px;
+  display: none;
 }
 
 .song-card-info {
@@ -340,10 +340,17 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 .song-card-wrapper:nth-child(n+9) { animation-delay: 200ms; }
 
 /* DIFFICULTY DROPDOWN */
-.diff-dropdown { animation: dropdown-in 0.15s ease-out forwards; }
-@keyframes dropdown-in {
-  from { opacity: 0; max-height: 0; transform: translateY(-6px); }
-  to   { opacity: 1; max-height: 600px; transform: translateY(0); }
+.diff-dropdown {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 4px 8px 6px;
+  overflow: hidden;
+  max-height: 500px; opacity: 1;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.diff-dropdown.collapsed {
+  max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0;
 }
 .diff-dropdown-item {
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
@@ -391,8 +398,8 @@ body.combo-break { animation: vignette-red 0.3s ease; }
 
 @media (max-width: 768px) {
   .song-list-column { width: 100% !important; max-width: 100% !important; }
-  .song-card { height: 52px; }
-  .song-card-thumb { flex: 0 0 72px; }
+  .song-card { height: 52px; border-radius: 20px; }
+  .song-card-thumb { flex: 0 0 80px; border-radius: 20px 0 0 20px; }
   .song-card-title-row { font-size: 11px; }
   .song-card-artist { font-size: 10px; }
   .song-card-info { padding: 4px 8px; }
