@@ -114,6 +114,8 @@ async function boot() {
   let _endingGame = false;  // guard against double-calling endGame()
   let _inCountdown = false; // true during 3-2-1 countdown (after resume)
   let _dying = false;       // true during death animation (HP depleted)
+  let _deathTimeout = null; // timeout ID for death sequence → endGame
+  let _skipResult = false;  // when true, endGame() rAF won't show result screen (restart)
   let currentMapData = null;
   let currentLaneCount = 4;
 
@@ -147,8 +149,9 @@ async function boot() {
   });
 
   const startGame = (map) => {
-    if (gameActive) endGame();
+    if (gameActive) { _skipResult = true; endGame(); }
     _dying = false;
+    if (_deathTimeout) { clearTimeout(_deathTimeout); _deathTimeout = null; }
     initAudio();
 
     // Restore HUD and judgement container opacity (hidden during song-select transition)
@@ -321,7 +324,7 @@ async function boot() {
           deathEl.id = 'death-overlay';
           document.body.appendChild(deathEl);
           // After music finishes slowing, show result
-          setTimeout(() => endGame(), 2800);
+          _deathTimeout = setTimeout(() => endGame(), 2800);
         }
       },
       render(delta) {
@@ -351,6 +354,8 @@ async function boot() {
     _dying = false;
     gameActive = false;
     input.disable();
+    // Cancel pending death timeout (if endGame was called manually before timeout fired)
+    if (_deathTimeout) { clearTimeout(_deathTimeout); _deathTimeout = null; }
     // Remove overlays
     const cdOverlay = document.getElementById('countdown-overlay');
     if (cdOverlay) cdOverlay.remove();
@@ -390,6 +395,8 @@ async function boot() {
     // and avoid race conditions with the game loop's requestAnimationFrame
     requestAnimationFrame(() => {
       _endingGame = false;
+      // If restart was triggered, skip showing the result screen
+      if (_skipResult) { _skipResult = false; return; }
       screens.show('result', { stats, map: currentMapData });
     });
   };
@@ -424,9 +431,9 @@ async function boot() {
     _pauseOverlay = overlay;
 
     document.getElementById('resume-btn').addEventListener('click', () => { _closePause(); resumeGame(); });
-    document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); endGame(); startGame(currentMapData); });
+    document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; endGame(); startGame(currentMapData); });
     document.getElementById('settings-btn').addEventListener('click', () => { _openPauseSettings(); });
-    document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); endGame(); screens.show('song-select'); });
+    document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); _skipResult = true; endGame(); screens.show('song-select'); });
     EventBus.emit('game:pause');
   };
 

@@ -262,3 +262,29 @@ Stage Summary:
 - Result screen completely redesigned: song info, large gradient grade, glass-morphism panels, animated stacked bar chart, staggered entrance animations
 - HUD rank indicator also uses gradient text matching result screen colors
 - Lint passes clean
+---
+Task ID: 1
+Agent: main
+Task: Fix restart not working and keyboard controls not being listened to
+
+Work Log:
+- Read all game files: main.js, GameLoop.js, InputManager.js, NoteRenderer.js, JudgementDisplay.js, HUD.js, ZZZTheme.js, ResultScreen.js, ThreeScene.js, AudioEngine.js, ScreenManager.js
+- Identified root cause: endGame() queues a requestAnimationFrame that shows the result screen. When restart is triggered from pause menu, this rAF fires AFTER startGame() has already started a new game, causing the result screen to appear on top of the running game.
+- Identified secondary issue: death timeout not cancelled on restart, causing endGame() to fire again later
+- Identified keyboard issue is a symptom of the restart bug (result screen overlay covers the game, making it appear that keyboard doesn't work)
+- Applied fixes to public/game/main.js:
+  1. Added _deathTimeout variable to track death sequence timeout ID
+  2. Added _skipResult flag to prevent result screen from showing on restart
+  3. Store death timeout ID in setTimeout call
+  4. Cancel death timeout in endGame()
+  5. Check _skipResult in rAF callback to conditionally skip result screen
+  6. Set _skipResult=true in pause restart and quit handlers
+  7. Set _skipResult=true and cancel death timeout in startGame() for safety
+- Ran lint: no errors
+
+Stage Summary:
+- Fixed restart from pause menu no longer shows result screen
+- Fixed restart from pause menu during death sequence properly cancels death timeout
+- Fixed quit from pause menu no longer shows result screen
+- Keyboard controls work correctly after restart (underlying issue was the result screen overlay)
+- All changes in public/game/main.js
