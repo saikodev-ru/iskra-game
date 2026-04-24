@@ -52,7 +52,6 @@ export default class ThreeScene {
 
     // CRT / Glitch state
     this._crtIntensity = 0;     // 0-1, CRT overlay intensity (scanlines, barrel distortion)
-    this._chromaticAberration = 0; // 0-1, chromatic aberration (RGB shift) — separate from CRT
     this._glitchIntensity = 0;  // 0-1, glitch effect intensity (RGB split, scan disruption)
     this._glitchSeed = 0;       // random seed for glitch patterns
 
@@ -308,7 +307,6 @@ export default class ThreeScene {
         uniform float uOpacity;
         uniform float uMissFlash;
         uniform float uCrtIntensity;
-        uniform float uChromaticAberration;
         uniform float uGlitchIntensity;
         uniform float uGlitchSeed;
         uniform float uTime;
@@ -349,12 +347,7 @@ export default class ThreeScene {
 
           uv = clamp(uv, 0.0, 1.0);
 
-          // Chromatic aberration (RGB shift) — controlled independently
-          float ca = uChromaticAberration * 0.003 * (1.0 + 2.0 * length(vUv - 0.5));
-          vec4 texR = texture2D(uTexture, vec2(uv.x + ca, uv.y));
-          vec4 texG = texture2D(uTexture, uv);
-          vec4 texB = texture2D(uTexture, vec2(uv.x - ca, uv.y));
-          vec3 texRgb = vec3(texR.r, texG.g, texB.b);
+          vec3 texRgb = texture2D(uTexture, uv).rgb;
 
           vec3 color = texRgb * 0.25;
           float glow = uBass * 0.2 + uAudioIntensity * 0.08;
@@ -400,7 +393,6 @@ export default class ThreeScene {
           uOpacity: { value: 0 },
           uMissFlash: { value: 0 },
           uCrtIntensity: { value: this._crtIntensity },
-          uChromaticAberration: { value: this._chromaticAberration },
           uGlitchIntensity: { value: 0 },
           uGlitchSeed: { value: 0 },
           uTime: { value: 0 },
@@ -594,7 +586,7 @@ export default class ThreeScene {
       // Calculate video aspect
       const videoAspect = video.videoWidth / video.videoHeight || 16 / 9;
 
-      // Shader material for video — with CRT + glitch support
+      // Shader material for video — with CRT + glitch support (no chromatic aberration)
       const fragmentShader = `
         uniform sampler2D uTexture;
         uniform float uBass;
@@ -605,7 +597,6 @@ export default class ThreeScene {
         uniform float uOpacity;
         uniform float uMissFlash;
         uniform float uCrtIntensity;
-        uniform float uChromaticAberration;
         uniform float uGlitchIntensity;
         uniform float uGlitchSeed;
         uniform float uTime;
@@ -647,12 +638,7 @@ export default class ThreeScene {
           // Clamp UVs to prevent wrapping
           uv = clamp(uv, 0.0, 1.0);
 
-          // Chromatic aberration (RGB shift) — controlled independently
-          float ca = uChromaticAberration * 0.003 * (1.0 + 2.0 * length(vUv - 0.5));
-          vec4 texR = texture2D(uTexture, vec2(uv.x + ca, uv.y));
-          vec4 texG = texture2D(uTexture, uv);
-          vec4 texB = texture2D(uTexture, vec2(uv.x - ca, uv.y));
-          vec3 texRgb = vec3(texR.r, texG.g, texB.b);
+          vec3 texRgb = texture2D(uTexture, uv).rgb;
 
           vec3 color = texRgb * 0.3;
           float glow = uBass * 0.2 + uAudioIntensity * 0.08;
@@ -698,7 +684,6 @@ export default class ThreeScene {
           uOpacity: { value: 0 },
           uMissFlash: { value: 0 },
           uCrtIntensity: { value: this._crtIntensity },
-          uChromaticAberration: { value: this._chromaticAberration },
           uGlitchIntensity: { value: 0 },
           uGlitchSeed: { value: 0 },
           uTime: { value: 0 },
@@ -846,9 +831,9 @@ export default class ThreeScene {
     this._crtIntensity = Math.max(0, Math.min(1, intensity));
   }
 
-  /** Set chromatic aberration (RGB shift) intensity (0-1) — separate from CRT scanlines */
+  /** Set chromatic aberration — REMOVED, kept as no-op for compatibility */
   setChromaticAberration(intensity) {
-    this._chromaticAberration = Math.max(0, Math.min(1, intensity));
+    // Chromatic aberration removed — no-op
   }
 
   /** Trigger a glitch transition effect */
@@ -1004,7 +989,6 @@ export default class ThreeScene {
       this._videoMaterial.uniforms.uMissFlash.value = this._missFlash * gfx;
       // CRT + Glitch uniforms
       this._videoMaterial.uniforms.uCrtIntensity.value = this._crtIntensity;
-      if (this._videoMaterial.uniforms.uChromaticAberration) this._videoMaterial.uniforms.uChromaticAberration.value = this._chromaticAberration;
       this._videoMaterial.uniforms.uGlitchIntensity.value = this._glitchIntensity;
       this._videoMaterial.uniforms.uGlitchSeed.value = this._glitchSeed;
       this._videoMaterial.uniforms.uTime.value = time * 0.001;
@@ -1015,7 +999,6 @@ export default class ThreeScene {
       this._bgImageMaterial.uniforms.uBass.value = bassPulse;
       this._bgImageMaterial.uniforms.uAudioIntensity.value = audioPulse;
       if (this._bgImageMaterial.uniforms.uCrtIntensity) this._bgImageMaterial.uniforms.uCrtIntensity.value = this._crtIntensity;
-      if (this._bgImageMaterial.uniforms.uChromaticAberration) this._bgImageMaterial.uniforms.uChromaticAberration.value = this._chromaticAberration;
       if (this._bgImageMaterial.uniforms.uGlitchIntensity) this._bgImageMaterial.uniforms.uGlitchIntensity.value = this._glitchIntensity;
       if (this._bgImageMaterial.uniforms.uGlitchSeed) this._bgImageMaterial.uniforms.uGlitchSeed.value = this._glitchSeed;
       if (this._bgImageMaterial.uniforms.uTime) this._bgImageMaterial.uniforms.uTime.value = time * 0.001;

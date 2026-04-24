@@ -238,7 +238,8 @@ export default class NoteRenderer {
       cctx.fill();
     }
 
-    // Fade overlay below judge line — darken/transparent so the field fades out
+    // Beautiful fade overlay below judge line — lane-colored glow fading to dark
+    const fadeDist = bottomY - judgeLineY;
     for (let i = 0; i < laneCount; i++) {
       const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
       const btg = this._getLaneGeometry(i, bottomY, laneCount);
@@ -248,25 +249,57 @@ export default class NoteRenderer {
       cctx.lineTo(btg.x + btg.width, bottomY);
       cctx.lineTo(btg.x, bottomY);
       cctx.closePath();
-      // Gradient fade from semi-transparent to full black
+
+      // Colored glow near judge line fading to transparent below
+      const laneColor = LANE_COLORS[i % LANE_COLORS.length];
+      const rgb = this._hexToRgb(laneColor);
       const fadeGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
-      fadeGrad.addColorStop(0, 'rgba(0,0,0,0.1)');
-      fadeGrad.addColorStop(0.4, 'rgba(0,0,0,0.5)');
+      fadeGrad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},0.25)`);
+      fadeGrad.addColorStop(0.08, `rgba(${rgb.r},${rgb.g},${rgb.b},0.12)`);
+      fadeGrad.addColorStop(0.25, `rgba(${rgb.r},${rgb.g},${rgb.b},0.04)`);
+      fadeGrad.addColorStop(0.5, 'rgba(0,0,0,0.15)');
       fadeGrad.addColorStop(1, 'rgba(0,0,0,0.95)');
       cctx.fillStyle = fadeGrad;
       cctx.fill();
     }
 
-    // Draw lane dividers — extended to bottomY
-    cctx.strokeStyle = 'rgba(170,255,0,0.05)';
-    cctx.lineWidth = 1;
+    // Bright glow strip right below judge line — white fade
+    const glowH = 30;
+    for (let i = 0; i < laneCount; i++) {
+      const bg = this._getLaneGeometry(i, judgeLineY, laneCount);
+      const glowBotGeom = this._getLaneGeometry(i, judgeLineY + glowH, laneCount);
+      cctx.beginPath();
+      cctx.moveTo(bg.x, judgeLineY);
+      cctx.lineTo(bg.x + bg.width, judgeLineY);
+      cctx.lineTo(glowBotGeom.x + glowBotGeom.width, judgeLineY + glowH);
+      cctx.lineTo(glowBotGeom.x, judgeLineY + glowH);
+      cctx.closePath();
+      const glowGrad = cctx.createLinearGradient(0, judgeLineY, 0, judgeLineY + glowH);
+      glowGrad.addColorStop(0, 'rgba(255,255,255,0.18)');
+      glowGrad.addColorStop(0.3, 'rgba(255,255,255,0.05)');
+      glowGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      cctx.fillStyle = glowGrad;
+      cctx.fill();
+    }
+
+    // Draw lane dividers — extended to bottomY with fade
     for (let i = 0; i <= laneCount; i++) {
       const tg = this._getLaneGeometry(i, topY, laneCount);
       const btg = this._getLaneGeometry(i, bottomY, laneCount);
+      // Main divider line from top to bottom
+      cctx.save();
+      const divGrad = cctx.createLinearGradient(0, topY, 0, bottomY);
+      divGrad.addColorStop(0, 'rgba(170,255,0,0.05)');
+      divGrad.addColorStop(0.82, 'rgba(170,255,0,0.05)');  // judgeLineY is at 0.92/1.12 ≈ 0.82 of the way
+      divGrad.addColorStop(0.9, 'rgba(255,255,255,0.06)');
+      divGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      cctx.strokeStyle = divGrad;
+      cctx.lineWidth = 1;
       cctx.beginPath();
       cctx.moveTo(tg.x, topY);
       cctx.lineTo(btg.x, bottomY);
       cctx.stroke();
+      cctx.restore();
     }
 
     // Update cache metadata
@@ -293,8 +326,9 @@ export default class NoteRenderer {
   }
 
   _getBottomY() {
-    // Extend the field below the judge line for aesthetics
-    return this.safeArea.y + this.safeArea.h * 0.98;
+    // Extend the field well below the judge line for aesthetics
+    // Judge line is at 0.92; extend to bottom of screen + a bit beyond
+    return this.safeArea.y + this.safeArea.h * 1.12;
   }
 
   _getPerspectiveScale(y) {
@@ -777,27 +811,36 @@ export default class NoteRenderer {
     const totalWidth = laneCount * fullGeom.width;
     const gfx = this._gfx();
 
-    // White judgement line with soft glow
+    // Outer white glow bloom — wide, soft
     ctx.save();
-    ctx.shadowBlur = 20 * gfx;
-    ctx.shadowColor = 'rgba(255,255,255,0.6)';
-    const grad = ctx.createLinearGradient(startX, judgeLineY, startX + totalWidth, judgeLineY);
-    grad.addColorStop(0, 'rgba(255,255,255,0)');
-    grad.addColorStop(0.06, 'rgba(255,255,255,0.5)');
-    grad.addColorStop(0.5, '#ffffff');
-    grad.addColorStop(0.94, 'rgba(255,255,255,0.5)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(startX, judgeLineY - 2.5, totalWidth, 5);
+    ctx.globalAlpha = 0.18;
+    ctx.shadowBlur = 45 * gfx;
+    ctx.shadowColor = 'rgba(255,255,255,0.7)';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(startX - 4, judgeLineY - 6, totalWidth + 8, 12);
     ctx.restore();
 
-    // Soft white bloom line
+    // Main white judgement line — solid and bright
     ctx.save();
-    ctx.globalAlpha = 0.25;
-    ctx.shadowBlur = 35 * gfx;
-    ctx.shadowColor = 'rgba(255,255,255,0.5)';
+    ctx.shadowBlur = 25 * gfx;
+    ctx.shadowColor = 'rgba(255,255,255,0.8)';
+    const grad = ctx.createLinearGradient(startX, judgeLineY, startX + totalWidth, judgeLineY);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.04, 'rgba(255,255,255,0.7)');
+    grad.addColorStop(0.5, '#ffffff');
+    grad.addColorStop(0.96, 'rgba(255,255,255,0.7)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(startX, judgeLineY - 3, totalWidth, 6);
+    ctx.restore();
+
+    // Core bright white center line — razor sharp
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.shadowBlur = 40 * gfx;
+    ctx.shadowColor = 'rgba(255,255,255,0.6)';
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(startX, judgeLineY - 1, totalWidth, 2);
+    ctx.fillRect(startX + 2, judgeLineY - 1.5, totalWidth - 4, 3);
     ctx.restore();
   }
 
@@ -860,6 +903,13 @@ export default class NoteRenderer {
         ctx.restore();
       }
     }
+  }
+
+  _hexToRgb(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return { r, g, b };
   }
 
   /* ── Utility ────────────────────────────────────────────────────── */
