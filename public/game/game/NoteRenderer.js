@@ -229,31 +229,26 @@ export default class NoteRenderer {
     const cx = sa.x + sa.w / 2;
     const fullPw = sa.w * 0.55;
 
-    const topScale = this._getPerspectiveScale(topY);
-    const judgeScale = 1.0;
-    const topPw = fullPw * topScale;
-    const judgePw = fullPw * judgeScale;
+    // Draw each lane as a single trapezoid path (no stepping)
+    for (let i = 0; i < laneCount; i++) {
+      const topGeom = this._getLaneGeometry(i, topY, laneCount);
+      const judgeGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
+      const botGeom = this._getLaneGeometry(i, bottomY, laneCount);
 
-    // Sample rows for smooth gradient fill of trapezoidal lanes
-    const steps = 60;
-    const stepH = (bottomY - topY) / steps;
+      // Full lane: top → judge line (where perspective changes)
+      cctx.fillStyle = i % 2 === 0
+        ? 'rgba(10,7,5,0.88)'
+        : 'rgba(18,13,9,0.88)';
+      cctx.beginPath();
+      cctx.moveTo(topGeom.x, topY);
+      cctx.lineTo(topGeom.x + topGeom.width, topY);
+      cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
+      cctx.lineTo(judgeGeom.x, judgeLineY);
+      cctx.closePath();
+      cctx.fill();
 
-    for (let s = 0; s < steps; s++) {
-      const y1 = topY + s * stepH;
-      const y2 = topY + (s + 1) * stepH;
-      const yMid = (y1 + y2) / 2;
-      const scale = this._getPerspectiveScale(yMid);
-      const pw = fullPw * scale;
-      const le = cx - pw / 2;
-
-      for (let i = 0; i < laneCount; i++) {
-        const lx = le + i * (pw / laneCount);
-        const lw = pw / laneCount;
-        cctx.fillStyle = i % 2 === 0
-          ? 'rgba(10,7,5,0.88)'
-          : 'rgba(18,13,9,0.88)';
-        cctx.fillRect(lx, y1, lw, stepH + 1); // +1 to avoid gaps
-      }
+      // Below judge line: extend as rectangle (no perspective below)
+      cctx.fillRect(judgeGeom.x, judgeLineY, judgeGeom.width, bottomY - judgeLineY);
     }
 
     // Depth gradient overlay — subtle darkening toward the top to hint at distance
@@ -292,7 +287,9 @@ export default class NoteRenderer {
       cctx.fillRect(laneGeom.x, judgeLineY, laneGeom.width, glowH);
     }
 
-    // Draw lane dividers — converging lines from vanishing point to judge line
+    // Draw lane dividers — straight converging lines (linear perspective = straight)
+    const topEdgeGeom = this._getLaneGeometry(0, topY, laneCount);
+    const judgeEdgeGeom = this._getLaneGeometry(0, judgeLineY, laneCount);
     for (let i = 0; i <= laneCount; i++) {
       cctx.save();
       const divGrad = cctx.createLinearGradient(0, topY, 0, bottomY);
@@ -304,45 +301,37 @@ export default class NoteRenderer {
       cctx.lineWidth = 1;
       cctx.beginPath();
 
-      // Draw converging line using multiple segments for smooth curve
-      const segSteps = 40;
-      for (let s = 0; s <= segSteps; s++) {
-        const t = s / segSteps;
-        const y = topY + t * (bottomY - topY);
-        const geom = this._getLaneGeometry(i, y, laneCount);
-        if (s === 0) cctx.moveTo(geom.x, y);
-        else cctx.lineTo(geom.x, y);
-      }
+      const topG = this._getLaneGeometry(i, topY, laneCount);
+      const botG = this._getLaneGeometry(i, bottomY, laneCount);
+      // With linear perspective, edges are straight lines
+      cctx.moveTo(topG.x, topY);
+      cctx.lineTo(botG.x, bottomY);
       cctx.stroke();
       cctx.restore();
     }
 
-    // Side edges — converging lines with subtle outer glow
+    // Side edges — straight converging lines with subtle outer glow
     cctx.save();
-    // Left edge
-    cctx.beginPath();
-    for (let s = 0; s <= 40; s++) {
-      const t = s / 40;
-      const y = topY + t * (bottomY - topY);
-      const geom = this._getLaneGeometry(0, y, laneCount);
-      if (s === 0) cctx.moveTo(geom.x, y);
-      else cctx.lineTo(geom.x, y);
-    }
+    const leftTop = this._getLaneGeometry(0, topY, laneCount);
+    const leftBot = this._getLaneGeometry(0, bottomY, laneCount);
+    const rightTop = this._getLaneGeometry(laneCount, topY, laneCount);
+    const rightBot = this._getLaneGeometry(laneCount, bottomY, laneCount);
+
     cctx.strokeStyle = 'rgba(170,255,0,0.06)';
     cctx.lineWidth = 2;
     cctx.shadowBlur = 8;
     cctx.shadowColor = 'rgba(170,255,0,0.15)';
+
+    // Left edge
+    cctx.beginPath();
+    cctx.moveTo(leftTop.x, topY);
+    cctx.lineTo(leftBot.x, bottomY);
     cctx.stroke();
 
     // Right edge
     cctx.beginPath();
-    for (let s = 0; s <= 40; s++) {
-      const t = s / 40;
-      const y = topY + t * (bottomY - topY);
-      const geom = this._getLaneGeometry(laneCount, y, laneCount);
-      if (s === 0) cctx.moveTo(geom.x, y);
-      else cctx.lineTo(geom.x, y);
-    }
+    cctx.moveTo(rightTop.x, topY);
+    cctx.lineTo(rightBot.x, bottomY);
     cctx.stroke();
     cctx.restore();
 
