@@ -5,71 +5,129 @@ export default class MainMenu {
   constructor({ audio, screens }) {
     this.audio = audio;
     this.screens = screens;
+    this._keyHandler = null;
+    this._tickerInterval = null;
+    this._initTime = Date.now();
   }
 
   build() {
     return `
-      <div style="display:flex;flex-direction:column;height:100%;background:rgba(0,0,0,0.6);overflow:hidden;">
-        <!-- Top spacer -->
-        <div style="flex:1;min-height:24px;"></div>
+      <div id="mm-root" style="display:flex;flex-direction:column;height:100%;position:relative;overflow:hidden;">
+        <!-- Animated background grain -->
+        <div style="position:absolute;inset:0;opacity:0.03;pointer-events:none;background-image:url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E');animation:mm-grain 0.5s steps(4) infinite;"></div>
 
-        <!-- Main content area -->
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:40px;padding:0 32px;">
+        <!-- Top gradient fade -->
+        <div style="position:absolute;top:0;left:0;right:0;height:120px;background:linear-gradient(to bottom,rgba(0,0,0,0.7),transparent);pointer-events:none;z-index:1;"></div>
 
-          <!-- Title block with parallax -->
-          <div id="mm-parallax-title" class="parallax-layer" data-parallax="6" style="text-align:center;">
-            <h1 class="zzz-title" style="font-size:clamp(40px,8vw,72px);color:var(--zzz-lime);letter-spacing:0.25em;margin:0;line-height:1;text-shadow:0 0 40px rgba(170,255,0,0.4),0 0 80px rgba(170,255,0,0.2);">RHYTHM::OS</h1>
-            <div style="margin-top:12px;font-family:var(--zzz-font);font-weight:500;font-size:13px;color:var(--zzz-muted);letter-spacing:0.5em;text-transform:uppercase;">Neural Rhythm Interface</div>
+        <!-- Main content -->
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 40px;position:relative;z-index:2;">
+
+          <!-- Title block -->
+          <div id="mm-parallax-title" class="parallax-layer" data-parallax="5" style="text-align:center;margin-bottom:8px;">
+            <!-- Glitch title -->
+            <div style="position:relative;display:inline-block;">
+              <h1 id="mm-title" class="mm-title" style="font-family:var(--zzz-font);font-weight:900;font-size:clamp(42px,9vw,80px);letter-spacing:0.2em;line-height:1;margin:0;position:relative;">
+                <span style="color:var(--zzz-lime);text-shadow:0 0 60px rgba(170,255,0,0.35),0 0 120px rgba(170,255,0,0.15);">RHYTHM</span><span style="color:rgba(255,255,255,0.9);">::</span><span style="color:var(--zzz-text);text-shadow:0 0 40px rgba(240,240,240,0.2);">OS</span>
+              </h1>
+              <!-- Glitch overlay layer -->
+              <div id="mm-glitch-layer" style="position:absolute;inset:0;pointer-events:none;overflow:hidden;" aria-hidden="true"></div>
+            </div>
+            <!-- Subtitle -->
+            <div id="mm-subtitle" style="margin-top:12px;font-family:var(--zzz-font);font-weight:500;font-size:12px;color:var(--zzz-muted);letter-spacing:0.6em;text-transform:uppercase;opacity:0;animation:mm-fade-up 0.6s 0.3s ease-out forwards;">Neural Rhythm Interface</div>
+            <!-- Animated underline -->
+            <div style="margin:16px auto 0;width:0;height:2px;background:linear-gradient(90deg,transparent,var(--zzz-lime),transparent);animation:mm-line-expand 0.8s 0.5s ease-out forwards;border-radius:1px;box-shadow:0 0 12px rgba(170,255,0,0.3);"></div>
           </div>
 
-          <!-- Navigation buttons with parallax -->
-          <div id="mm-parallax-btns" class="parallax-layer" data-parallax="3" style="display:flex;flex-direction:column;gap:14px;align-items:center;">
-            <button class="zzz-btn zzz-btn--primary" data-action="play" style="min-width:280px;font-size:16px;padding:14px 36px;">
-              <span style="position:relative;z-index:1;">▶&ensp;PLAY</span>
+          <!-- Navigation buttons -->
+          <div id="mm-parallax-btns" class="parallax-layer" data-parallax="3" style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:36px;">
+            <button class="mm-nav-btn mm-nav-btn--primary" data-action="play" style="opacity:0;animation:mm-fade-up 0.5s 0.4s ease-out forwards;">
+              <span class="mm-nav-icon" style="font-size:18px;">▶</span>
+              <span class="mm-nav-text">PLAY</span>
+              <span class="mm-nav-arrow" style="opacity:0.4;">→</span>
             </button>
-            <button class="zzz-btn" data-action="settings" style="min-width:280px;border-color:var(--zzz-graphite-2);">
-              <span style="position:relative;z-index:1;">⚙&ensp;SETTINGS</span>
+            <button class="mm-nav-btn" data-action="settings" style="opacity:0;animation:mm-fade-up 0.5s 0.5s ease-out forwards;">
+              <span class="mm-nav-icon" style="font-size:16px;">⚙</span>
+              <span class="mm-nav-text">SETTINGS</span>
+              <span class="mm-nav-arrow" style="opacity:0.4;">→</span>
             </button>
           </div>
 
-          <!-- Stats panel -->
-          <div class="parallax-layer" data-parallax="2" style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-width:480px;width:100%;">
-            <div class="zzz-panel" style="padding:16px 20px;flex:1;min-width:120px;text-align:center;">
-              <div class="zzz-label" style="margin-bottom:6px;font-size:9px;">BEATMAPS</div>
-              <div id="mm-stat-maps" class="zzz-value" style="font-size:28px;color:var(--zzz-lime);line-height:1;">—</div>
+          <!-- Stats row -->
+          <div class="parallax-layer" data-parallax="2" style="display:flex;gap:10px;justify-content:center;margin-top:40px;opacity:0;animation:mm-fade-up 0.5s 0.6s ease-out forwards;">
+            <div class="mm-stat-card">
+              <div class="mm-stat-label">BEATMAPS</div>
+              <div id="mm-stat-maps" class="mm-stat-value" style="color:var(--zzz-lime);">—</div>
             </div>
-            <div class="zzz-panel" style="padding:16px 20px;flex:1;min-width:120px;text-align:center;">
-              <div class="zzz-label" style="margin-bottom:6px;font-size:9px;">BEST SCORE</div>
-              <div class="zzz-value" style="font-size:28px;color:var(--zzz-yellow);line-height:1;">—</div>
+            <div class="mm-stat-card">
+              <div class="mm-stat-label">BEST SCORE</div>
+              <div id="mm-stat-best" class="mm-stat-value" style="color:var(--zzz-yellow);">—</div>
             </div>
-            <div class="zzz-panel" style="padding:16px 20px;flex:1;min-width:120px;text-align:center;">
-              <div class="zzz-label" style="margin-bottom:6px;font-size:9px;">PLAY TIME</div>
-              <div class="zzz-value" style="font-size:28px;color:var(--zzz-text);line-height:1;">0h</div>
+            <div class="mm-stat-card">
+              <div class="mm-stat-label">PLAY TIME</div>
+              <div id="mm-stat-time" class="mm-stat-value">0h</div>
+            </div>
+            <div class="mm-stat-card">
+              <div class="mm-stat-label">TOTAL PLAYS</div>
+              <div id="mm-stat-plays" class="mm-stat-value" style="color:var(--zzz-purple);">—</div>
             </div>
           </div>
         </div>
 
-        <!-- Featured section -->
-        <div style="padding:0 32px 12px;">
-          <div class="zzz-panel" style="padding:0;overflow:hidden;position:relative;">
-            <div style="position:absolute;inset:0;background:linear-gradient(135deg, rgba(170,255,0,0.06) 0%, rgba(168,85,247,0.08) 50%, rgba(170,255,0,0.04) 100%);pointer-events:none;"></div>
-            <div style="position:relative;padding:24px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
-              <div>
-                <div class="zzz-label" style="margin-bottom:8px;font-size:10px;color:var(--zzz-purple);">FEATURED</div>
-                <div style="font-family:var(--zzz-font);font-weight:900;font-size:18px;color:var(--zzz-text);text-transform:uppercase;letter-spacing:0.08em;">NEW SEASON — COMING SOON</div>
-                <div style="font-family:var(--zzz-font);font-weight:500;font-size:12px;color:var(--zzz-muted);margin-top:4px;">Stay tuned for ranked play and online leaderboards</div>
+        <!-- Bottom section -->
+        <div style="position:relative;z-index:2;flex-shrink:0;">
+          <!-- News ticker -->
+          <div style="position:relative;height:32px;overflow:hidden;margin:0 40px 12px;border-top:1px solid rgba(170,255,0,0.08);border-bottom:1px solid rgba(170,255,0,0.08);opacity:0;animation:mm-fade-up 0.5s 0.7s ease-out forwards;">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:80px;background:linear-gradient(90deg,rgba(0,0,0,0.95),transparent);z-index:2;display:flex;align-items:center;padding-left:12px;">
+              <span style="font-family:var(--zzz-font);font-weight:900;font-size:9px;color:var(--zzz-lime);letter-spacing:0.15em;">NEWS</span>
+            </div>
+            <div id="mm-ticker" style="position:absolute;inset:0;display:flex;align-items:center;">
+              <div id="mm-ticker-content" style="white-space:nowrap;font-family:var(--zzz-font);font-weight:500;font-size:11px;color:var(--zzz-muted);letter-spacing:0.04em;padding-left:90px;animation:mm-ticker-scroll 30s linear infinite;">
+                <span style="color:var(--zzz-lime);margin-right:8px;">●</span> Season 1 ranked play coming soon
+                <span style="color:var(--zzz-graphite-2);margin:0 24px;">│</span>
+                <span style="color:var(--zzz-yellow);margin-right:8px;">●</span> New difficulty analyzer with star ratings
+                <span style="color:var(--zzz-graphite-2);margin:0 24px;">│</span>
+                <span style="color:var(--zzz-purple);margin-right:8px;">●</span> Video backgrounds now supported
+                <span style="color:var(--zzz-graphite-2);margin:0 24px;">│</span>
+                <span style="color:var(--zzz-red);margin-right:8px;">●</span> Custom keybindings available in settings
+                <span style="color:var(--zzz-graphite-2);margin:0 24px;">│</span>
+                <span style="color:var(--zzz-lime);margin-right:8px;">●</span> Import your .osz beatmaps and start playing
               </div>
-              <div style="flex-shrink:0;width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg, var(--zzz-lime), var(--zzz-purple));display:flex;align-items:center;justify-content:center;font-size:20px;opacity:0.8;">
-                ★
+            </div>
+            <div style="position:absolute;right:0;top:0;bottom:0;width:40px;background:linear-gradient(270deg,rgba(0,0,0,0.95),transparent);z-index:2;"></div>
+          </div>
+
+          <!-- Featured card -->
+          <div style="padding:0 40px 8px;opacity:0;animation:mm-fade-up 0.5s 0.75s ease-out forwards;">
+            <div class="mm-featured-card">
+              <div class="mm-featured-glow"></div>
+              <div style="position:relative;padding:20px 24px;display:flex;align-items:center;gap:16px;">
+                <div style="flex-shrink:0;width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg, var(--zzz-lime), var(--zzz-purple));display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 24px rgba(170,255,0,0.15);">
+                  ★
+                </div>
+                <div style="flex:1;min-width:0;">
+                  <div class="mm-featured-label">FEATURED</div>
+                  <div class="mm-featured-title">RANKED SEASON 1 — COMING SOON</div>
+                  <div class="mm-featured-desc">Compete on global leaderboards and climb the ranks</div>
+                </div>
+                <div style="flex-shrink:0;">
+                  <div style="font-family:var(--zzz-font);font-weight:700;font-size:10px;color:var(--zzz-lime);letter-spacing:0.1em;padding:6px 14px;border:1px solid rgba(170,255,0,0.2);border-radius:9999px;white-space:nowrap;">VIEW DETAILS →</div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Bottom bar -->
-        <div style="padding:16px 32px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-          <div class="zzz-label" style="font-size:10px;opacity:0.5;">v0.5.0 — NEON EDITION</div>
-          <div class="zzz-label" style="font-size:10px;opacity:0.3;">PRESS ENTER TO PLAY</div>
+          <!-- Bottom bar -->
+          <div style="padding:12px 40px 16px;display:flex;align-items:center;justify-content:space-between;opacity:0;animation:mm-fade-up 0.5s 0.8s ease-out forwards;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <span class="mm-version">v0.5.0</span>
+              <span style="color:rgba(255,255,255,0.1);">·</span>
+              <span class="mm-version-sub">NEON EDITION</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="mm-hint-key">ENTER</span>
+              <span class="mm-version-sub">TO PLAY</span>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -89,17 +147,20 @@ export default class MainMenu {
     };
     window.addEventListener('keydown', this._keyHandler);
 
-    // Load beatmap count from IndexedDB
-    this._loadBeatmapCount();
-
     // Add parallax layers
     const p1 = document.getElementById('mm-parallax-title');
     const p2 = document.getElementById('mm-parallax-btns');
-    if (p1) ZZZTheme.addParallax(p1, 6);
+    if (p1) ZZZTheme.addParallax(p1, 5);
     if (p2) ZZZTheme.addParallax(p2, 3);
+
+    // Load stats
+    this._loadStats();
+
+    // Start periodic title glitch effect
+    this._startGlitchLoop();
   }
 
-  async _loadBeatmapCount() {
+  async _loadStats() {
     try {
       const db = await new Promise((resolve, reject) => {
         const req = indexedDB.open('rhythm-os', 2);
@@ -115,14 +176,64 @@ export default class MainMenu {
       });
       const el = document.getElementById('mm-stat-maps');
       if (el) el.textContent = count;
+
+      // Count total plays from all records
+      let bestScore = 0;
+      let totalPlays = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('rhythm-record-')) {
+          try {
+            const rec = JSON.parse(localStorage.getItem(key));
+            if (rec) {
+              totalPlays++;
+              if (rec.score > bestScore) bestScore = rec.score;
+            }
+          } catch (_) {}
+        }
+      }
+      const bestEl = document.getElementById('mm-stat-best');
+      if (bestEl) bestEl.textContent = bestScore > 0 ? bestScore.toLocaleString() : '—';
+      const playsEl = document.getElementById('mm-stat-plays');
+      if (playsEl) playsEl.textContent = totalPlays;
     } catch (_) {
       const el = document.getElementById('mm-stat-maps');
       if (el) el.textContent = '0';
     }
   }
 
+  /** Periodic subtle glitch on the title */
+  _startGlitchLoop() {
+    const glitch = () => {
+      if (this.container !== document.getElementById('screen')) return; // destroyed
+      const layer = document.getElementById('mm-glitch-layer');
+      if (!layer) return;
+
+      // Random glitch burst (short, subtle)
+      const intensity = Math.random() < 0.3 ? 0.6 : 0.15;
+      const duration = 80 + Math.random() * 120;
+      const offset = () => (Math.random() - 0.5) * 4 * intensity;
+
+      layer.innerHTML = `
+        <div style="position:absolute;inset:0;transform:translate(${offset()}px, ${offset()}px);clip-path:inset(${Math.random()*30}% 0 ${Math.random()*30}% 0);color:var(--zzz-lime);opacity:${intensity};font-family:var(--zzz-font);font-weight:900;font-size:clamp(42px,9vw,80px);letter-spacing:0.2em;line-height:1;pointer-events:none;">
+          <span>RHYTHM</span><span style="color:rgba(255,255,255,0.9);">::</span><span style="color:var(--zzz-text);">OS</span>
+        </div>
+        <div style="position:absolute;inset:0;transform:translate(${offset()}px, ${offset()}px);clip-path:inset(${Math.random()*40}% 0 ${Math.random()*40}% 0);color:var(--zzz-red);opacity:${intensity * 0.7};font-family:var(--zzz-font);font-weight:900;font-size:clamp(42px,9vw,80px);letter-spacing:0.2em;line-height:1;pointer-events:none;">
+          <span>RHYTHM</span><span style="color:rgba(255,255,255,0.9);">::</span><span style="color:var(--zzz-text);">OS</span>
+        </div>
+      `;
+      setTimeout(() => { if (layer) layer.innerHTML = ''; }, duration);
+
+      // Schedule next glitch (3-8 seconds)
+      this._glitchTimeout = setTimeout(glitch, 3000 + Math.random() * 5000);
+    };
+    // First glitch after 2-4 seconds
+    this._glitchTimeout = setTimeout(glitch, 2000 + Math.random() * 2000);
+  }
+
   destroy() {
     if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler);
+    if (this._glitchTimeout) clearTimeout(this._glitchTimeout);
     // Clean up parallax
     const p1 = document.getElementById('mm-parallax-title');
     const p2 = document.getElementById('mm-parallax-btns');

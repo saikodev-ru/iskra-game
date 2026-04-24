@@ -367,3 +367,72 @@ Stage Summary:
 - Main menu is now a stylish content-rich dashboard with real beatmap count, stats placeholders, featured section
 - Files modified: ZZZTheme.js, JudgementDisplay.js, main.js, Settings.js, ScreenManager.js, MainMenu.js
 
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix EARLY/LATE text getting stuck on screen
+
+Work Log:
+- Identified root cause in JudgementDisplay.js: showMiss() didn't clean up _timingEl
+- Added _timingEl cleanup to showMiss() method
+- Added reset() method to clear all displayed elements on game end
+- Called judgementDisplay.reset() in main.js endGame()
+
+Stage Summary:
+- EARLY/LATE text no longer persists through MISS events or game transitions
+- Added defensive reset() method for clean state on game end
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Remember last selected song across sessions/transitions
+
+Work Log:
+- Added _saveSelection() method to persist song ID + diff index to localStorage as 'rhythm-os-last-song'
+- Added _restoreSelection() method that loads saved selection and finds matching beatmap by ID
+- Modified init() to call _restoreSelection() instead of hardcoded _selectSong(0)
+- Modified _selectSong() and _selectDifficulty() to call _saveSelection()
+
+Stage Summary:
+- Song selection now persists across page reloads, game exits, and menu transitions
+- Falls back to first song if saved song was deleted or data is invalid
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Complete main menu redesign
+
+Work Log:
+- Rewrote MainMenu.js with cinematic ZZZ-inspired design
+- Added animated grain noise background overlay
+- Created glitch title effect with periodic random glitch bursts
+- Designed custom navigation buttons with hover shine animation and arrow indicators
+- Added news ticker with auto-scrolling horizontal content
+- Added 4 stat cards (Beatmaps, Best Score, Play Time, Total Plays)
+- Added featured card with gradient glow for season announcements
+- Staggered entrance animations for all elements
+- Added comprehensive CSS to ZZZTheme.js (mm-grain, mm-fade-up, mm-line-expand, mm-ticker-scroll, mm-nav-btn, mm-stat-card, mm-featured-card, etc.)
+
+Stage Summary:
+- Main menu now feels like a polished, production-ready product
+- Includes animated title with glitch effects, news ticker, stats, and featured sections
+- All elements have smooth staggered entrance animations
+- Mobile responsive design included
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Song selection visual improvements
+
+Work Log:
+- Added enhanced vignette overlay (radial gradient from transparent to 70% black) to song select
+- Added top-left corner backdrop (gradient from black to transparent) behind song info
+- Added right panel gradient (::before pseudo-element on .song-list-column) fading to black
+- Added top fade gradient on the list area (::after pseudo-element)
+- Set proper z-index layering (vignette z:1, content z:2)
+
+Stage Summary:
+- Song select screen now has stronger vignette for depth
+- Right song list panel has a subtle gradient background transitioning to black
+- Top-left song info area has a proper dark backdrop for readability

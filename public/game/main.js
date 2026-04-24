@@ -368,6 +368,7 @@ async function boot() {
     if (gameLoop) { gameLoop.stop(); gameLoop = null; }
     audio.stop();
     audio.stopBeatScheduler();
+    judgementDisplay.reset();
     hud.hide();
     noteRenderer.clearBackground();
     noteRenderer.clear();

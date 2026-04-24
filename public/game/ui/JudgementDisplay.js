@@ -49,6 +49,8 @@ export default class JudgementDisplay {
 
   showMiss() {
     if (this._currentEl) this._currentEl.remove();
+    if (this._timingEl) this._timingEl.remove();
+    this._timingEl = null;
     const el = document.createElement('div');
     el.className = 'judgement-text judgement--miss judgement--in';
     el.textContent = 'MISS';
@@ -112,4 +114,13 @@ export default class JudgementDisplay {
   }
 
   checkMilestone(combo) { if ([50, 100, 200, 500].includes(combo)) this.showMilestone(combo); }
+
+  /** Reset all displayed elements (called on game end) */
+  reset() {
+    clearTimeout(this._outTimer);
+    if (this._currentEl) { this._currentEl.remove(); this._currentEl = null; }
+    if (this._timingEl) { this._timingEl.remove(); this._timingEl = null; }
+    if (this._comboBreakEl) { this._comboBreakEl.remove(); this._comboBreakEl = null; }
+    if (this._milestoneEl) { this._milestoneEl.remove(); this._milestoneEl = null; }
+  }
 }

@@ -58,6 +58,12 @@ export default class SongSelect {
   build() {
     return `
       <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;">
+        <!-- Enhanced vignette overlay -->
+        <div style="position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.35) 70%, rgba(0,0,0,0.7) 100%);"></div>
+
+        <!-- Song info backdrop (top-left) -->
+        <div style="position:absolute;top:8px;left:12px;right:55%;bottom:55%;z-index:1;pointer-events:none;background:linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.3) 60%, transparent 100%);border-radius:16px;"></div>
+
         <!-- Song info (top-left) with parallax -->
         <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:16px;left:24px;z-index:2;max-width:45%;pointer-events:none;"></div>
 
@@ -65,8 +71,8 @@ export default class SongSelect {
         <div id="ss-play-area" class="parallax-layer" data-parallax="5" style="position:absolute;bottom:24px;left:24px;z-index:2;pointer-events:auto;"></div>
 
         <!-- Right column: back + search + list -->
-        <div id="ss-right-column" class="parallax-layer" data-parallax="2" style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:16px 24px 0 0;">
-          <div class="song-list-column" style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden;">
+        <div id="ss-right-column" class="parallax-layer" data-parallax="2" style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:16px 24px 0 0;z-index:2;position:relative;">
+          <div class="song-list-column" style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden;position:relative;">
             <!-- Top bar -->
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
               <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
@@ -96,7 +102,7 @@ export default class SongSelect {
 
     this._buildFilteredIndices();
     this._renderSongList();
-    if (this.beatmapSets.length > 0) this._selectSong(0);
+    if (this.beatmapSets.length > 0) this._restoreSelection();
     else this._renderEmptyState();
 
     document.getElementById('back-btn').addEventListener('click', () => this.screens.show('main-menu'));
@@ -576,7 +582,42 @@ export default class SongSelect {
 
     this._renderSongInfo(set);
     this._playPreview(set);
+    this._saveSelection();
     EventBus.emit('song:select', { map: set });
+  }
+
+  /** Save current selection to localStorage */
+  _saveSelection() {
+    try {
+      if (this.selectedIndex >= 0 && this.selectedIndex < this.beatmapSets.length) {
+        const set = this.beatmapSets[this.selectedIndex];
+        localStorage.setItem('rhythm-os-last-song', JSON.stringify({
+          id: set.id,
+          diffIndex: this.selectedDiffIndex
+        }));
+      }
+    } catch (_) {}
+  }
+
+  /** Restore last selected song from localStorage */
+  _restoreSelection() {
+    try {
+      const raw = localStorage.getItem('rhythm-os-last-song');
+      if (!raw) { this._selectSong(0); return; }
+      const saved = JSON.parse(raw);
+      if (!saved || !saved.id) { this._selectSong(0); return; }
+      // Find the set by ID
+      const idx = this.beatmapSets.findIndex(s => s.id === saved.id);
+      if (idx < 0) { this._selectSong(0); return; }
+      this._selectSong(idx);
+      // Restore difficulty if valid
+      const set = this.beatmapSets[idx];
+      if (saved.diffIndex && saved.diffIndex > 0 && saved.diffIndex < set.difficulties.length) {
+        this._selectDifficulty(saved.diffIndex);
+      }
+    } catch (_) {
+      this._selectSong(0);
+    }
   }
 
   _selectDifficulty(diffIndex) {
@@ -586,6 +627,7 @@ export default class SongSelect {
     this._updateSelection();
     this._renderSongInfo(set);
     this._renderPlayButton(set);
+    this._saveSelection();
 
     // Effectful difficulty switch — brief glitch + channel switch sound
     ZZZTheme.playSwitchSound();
