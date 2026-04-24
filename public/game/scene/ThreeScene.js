@@ -640,28 +640,28 @@ export default class ThreeScene {
 
           vec3 texRgb = texture2D(uTexture, uv).rgb;
 
-          vec3 color = texRgb * 0.7;
-          float glow = uBass * 0.15 + uAudioIntensity * 0.05;
+          vec3 color = texRgb * 0.25;
+          float glow = uBass * 0.2 + uAudioIntensity * 0.08;
           color += texRgb * glow;
-          color += vec3(uBrightness * 0.1);
+          color += vec3(uBrightness * 0.15);
 
-          // ── Vignette (subtle, less aggressive) ──
+          // ── Vignette (pure black, subtle) ──
           float vig = distance(vUv, vec2(0.5));
           float vigDark = smoothstep(0.5, 1.0, vig);
-          color *= 1.0 - vigDark * 0.35;
+          color *= 1.0 - vigDark * 0.6;
 
           // Rounded corners — soft darkening
           vec2 cornerDist = max(abs(vUv - 0.5) - 0.38, vec2(0.0));
           float cornerLen = length(cornerDist);
           float cornerDark = smoothstep(0.0, 0.12, cornerLen);
-          color *= 1.0 - cornerDark * 0.3;
+          color *= 1.0 - cornerDark * 0.5;
 
           // CRT: scanlines + phosphor flicker (wider scanlines: 500 instead of 800)
           if (uCrtIntensity > 0.01) {
             float scanline = sin(vUv.y * 500.0 + uTime * 2.0) * 0.5 + 0.5;
-            float scanDark = 1.0 - scanline * 0.08 * uCrtIntensity;
+            float scanDark = 1.0 - scanline * 0.12 * uCrtIntensity;
             color *= scanDark;
-            float flicker = 1.0 - 0.015 * uCrtIntensity * hash(uTime * 60.0);
+            float flicker = 1.0 - 0.02 * uCrtIntensity * hash(uTime * 60.0);
             color *= flicker;
           }
 

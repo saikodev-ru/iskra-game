@@ -193,7 +193,7 @@ export default class NoteRenderer {
     }
   }
 
-  /** Rebuild the offscreen background cache — ORTHOGRAPHIC (parallel lanes) */
+  /** Rebuild the offscreen background cache — PERSPECTIVE (converging lanes) */
   _rebuildBackgroundCache(laneCount) {
     const dpr = window.devicePixelRatio || 1;
     const pixelW = Math.round(this.w * dpr * this._resScale);
@@ -221,21 +221,39 @@ export default class NoteRenderer {
       cctx.restore();
     }
 
-    // ── Orthographic: parallel rectangular lanes ──
+    // ── Perspective: converging trapezoidal lanes ──
     const topY = this._getTopY();
     const judgeLineY = this._getJudgeLineY();
     const bottomY = this._getBottomY();
-    const geom = this._getLaneGeometry(0, judgeLineY, laneCount); // same at any Y now
-    const fieldLeft = geom.x;
-    const fieldWidth = laneCount * geom.width;
+    const sa = this.safeArea;
+    const cx = sa.x + sa.w / 2;
+    const fullPw = sa.w * 0.55;
 
-    // Draw lane rectangles — main section (top → bottom)
-    for (let i = 0; i < laneCount; i++) {
-      const laneGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
-      cctx.fillStyle = i % 2 === 0
-        ? 'rgba(10,7,5,0.88)'
-        : 'rgba(18,13,9,0.88)';
-      cctx.fillRect(laneGeom.x, topY, laneGeom.width, bottomY - topY);
+    const topScale = this._getPerspectiveScale(topY);
+    const judgeScale = 1.0;
+    const topPw = fullPw * topScale;
+    const judgePw = fullPw * judgeScale;
+
+    // Sample rows for smooth gradient fill of trapezoidal lanes
+    const steps = 60;
+    const stepH = (bottomY - topY) / steps;
+
+    for (let s = 0; s < steps; s++) {
+      const y1 = topY + s * stepH;
+      const y2 = topY + (s + 1) * stepH;
+      const yMid = (y1 + y2) / 2;
+      const scale = this._getPerspectiveScale(yMid);
+      const pw = fullPw * scale;
+      const le = cx - pw / 2;
+
+      for (let i = 0; i < laneCount; i++) {
+        const lx = le + i * (pw / laneCount);
+        const lw = pw / laneCount;
+        cctx.fillStyle = i % 2 === 0
+          ? 'rgba(10,7,5,0.88)'
+          : 'rgba(18,13,9,0.88)';
+        cctx.fillRect(lx, y1, lw, stepH + 1); // +1 to avoid gaps
+      }
     }
 
     // Depth gradient overlay — subtle darkening toward the top to hint at distance
@@ -245,7 +263,7 @@ export default class NoteRenderer {
     depthGrad.addColorStop(0.7, 'rgba(0,0,0,0)');
     depthGrad.addColorStop(1, 'rgba(0,0,0,0)');
     cctx.fillStyle = depthGrad;
-    cctx.fillRect(fieldLeft, topY, fieldWidth, judgeLineY - topY);
+    cctx.fillRect(cx - fullPw / 2, topY, fullPw, judgeLineY - topY);
 
     // Fade overlay below judge line — lane-colored glow fading to dark
     for (let i = 0; i < laneCount; i++) {
@@ -274,39 +292,58 @@ export default class NoteRenderer {
       cctx.fillRect(laneGeom.x, judgeLineY, laneGeom.width, glowH);
     }
 
-    // Draw lane dividers — parallel vertical lines with gradient
+    // Draw lane dividers — converging lines from vanishing point to judge line
     for (let i = 0; i <= laneCount; i++) {
-      const laneGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
       cctx.save();
       const divGrad = cctx.createLinearGradient(0, topY, 0, bottomY);
-      divGrad.addColorStop(0, 'rgba(170,255,0,0.03)');
-      divGrad.addColorStop(0.7, 'rgba(170,255,0,0.05)');
+      divGrad.addColorStop(0, 'rgba(170,255,0,0.02)');
+      divGrad.addColorStop(0.6, 'rgba(170,255,0,0.04)');
       divGrad.addColorStop(0.85, 'rgba(255,255,255,0.06)');
       divGrad.addColorStop(1, 'rgba(255,255,255,0)');
       cctx.strokeStyle = divGrad;
       cctx.lineWidth = 1;
       cctx.beginPath();
-      cctx.moveTo(laneGeom.x, topY);
-      cctx.lineTo(laneGeom.x, bottomY);
+
+      // Draw converging line using multiple segments for smooth curve
+      const segSteps = 40;
+      for (let s = 0; s <= segSteps; s++) {
+        const t = s / segSteps;
+        const y = topY + t * (bottomY - topY);
+        const geom = this._getLaneGeometry(i, y, laneCount);
+        if (s === 0) cctx.moveTo(geom.x, y);
+        else cctx.lineTo(geom.x, y);
+      }
       cctx.stroke();
       cctx.restore();
     }
 
-    // Side edges — subtle outer glow
+    // Side edges — converging lines with subtle outer glow
     cctx.save();
-    const edgeL = cctx.createLinearGradient(fieldLeft - 8, 0, fieldLeft + 4, 0);
-    edgeL.addColorStop(0, 'rgba(170,255,0,0)');
-    edgeL.addColorStop(0.6, 'rgba(170,255,0,0.04)');
-    edgeL.addColorStop(1, 'rgba(170,255,0,0)');
-    cctx.fillStyle = edgeL;
-    cctx.fillRect(fieldLeft - 8, topY, 12, bottomY - topY);
+    // Left edge
+    cctx.beginPath();
+    for (let s = 0; s <= 40; s++) {
+      const t = s / 40;
+      const y = topY + t * (bottomY - topY);
+      const geom = this._getLaneGeometry(0, y, laneCount);
+      if (s === 0) cctx.moveTo(geom.x, y);
+      else cctx.lineTo(geom.x, y);
+    }
+    cctx.strokeStyle = 'rgba(170,255,0,0.06)';
+    cctx.lineWidth = 2;
+    cctx.shadowBlur = 8;
+    cctx.shadowColor = 'rgba(170,255,0,0.15)';
+    cctx.stroke();
 
-    const edgeR = cctx.createLinearGradient(fieldLeft + fieldWidth - 4, 0, fieldLeft + fieldWidth + 8, 0);
-    edgeR.addColorStop(0, 'rgba(170,255,0,0)');
-    edgeR.addColorStop(0.4, 'rgba(170,255,0,0.04)');
-    edgeR.addColorStop(1, 'rgba(170,255,0,0)');
-    cctx.fillStyle = edgeR;
-    cctx.fillRect(fieldLeft + fieldWidth - 4, topY, 12, bottomY - topY);
+    // Right edge
+    cctx.beginPath();
+    for (let s = 0; s <= 40; s++) {
+      const t = s / 40;
+      const y = topY + t * (bottomY - topY);
+      const geom = this._getLaneGeometry(laneCount, y, laneCount);
+      if (s === 0) cctx.moveTo(geom.x, y);
+      else cctx.lineTo(geom.x, y);
+    }
+    cctx.stroke();
     cctx.restore();
 
     // Update cache metadata
@@ -322,7 +359,7 @@ export default class NoteRenderer {
     this._bgCacheBgImage = null;
   }
 
-  /* ── Layout (Orthographic — constant scale everywhere) ────────── */
+  /* ── Layout (Perspective — converging lanes like Project SEKAI) ── */
 
   _getJudgeLineY() {
     return this.safeArea.y + this.safeArea.h * 0.92;
@@ -338,21 +375,32 @@ export default class NoteRenderer {
   }
 
   /**
-   * Orthographic: returns 1.0 always — no perspective distortion.
-   * Notes scroll at constant visual speed across the entire field.
-   * All lane widths are identical regardless of Y position.
+   * Perspective scale — lanes converge toward a vanishing point at the top.
+   * Returns a value from ~0.3 at the top edge to 1.0 at the judge line.
+   * Uses smooth quadratic easing for a natural Project SEKAI-style perspective.
+   * Notes at the judge line are full size; notes at the top are compressed.
    */
   _getPerspectiveScale(y) {
-    return 1.0;
+    const judgeLineY = this._getJudgeLineY();
+    const topY = this._getTopY();
+    const t = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
+    // Quadratic ease: 0.3 at top → 1.0 at judge line
+    return 0.3 + 0.7 * t * t;
   }
 
-  /** Lane geometry is now independent of Y (orthographic/parallel lanes) */
+  /**
+   * Lane geometry with perspective — lanes converge toward vanishing point.
+   * At the judge line (bottom), lanes are at full width.
+   * At the top, lanes are compressed to 30% width, centered.
+   */
   _getLaneGeometry(laneIndex, y, laneCount) {
     const sa = this.safeArea;
-    const pw = sa.w * 0.55; // play field width = 55% of safe area
+    const pw = sa.w * 0.55; // full play field width at judge line
     const cx = sa.x + sa.w / 2;
-    const lw = pw / laneCount; // constant lane width
-    const le = cx - pw / 2;
+    const scale = this._getPerspectiveScale(y);
+    const scaledPw = pw * scale;
+    const lw = scaledPw / laneCount;
+    const le = cx - scaledPw / 2;
     return { x: le + laneIndex * lw, width: lw, centerX: le + (laneIndex + 0.5) * lw };
   }
 
@@ -478,10 +526,24 @@ export default class NoteRenderer {
 
   _noteY(time, currentTime, judgeLineY) {
     // Linear scroll: note position is directly proportional to time difference.
-    // With orthographic projection, the visual speed is constant — no perspective
-    // distortion makes notes appear to slow down near the judge line.
+    // Notes travel at constant visual speed across the entire field.
+    // With perspective, lanes converge at the top but note Y-position remains linear,
+    // ensuring even, predictable scroll like Project SEKAI.
     const distFromJudge = (time - currentTime) * this.scrollSpeed;
     return judgeLineY - distFromJudge;
+  }
+
+  /**
+   * Get perspective scale for a note's Y position.
+   * Used to scale note size based on distance from judge line.
+   * At judge line: scale = 1.0 (full size). At top: scale ≈ 0.3 (small).
+   */
+  _getNoteScale(noteY) {
+    const judgeLineY = this._getJudgeLineY();
+    const topY = this._getTopY();
+    const t = Math.max(0, Math.min(1, (noteY - topY) / (judgeLineY - topY)));
+    // Quadratic ease matching perspective scale
+    return 0.3 + 0.7 * t * t;
   }
 
   _fadeIn(noteY, judgeLineY) {
@@ -493,15 +555,16 @@ export default class NoteRenderer {
   _drawTapNote(lane, noteY, laneCount, color, alpha) {
     const ctx = this.ctx;
     const geom = this._getLaneGeometry(lane, noteY, laneCount);
-    const pad = 5;
+    const scale = this._getNoteScale(noteY);
+    const pad = 5 * scale;
     const x = geom.x + pad;
     const w = geom.width - pad * 2;
-    const h = this.noteHeight;
-    const r = Math.max(2, 8);
+    const h = this.noteHeight * scale;
+    const r = Math.max(2, 8 * scale);
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur = 14 * this._gfx();
+    ctx.shadowBlur = 14 * this._gfx() * scale;
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     this._roundRect(ctx, x, noteY - h / 2, w, h, r);
@@ -570,37 +633,53 @@ export default class NoteRenderer {
   _drawHoldBody(note, laneCount, color, topY, bottomY, alpha, isHolding) {
     const ctx = this.ctx;
     const geom = this._getLaneGeometry(note.lane, bottomY, laneCount);
-    const pad = 3;
-    const x = geom.x + pad;
-    const w = geom.width - pad * 2;
-    const cx = geom.x + geom.width / 2;
+    const topGeom = this._getLaneGeometry(note.lane, topY, laneCount);
+    const topScale = this._getNoteScale(topY);
+    const botScale = this._getNoteScale(bottomY);
+    const avgScale = (topScale + botScale) / 2;
+    const pad = 3 * avgScale;
+    // Use trapezoid body: wider at bottom, narrower at top
+    const botX = geom.x + pad;
+    const botW = geom.width - pad * 2;
+    const topX = topGeom.x + pad;
+    const topW = topGeom.width - pad * 2;
+    const cx = (geom.x + geom.width / 2 + topGeom.x + topGeom.width / 2) / 2;
 
     const gfx = this._gfx();
 
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    // Body fill — simple rectangle (orthographic, no perspective curve needed)
+    // Body fill — trapezoid (perspective: wider at judge line, narrower at top)
     ctx.fillStyle = isHolding ? this._withAlpha(color, 0.30) : this._withAlpha(color, 0.18);
-    ctx.shadowBlur = (isHolding ? 20 : 8) * gfx;
+    ctx.shadowBlur = (isHolding ? 20 : 8) * gfx * avgScale;
     ctx.shadowColor = color;
-    ctx.fillRect(x, topY, w, bottomY - topY);
+    ctx.beginPath();
+    ctx.moveTo(topX, topY);
+    ctx.lineTo(topX + topW, topY);
+    ctx.lineTo(botX + botW, bottomY);
+    ctx.lineTo(botX, bottomY);
+    ctx.closePath();
+    ctx.fill();
 
+    // Stroke the trapezoid outline
     ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.7) : this._withAlpha(color, 0.45);
-    ctx.lineWidth = isHolding ? 2 : 1.5;
-    ctx.strokeRect(x, topY, w, bottomY - topY);
+    ctx.lineWidth = (isHolding ? 2 : 1.5) * avgScale;
+    ctx.stroke();
     ctx.restore();
 
-    // Center glow line
+    // Center glow line (straight vertical from top to bottom center)
     ctx.save();
     ctx.globalAlpha = alpha * (isHolding ? 0.4 : 0.2);
-    ctx.shadowBlur = (isHolding ? 20 : 12) * gfx;
+    ctx.shadowBlur = (isHolding ? 20 : 12) * gfx * avgScale;
     ctx.shadowColor = color;
     ctx.strokeStyle = isHolding ? '#ffffff' : this._withAlpha(color, 0.8);
-    ctx.lineWidth = isHolding ? 4 : 2;
+    ctx.lineWidth = (isHolding ? 4 : 2) * avgScale;
     ctx.beginPath();
-    ctx.moveTo(cx, topY);
-    ctx.lineTo(cx, bottomY);
+    const topCx = topGeom.x + topGeom.width / 2;
+    const botCx = geom.x + geom.width / 2;
+    ctx.moveTo(topCx, topY);
+    ctx.lineTo(botCx, bottomY);
     ctx.stroke();
     ctx.restore();
   }
@@ -608,15 +687,16 @@ export default class NoteRenderer {
   _drawHoldCap(laneIndex, y, laneCount, color, alpha) {
     const ctx = this.ctx;
     const geom = this._getLaneGeometry(laneIndex, y, laneCount);
-    const pad = 5;
+    const scale = this._getNoteScale(y);
+    const pad = 5 * scale;
     const x = geom.x + pad;
     const w = geom.width - pad * 2;
-    const h = this.noteHeight;
-    const r = Math.max(2, 8);
+    const h = this.noteHeight * scale;
+    const r = Math.max(2, 8 * scale);
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur = 12 * this._gfx();
+    ctx.shadowBlur = 12 * this._gfx() * scale;
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     this._roundRect(ctx, x, y - h / 2, w, h, r);
