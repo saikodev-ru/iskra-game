@@ -344,8 +344,23 @@ export default class ThreeScene {
           float glow = uBass * 0.2 + uAudioIntensity * 0.08;
           color += texRgb * glow;
           color += vec3(uBrightness * 0.15);
+
+          // ── Stylized ZZZ vignette ──
           float vig = distance(vUv, vec2(0.5));
-          color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
+
+          // Strong dark vignette at edges
+          float vigDark = smoothstep(0.35, 0.95, vig);
+          color *= 1.0 - vigDark * 0.85;
+
+          // Green accent ring at mid-vignette boundary
+          float vigGlow = smoothstep(0.25, 0.45, vig) * (1.0 - smoothstep(0.45, 0.65, vig));
+          color += vec3(0.08, 0.18, 0.0) * vigGlow * 0.2;
+
+          // Rounded corners — extra darkening (CRT monitor feel)
+          vec2 cornerDist = max(abs(vUv - 0.5) - 0.36, vec2(0.0));
+          float cornerLen = length(cornerDist);
+          float cornerDark = smoothstep(0.0, 0.14, cornerLen);
+          color *= 1.0 - cornerDark * 0.7;
 
           // CRT: scanlines + phosphor flicker
           if (uCrtIntensity > 0.01) {
@@ -497,7 +512,7 @@ export default class ThreeScene {
     const rawW = (r - l) * halfW;
     const rawH = (t - b) * halfH;
     return {
-      width: rawW * 1.12, height: rawH * 1.12,
+      width: rawW * 0.94, height: rawH * 0.94,
       cx: ((l + r) / 2) * halfW, cy: ((t + b) / 2) * halfH,
       safeAreaAspect: sa.w / sa.h, viewWidth: rawW
     };
@@ -631,8 +646,23 @@ export default class ThreeScene {
           float glow = uBass * 0.2 + uAudioIntensity * 0.08;
           color += texRgb * glow;
           color += vec3(uBrightness * 0.15);
+
+          // ── Stylized ZZZ vignette ──
           float vig = distance(vUv, vec2(0.5));
-          color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
+
+          // Strong dark vignette at edges
+          float vigDark = smoothstep(0.35, 0.95, vig);
+          color *= 1.0 - vigDark * 0.85;
+
+          // Green accent ring at mid-vignette boundary
+          float vigGlow = smoothstep(0.25, 0.45, vig) * (1.0 - smoothstep(0.45, 0.65, vig));
+          color += vec3(0.08, 0.18, 0.0) * vigGlow * 0.2;
+
+          // Rounded corners — extra darkening (CRT monitor feel)
+          vec2 cornerDist = max(abs(vUv - 0.5) - 0.36, vec2(0.0));
+          float cornerLen = length(cornerDist);
+          float cornerDark = smoothstep(0.0, 0.14, cornerLen);
+          color *= 1.0 - cornerDark * 0.7;
 
           // CRT: scanlines + phosphor flicker
           if (uCrtIntensity > 0.01) {
