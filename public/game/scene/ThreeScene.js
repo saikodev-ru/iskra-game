@@ -754,8 +754,18 @@ export default class ThreeScene {
 
     video.addEventListener('error', () => {
       if (loadId !== this._videoLoadId) return; // stale
-      console.warn('[ThreeScene] Failed to load video background');
+      console.warn('[ThreeScene] Failed to load video background (format may not be supported by browser)');
       this._clearBackgroundVideo();
+    });
+
+    // Also handle codec issues: if the video loads metadata but can't decode frames
+    video.addEventListener('loadedmetadata', () => {
+      if (loadId !== this._videoLoadId) return; // stale
+      // Check if the video has valid dimensions
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.warn('[ThreeScene] Video has invalid dimensions — likely unsupported codec');
+        this._clearBackgroundVideo();
+      }
     });
 
     video.load();

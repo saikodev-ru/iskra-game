@@ -231,6 +231,11 @@ async function boot() {
       const pos = noteRenderer.getLaneHitPosition(lane, currentLaneCount);
 
       if (result) {
+        if (result.recovered) {
+          // Hold note recovered after drop — subtle green flash, no judgement
+          noteRenderer.addLaneGlow(lane, currentLaneCount, '#AAFF00');
+          return;
+        }
         // Note was hit — show judgment-colored effect + lane glow
         const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };
         noteRenderer.addEffect(pos.x, pos.y, effectColors[result.judgement] || '#AAFF00', result.judgement);
@@ -257,6 +262,9 @@ async function boot() {
       if (!gameActive) return;
       const result = currentJudgement.judgeRelease(lane, releaseTime);
       if (!result) return;
+
+      // Dropped hold (released before end) — no immediate effect, grace period started
+      if (result.dropped) return;
 
       const pos = noteRenderer.getLaneHitPosition(lane, currentLaneCount);
       const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };

@@ -67,8 +67,8 @@ export default class SongSelect {
         <!-- Darken background by 30% -->
         <div style="position:absolute;inset:0;z-index:0;background:rgba(0,0,0,0.3);pointer-events:none;"></div>
 
-        <!-- Enhanced vignette overlay -->
-        <div style="position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.35) 70%, rgba(0,0,0,0.7) 100%);"></div>
+        <!-- Subtle vignette overlay (behind UI panels) -->
+        <div style="position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.18) 72%, rgba(0,0,0,0.45) 100%);"></div>
 
         <!-- Song info (top-left) with parallax -->
         <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:20px;left:20px;z-index:2;width:clamp(280px, 42%, 440px);"></div>

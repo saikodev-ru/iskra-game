@@ -8,6 +8,13 @@ const WINDOWS = {
   bad:     0.200,   // ±200ms, combo breaks
 };
 
+// Lenient release timing windows for hold note tails (1.5× normal)
+const RELEASE_WINDOWS = {
+  perfect: 0.068,   // ±68ms
+  great:   0.135,   // ±135ms
+  good:    0.210,   // ±210ms
+};
+
 // Judgement score multipliers for 1M base score
 const JUDGEMENT_MULT = { perfect: 1.0, great: 0.75, good: 0.5, bad: 0.25, miss: 0 };
 
@@ -20,6 +27,10 @@ const HP_JUDGEMENT = { perfect: 2.0, great: 1.5, good: 0.8, bad: -0.5, miss: -1.
 // HP drain rate per second (base, before difficulty scaling)
 const HP_DRAIN_RATE = 0.8;
 
+// Hold note grace period: if player releases during hold but re-presses
+// within this time, no penalty (like osu!mania 4K lenient system)
+const HOLD_GRACE_PERIOD = 0.15; // 150ms
+
 export default class JudgementSystem {
   constructor(beatMap) {
     this.map = beatMap;
@@ -27,7 +38,9 @@ export default class JudgementSystem {
     this.combo = 0;
     this.maxCombo = 0;
     this.hitCounts = { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 };
+    this.sliderBreaks = 0; // slider breaks (hold note drops)
     this._activeHoldNotes = new Map(); // lane → note
+    this._droppedHolds = new Map(); // lane → { note, dropTime }
     this._totalJudgements = 0; // total judgement slots (tap=1, hold=2)
     this._judgementsProcessed = 0; // how many judgements have been resolved so far
     this._missCheckIndex = 0; // pointer for O(n) miss check optimization
@@ -37,7 +50,9 @@ export default class JudgementSystem {
   reset() {
     this.score = 0; this.combo = 0; this.maxCombo = 0;
     this.hitCounts = { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 };
+    this.sliderBreaks = 0;
     this._activeHoldNotes.clear();
+    this._droppedHolds.clear();
     this._totalJudgements = 0;
     this._judgementsProcessed = 0;
     this._missCheckIndex = 0;
@@ -57,6 +72,22 @@ export default class JudgementSystem {
   }
 
   judgeHit(lane, hitTime) {
+    // ── Check for dropped hold recovery (grace period) ──
+    const dropped = this._droppedHolds.get(lane);
+    if (dropped) {
+      const elapsed = hitTime - dropped.dropTime;
+      if (elapsed <= HOLD_GRACE_PERIOD) {
+        // Recovered! Re-add to active holds — no penalty
+        this._droppedHolds.delete(lane);
+        this._activeHoldNotes.set(lane, dropped.note);
+        EventBus.emit('hold:recovered', { note: dropped.note, lane });
+        return { note: dropped.note, judgement: null, recovered: true };
+      } else {
+        // Grace period already expired — slider break was applied in checkDroppedHolds
+        this._droppedHolds.delete(lane);
+      }
+    }
+
     const result = this.map.findClosestNote(lane, hitTime, 0.25);
     if (!result) return null;
 
@@ -95,21 +126,62 @@ export default class JudgementSystem {
     this._activeHoldNotes.delete(lane);
 
     const holdEnd = note.time + note.duration;
+
+    // ── Released BEFORE hold end: start grace period (lenient) ──
+    if (releaseTime < holdEnd - 0.01) {
+      this._droppedHolds.set(lane, { note, dropTime: releaseTime });
+      return { note, judgement: 'dropped', dropped: true };
+    }
+
+    // ── Released at/after hold end: use lenient release windows ──
     const delta = releaseTime - holdEnd;
     const absDelta = Math.abs(delta);
 
     let judgement;
-    if (absDelta <= WINDOWS.perfect) judgement = 'perfect';
-    else if (absDelta <= WINDOWS.great) judgement = 'great';
-    else if (absDelta <= WINDOWS.good) judgement = 'good';
-    else judgement = 'bad';
+    if (absDelta <= RELEASE_WINDOWS.perfect) judgement = 'perfect';
+    else if (absDelta <= RELEASE_WINDOWS.great) judgement = 'great';
+    else if (absDelta <= RELEASE_WINDOWS.good) judgement = 'good';
+    else judgement = 'good'; // Lenient: even very late release = good (no combo break)
 
     note.releaseJudgement = judgement;
     note.released = true;
-    this._applyJudgement(judgement);
+    // Use lenient apply for release — NEVER breaks combo
+    this._applyReleaseJudgement(judgement);
 
     EventBus.emit('note:hit', { note, judgement, delta: Math.round(delta * 1000), isRelease: true });
     return { note, judgement, delta };
+  }
+
+  /**
+   * Check dropped holds — call each frame.
+   * If grace period expired without re-press, apply slider break.
+   */
+  checkDroppedHolds(currentTime) {
+    for (const [lane, dropped] of this._droppedHolds) {
+      if (currentTime - dropped.dropTime > HOLD_GRACE_PERIOD) {
+        this._droppedHolds.delete(lane);
+        this._applySliderBreak(dropped.note);
+      }
+    }
+  }
+
+  /** Apply a slider break (hold note dropped after grace period).
+   *  Treated as "good" for scoring — lenient, no combo break. */
+  _applySliderBreak(note) {
+    this.sliderBreaks++;
+    this._judgementsProcessed++;
+    // Treat as "good" for scoring (lenient, like osu!mania 4K)
+    this.hitCounts.good++;
+    // HP: mild penalty (not as harsh as bad)
+    this.hp = Math.max(0, Math.min(100, this.hp - 0.3));
+    // DON'T break combo from slider break!
+    this.combo++;
+    if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+
+    note.releaseJudgement = 'good'; // Mark as judged (lenient)
+    note.released = true;
+
+    EventBus.emit('note:sliderbreak', { note });
   }
 
   /** Apply a judgement: update score, combo, HP, and counts */
@@ -133,6 +205,25 @@ export default class JudgementSystem {
     }
   }
 
+  /** Apply a release judgement — NEVER breaks combo (lenient hold system) */
+  _applyReleaseJudgement(judgement) {
+    this.hitCounts[judgement]++;
+    this._judgementsProcessed++;
+
+    const baseScore = 1_000_000 / this._totalJudgements;
+    this.score += Math.round(baseScore * JUDGEMENT_MULT[judgement]);
+    this.hp = Math.max(0, Math.min(100, this.hp + (HP_JUDGEMENT[judgement] || 0)));
+
+    // Never break combo from hold release (osu!mania 4K lenient)
+    if (judgement === 'miss') {
+      if (this.combo > 0) EventBus.emit('combo:break', { combo: this.combo });
+      this.combo = 0;
+    } else {
+      this.combo++;
+      if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+    }
+  }
+
   /** Tick HP drain — call once per frame with delta time in seconds */
   tickHP(delta) {
     if (this._totalJudgements === 0) return;
@@ -141,6 +232,9 @@ export default class JudgementSystem {
   }
 
   checkMisses(currentTime) {
+    // Also check dropped holds that might have expired
+    this.checkDroppedHolds(currentTime);
+
     // O(n) optimization: use pointer since notes are time-sorted.
     // We only need to check from _missCheckIndex forward.
     const notes = this.map.notes;
@@ -168,15 +262,19 @@ export default class JudgementSystem {
         }
       }
 
-      // Check if a held note's release was missed
+      // Check if a held note's release was missed (only if still active)
       if (note.type === 'hold' && note.duration > 0 && note.hit && note.judgement !== 'miss' && !note.released) {
-        const holdEnd = note.time + note.duration;
-        if (currentTime - holdEnd > WINDOWS.bad) {
-          note.releaseJudgement = 'miss';
-          note.released = true;
-          this._activeHoldNotes.delete(note.lane);
-          this._applyJudgement('miss');
-          EventBus.emit('note:miss', { note });
+        // Skip if this note was dropped (slider break already applied)
+        const isDropped = this._droppedHolds.has(note.lane);
+        if (!isDropped) {
+          const holdEnd = note.time + note.duration;
+          if (currentTime - holdEnd > WINDOWS.bad) {
+            note.releaseJudgement = 'miss';
+            note.released = true;
+            this._activeHoldNotes.delete(note.lane);
+            this._applyJudgement('miss');
+            EventBus.emit('note:miss', { note });
+          }
         }
       }
 
@@ -191,17 +289,22 @@ export default class JudgementSystem {
   }
 
   /**
-   * osu!mania accuracy: starts at 100%, can only decrease
-   * accuracy = (sum of weight values) / (totalJudgements * 300) * 100
+   * osu!mania accuracy: starts at 100%, can only decrease.
+   * Unprocessed (future) notes are assumed to be perfect.
+   * accuracy = (processed hit value + unprocessed * 300) / (total * 300) * 100
    */
   getAccuracy() {
     const total = this._totalJudgements;
     if (total === 0) return 100;
+    const processed = this._judgementsProcessed;
+    const unprocessed = total - processed;
+    // Treat unprocessed notes as perfect (weight 300) — accuracy starts at 100% and decreases
     const hitValue = this.hitCounts.perfect * ACC_WEIGHT.perfect
                    + this.hitCounts.great  * ACC_WEIGHT.great
                    + this.hitCounts.good   * ACC_WEIGHT.good
-                   + this.hitCounts.bad    * ACC_WEIGHT.bad;
-    return (hitValue / (total * 300)) * 100;
+                   + this.hitCounts.bad    * ACC_WEIGHT.bad
+                   + unprocessed * ACC_WEIGHT.perfect;
+    return (hitValue / (total * ACC_WEIGHT.perfect)) * 100;
   }
 
   getRank() {
@@ -228,6 +331,7 @@ export default class JudgementSystem {
       combo: this.combo,
       rank: this.getRank(),
       health: this.hp,
+      sliderBreaks: this.sliderBreaks,
       hitCounts: { ...this.hitCounts }
     };
   }

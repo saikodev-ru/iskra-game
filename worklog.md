@@ -746,3 +746,47 @@ Stage Summary:
 - Action bar (IMPORT, PLAYLIST) also styled consistently
 - System sounds are 3× louder for miss, crtClick, crtSwitch, milestone (fail/hitsounds untouched)
 - TV channel switch sound now has 3 layers: relay pop + tuning hiss + static interference
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix accuracy system (start at 100%, degrade only), lenient hold note tails, vignette, OSZ importer conflicts, AVI fix
+
+Work Log:
+- Fixed JudgementSystem.js accuracy formula: getAccuracy() now treats unprocessed (future) notes as perfect (weight 300), so accuracy starts at 100% and can only decrease from good/bad/miss/slider breaks
+- Added lenient hold note tail system (osu!mania 4K style):
+  - Added RELEASE_WINDOWS (1.5× normal timing windows for hold note tails)
+  - Added HOLD_GRACE_PERIOD (150ms): if player releases during hold but re-presses within grace period, no penalty
+  - Added _droppedHolds Map to track holds that were released early
+  - Added checkDroppedHolds() called each frame in checkMisses()
+  - Added _applySliderBreak(): dropped holds after grace = "good" judgement, NO combo break, mild HP penalty (-0.3)
+  - Added _applyReleaseJudgement(): release judgements NEVER break combo (even bad/miss)
+  - Added sliderBreaks counter to stats
+- Updated main.js hitHandler: handles recovered holds (subtle green glow, no judgement display)
+- Updated main.js releaseHandler: handles dropped holds (no immediate effect, grace period started)
+- Weakened vignette in SongSelect.js: reduced from z-index:1 to z-index:0, softened gradient (transparent 50% → 0.18%, 72% → 0.45%, 100% → 0.45%)
+- Weakened vignette in ZZZTheme.js: global body vignette from 0.5→0.3 opacity, CRT overlay from 0.55→0.35 opacity
+- Added _resolveNoteConflicts() to OszLoader.js:
+  - Detects overlapping notes on same lane (impossible to hold both)
+  - Detects notes too close together on same lane (< 80ms gap)
+  - Greedy algorithm shifts conflicting notes to best available adjacent lane
+  - Prefers closer lanes, avoids creating new conflicts
+  - Called after _convertHitObjects() in _buildDifficulty()
+- Fixed AVI video background issue in OszLoader.js:
+  - Only process MP4 and WebM video formats (browser-supported)
+  - AVI, WMV, FLV are now skipped with console log
+  - DB_VERSION bumped to 5 (clears cached maps with old AVI data)
+- Improved ThreeScene.js video error handling:
+  - Added loadedmetadata listener to detect videos with invalid dimensions (codec issues)
+  - Better error messages for unsupported formats
+- Lint passes clean, dev server running
+
+Stage Summary:
+- Accuracy now starts at 100% and only decreases (no more "working in wrong direction")
+- Hold notes have lenient tail system: 150ms grace period, slider breaks don't break combo
+- Lenient release windows (1.5× normal) for hold note tails
+- Slider breaks count as "good" for scoring, no combo break
+- Vignette significantly weakened and placed behind UI panels
+- OSZ importer auto-resolves note conflicts (overlap/too-close) by shifting to adjacent lanes
+- AVI video backgrounds are skipped (unsupported in browsers), maps fall back to image BG
+- All changes lint clean

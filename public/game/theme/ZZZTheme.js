@@ -29,11 +29,11 @@ body.zzz-active::after {
   pointer-events: none;
 }
 
-/* VIGNETTE — pure black */
+/* VIGNETTE — subtle, behind UI */
 body.zzz-active::before {
   content: '';
   position: fixed; inset: 0; z-index: 9998;
-  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.5) 100%);
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.3) 100%);
   pointer-events: none;
 }
 
@@ -49,7 +49,7 @@ body.zzz-active::before {
 .crt-overlay::before {
   content: '';
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%);
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.35) 100%);
 }
 .crt-overlay::after {
   content: '';

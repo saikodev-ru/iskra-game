@@ -5,7 +5,7 @@ import DifficultyAnalyzer from './DifficultyAnalyzer.js';
 class BeatmapStore {
   static DB_NAME = 'rhythm-os-db';
   static STORE_NAME = 'beatmaps';
-  static DB_VERSION = 4; // v4: add video support
+  static DB_VERSION = 5; // v5: bump to clear old AVI video data
 
   /** Open (or create) the database */
   static async open() {
@@ -27,9 +27,16 @@ class BeatmapStore {
             console.warn('[BeatmapStore] v3 migration clear failed:', err);
           }
         }
-        // v3→v4: add video fields — no data migration needed
-        if (e.oldVersion < 4) {
-          console.log('[BeatmapStore] v4 migration: video support added');
+        // v4→v5: clear all stored beatmaps (AVI video format fix)
+        if (e.oldVersion < 5) {
+          try {
+            const tx = e.target.transaction;
+            const store = tx.objectStore(BeatmapStore.STORE_NAME);
+            store.clear();
+            console.log('[BeatmapStore] Cleared cached beatmaps (v5 migration: AVI video fix + note conflict resolution)');
+          } catch (err) {
+            console.warn('[BeatmapStore] v5 migration clear failed:', err);
+          }
         }
       };
       request.onsuccess = () => resolve(request.result);
@@ -307,23 +314,33 @@ export default class OszLoader {
       }
 
       // Create video Object URL and store raw data for persistence
+      // Only process browser-supported video formats (MP4, WebM)
+      // AVI, WMV, FLV are NOT supported by browsers — skip them
       let videoUrl = null;
       let videoData = null;
       let videoMime = null;
 
-      // Parse video filename from Events section (0,1,filename or Video,0,filename)
       const videoFileName = firstParsed.video?.toLowerCase();
       if (videoFileName && videoFiles[videoFileName]) {
-        videoData = videoFiles[videoFileName];
-        videoMime = this._getVideoMime(videoFileName);
-        videoUrl = this._createVideoObjectURL(videoFileName, videoFiles[videoFileName]);
+        const lowerName = videoFileName.toLowerCase();
+        if (lowerName.endsWith('.mp4') || lowerName.endsWith('.webm')) {
+          videoData = videoFiles[videoFileName];
+          videoMime = this._getVideoMime(videoFileName);
+          videoUrl = this._createVideoObjectURL(videoFileName, videoFiles[videoFileName]);
+        } else {
+          // Unsupported format (AVI, WMV, FLV) — log and skip
+          console.log(`[OszLoader] Skipping unsupported video format: ${videoFileName}`);
+        }
       } else {
-        // Fallback: use the first video file found in the archive
-        const firstVideo = Object.entries(videoFiles)[0];
-        if (firstVideo) {
-          videoData = firstVideo[1];
-          videoMime = this._getVideoMime(firstVideo[0]);
-          videoUrl = this._createVideoObjectURL(firstVideo[0], firstVideo[1]);
+        // Fallback: try the first video file, but only if it's a supported format
+        for (const [vidName, vidData] of Object.entries(videoFiles)) {
+          const lowerName = vidName.toLowerCase();
+          if (lowerName.endsWith('.mp4') || lowerName.endsWith('.webm')) {
+            videoData = vidData;
+            videoMime = this._getVideoMime(vidName);
+            videoUrl = this._createVideoObjectURL(vidName, vidData);
+            break;
+          }
         }
       }
 
@@ -423,6 +440,9 @@ export default class OszLoader {
       return null;
     }
 
+    // ── Resolve note conflicts (overlap / too-close on same lane) ──
+    this._resolveNoteConflicts(notes, laneCount);
+
     const bpmChanges = parsed.timingPoints
       .filter(tp => tp.msPerBeat > 0)
       .map(tp => ({
@@ -515,6 +535,107 @@ export default class OszLoader {
     }
 
     return notes;
+  }
+
+  /**
+   * Resolve note conflicts after conversion.
+   * 1. If notes on the same lane overlap (impossible to hold), shift to adjacent lane.
+   * 2. If notes on the same lane are too close together (< 80ms), shift to adjacent lane.
+   * Uses a greedy lane-assignment algorithm similar to osu!mania import handling.
+   */
+  _resolveNoteConflicts(notes, laneCount) {
+    if (notes.length === 0 || laneCount <= 1) return;
+
+    const MIN_GAP = 0.08; // 80ms minimum gap between notes on same lane
+
+    // Sort by time, then lane
+    notes.sort((a, b) => a.time - b.time || a.lane - b.lane);
+
+    // Group notes by lane for fast overlap detection
+    const byLane = new Map();
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
+      if (!byLane.has(n.lane)) byLane.set(n.lane, []);
+      byLane.get(n.lane).push(n);
+    }
+
+    // Find all conflicts on each lane
+    const conflicts = [];
+    for (const [lane, laneNotes] of byLane) {
+      laneNotes.sort((a, b) => a.time - b.time);
+      for (let i = 0; i < laneNotes.length - 1; i++) {
+        const curr = laneNotes[i];
+        const next = laneNotes[i + 1];
+        const currEnd = curr.time + Math.max(curr.duration || 0, 0.05); // hold notes use full duration
+
+        // Check overlap: current note's end overlaps with next note's start
+        // OR they're too close together
+        if (currEnd > next.time - MIN_GAP) {
+          conflicts.push({ note: next, conflictWith: curr, origLane: lane });
+        }
+      }
+    }
+
+    // Resolve each conflict by shifting to the best available lane
+    for (const { note: conflictNote, origLane } of conflicts) {
+      // Skip if already shifted by a previous resolution
+      if (conflictNote.lane !== origLane) continue;
+
+      // Try adjacent lanes: prefer lanes closest to original, then check for new conflicts
+      const candidates = [];
+      for (let delta = 1; delta < laneCount; delta++) {
+        for (const dir of [1, -1]) {
+          const newLane = origLane + delta * dir;
+          if (newLane < 0 || newLane >= laneCount) continue;
+          candidates.push({ lane: newLane, dist: delta });
+        }
+      }
+
+      // Sort by distance (prefer closer lanes)
+      candidates.sort((a, b) => a.dist - b.dist);
+
+      let bestLane = origLane;
+      let bestScore = -Infinity;
+
+      for (const { lane: candidateLane, dist } of candidates) {
+        const laneNotes = byLane.get(candidateLane) || [];
+        let score = 100 - dist * 10; // prefer closer lanes
+
+        // Check if this note would conflict on the candidate lane
+        const noteStart = conflictNote.time;
+        const noteEnd = conflictNote.time + Math.max(conflictNote.duration || 0, 0.05);
+
+        let hasConflict = false;
+        for (const other of laneNotes) {
+          const otherEnd = other.time + Math.max(other.duration || 0, 0.05);
+          // Check if ranges overlap or are too close
+          if (otherEnd > noteStart - MIN_GAP && other.time < noteEnd + MIN_GAP) {
+            score -= 50; // heavy penalty for conflict on candidate lane
+            hasConflict = true;
+          }
+        }
+
+        if (!hasConflict && score > bestScore) {
+          bestScore = score;
+          bestLane = candidateLane;
+        }
+      }
+
+      // Apply the shift if we found a better lane
+      if (bestLane !== origLane && bestLane !== conflictNote.lane) {
+        // Remove from old lane group
+        const oldGroup = byLane.get(conflictNote.lane);
+        if (oldGroup) {
+          const idx = oldGroup.indexOf(conflictNote);
+          if (idx >= 0) oldGroup.splice(idx, 1);
+        }
+        // Assign new lane
+        conflictNote.lane = bestLane;
+        // Add to new lane group
+        if (!byLane.has(bestLane)) byLane.set(bestLane, []);
+        byLane.get(bestLane).push(conflictNote);
+      }
+    }
   }
 
   // ── .osu File Parser ─────────────────────────────────────────────────────
