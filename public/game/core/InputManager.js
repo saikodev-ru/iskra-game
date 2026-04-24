@@ -53,7 +53,13 @@ export default class InputManager {
     this._active.add(e.code);
     EventBus.emit('input:hit', { lane, hitTime: this.audio.currentTime });
   }
-  _onKeyUp(e) { this._active.delete(e.code); }
+  _onKeyUp(e) {
+    const lane = this.keyMap[e.code];
+    if (lane !== undefined) {
+      EventBus.emit('input:release', { lane, releaseTime: this.audio.currentTime });
+    }
+    this._active.delete(e.code);
+  }
   isKeyDown(code) { return this._active.has(code); }
   getKeyMap() { return { ...this.keyMap }; }
   getDefaultKeyMaps() { return JSON.parse(JSON.stringify(DEFAULT_KEY_MAPS)); }

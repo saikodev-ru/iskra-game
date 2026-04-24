@@ -348,6 +348,8 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   position: relative;
   min-height: 68px;
   backdrop-filter: blur(8px);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .song-card:hover {
   background: rgba(42,42,42,0.85);
@@ -497,12 +499,17 @@ body.combo-break { animation: vignette-red 0.3s ease; }
   letter-spacing: 0.08em !important;
 }
 
-/* SONG LIST CONTAINER — responsive */
-.song-list-container {
-  transition: width 0.2s ease;
+/* SONG LIST COLUMN — right-aligned, no horizontal scroll */
+.song-list-column {
+  overflow: hidden;
 }
+.song-list-column * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 @media (max-width: 768px) {
-  .song-list-container {
+  .song-list-column {
     width: 100% !important;
     max-width: 100% !important;
   }

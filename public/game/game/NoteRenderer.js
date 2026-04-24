@@ -264,24 +264,45 @@ export default class NoteRenderer {
     const judgeLineY = sa.y + sa.h * 0.88;
 
     for (const note of notes) {
-      if (note.hit && note.judgement !== 'miss') continue;
-      if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
-
-      const noteY = judgeLineY - (note.time - currentTime) * this.scrollSpeed;
-      if (noteY < -80 || noteY > this.h + 50) continue;
+      // For tap notes: skip if hit (not missed)
+      // For hold notes: skip only if fully resolved (released or missed head)
+      if (note.type !== 'hold') {
+        if (note.hit && note.judgement !== 'miss') continue;
+        if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
+      } else {
+        // Hold note: skip if head was missed and we're past it, or if fully released
+        if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
+        if (note.released && currentTime - (note.time + note.duration) > 0.5) continue;
+      }
 
       const color = LANE_COLORS[note.lane % LANE_COLORS.length];
 
-      /* Fade-in: notes gradually appear as they approach */
-      const distToJudge = judgeLineY - noteY;
-      const fadeIn = Math.min(1, distToJudge / (this.scrollSpeed * 0.3));
+      if (note.type === 'hold' && note.duration > 0) {
+        // For hold notes that are being held (head hit but not yet released),
+        // clamp the start position to the judge line
+        const noteY = note.hit && note.judgement !== 'miss'
+          ? judgeLineY // head was hit, body starts from judge line
+          : judgeLineY - (note.time - currentTime) * this.scrollSpeed;
 
-      /* Dim missed notes */
-      const alpha = note.judgement === 'miss' ? 0.3 : 1;
+        // If note hasn't appeared yet, skip
+        if (noteY > this.h + 50 && !note.hit) continue;
 
-      if (note.type === 'hold') {
-        this._drawHoldNote(ctx, note, noteY, note.lane, laneCount, color, fadeIn * alpha, currentTime);
+        const holdEndY = judgeLineY - ((note.time + note.duration) - currentTime) * this.scrollSpeed;
+        if (holdEndY < -80 && note.released) continue;
+
+        const isHolding = note.hit && note.judgement !== 'miss' && !note.released;
+        const fadeIn = note.hit ? 1 : Math.min(1, (judgeLineY - noteY) / (this.scrollSpeed * 0.3));
+        const alpha = note.judgement === 'miss' ? 0.3 : 1;
+
+        this._drawHoldNote(ctx, note, noteY, holdEndY, note.lane, laneCount, color, fadeIn * alpha, currentTime, isHolding);
       } else {
+        const noteY = judgeLineY - (note.time - currentTime) * this.scrollSpeed;
+        if (noteY < -80 || noteY > this.h + 50) continue;
+
+        const distToJudge = judgeLineY - noteY;
+        const fadeIn = Math.min(1, distToJudge / (this.scrollSpeed * 0.3));
+        const alpha = note.judgement === 'miss' ? 0.3 : 1;
+
         this._drawTapNote(ctx, note.lane, noteY, laneCount, color, fadeIn * alpha);
       }
     }
@@ -328,13 +349,15 @@ export default class NoteRenderer {
     ctx.restore();
   }
 
-  _drawHoldNote(ctx, note, noteY, laneIndex, laneCount, color, alpha, currentTime) {
+  _drawHoldNote(ctx, note, noteY, holdEndY, laneIndex, laneCount, color, alpha, currentTime, isHolding) {
     const sa = this.safeArea;
     const judgeLineY = sa.y + sa.h * 0.88;
 
-    const holdEndY = judgeLineY - ((note.time + note.duration) - currentTime) * this.scrollSpeed;
     const topY = Math.min(noteY, holdEndY);
     const bottomY = Math.max(noteY, holdEndY);
+
+    // If the entire hold is past the judge line and not being held, skip
+    if (topY > judgeLineY + 10 && !isHolding) return;
 
     const topScale = this._getPerspectiveScale(topY);
     const bottomScale = this._getPerspectiveScale(bottomY);
@@ -345,9 +368,9 @@ export default class NoteRenderer {
     const bottomPad = 6 * bottomScale;
 
     ctx.save();
-    ctx.globalAlpha = alpha * 0.7;
+    ctx.globalAlpha = alpha * (isHolding ? 0.85 : 0.7);
 
-    /* Hold body — trapezoid narrowing towards the top */
+    /* Hold body — trapezoid */
     ctx.beginPath();
     ctx.moveTo(topGeom.x + topPad, topY);
     ctx.lineTo(topGeom.x + topGeom.width - topPad, topY);
@@ -355,18 +378,33 @@ export default class NoteRenderer {
     ctx.lineTo(bottomGeom.x + bottomPad, bottomY);
     ctx.closePath();
 
-    ctx.fillStyle = this._withAlpha(color, 0.18);
+    // Brighter fill when being held
+    ctx.fillStyle = isHolding ? this._withAlpha(color, 0.30) : this._withAlpha(color, 0.18);
     ctx.fill();
 
-    ctx.strokeStyle = this._withAlpha(color, 0.35);
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.55) : this._withAlpha(color, 0.35);
+    ctx.lineWidth = isHolding ? 2 : 1;
     ctx.stroke();
+
+    // Glow effect when holding
+    if (isHolding) {
+      ctx.save();
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = color;
+      ctx.strokeStyle = this._withAlpha(color, 0.2);
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(topGeom.x + topGeom.width / 2, topY);
+      ctx.lineTo(bottomGeom.x + bottomGeom.width / 2, bottomY);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     /* Center guide line */
     const topCenterX = topGeom.x + topGeom.width / 2;
     const bottomCenterX = bottomGeom.x + bottomGeom.width / 2;
-    ctx.strokeStyle = this._withAlpha(color, 0.12);
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = this._withAlpha(color, isHolding ? 0.25 : 0.12);
+    ctx.lineWidth = isHolding ? 3 : 2;
     ctx.beginPath();
     ctx.moveTo(topCenterX, topY);
     ctx.lineTo(bottomCenterX, bottomY);
@@ -374,8 +412,10 @@ export default class NoteRenderer {
 
     ctx.restore();
 
-    /* Start cap (at noteY — the leading edge of the hold) */
-    this._drawHoldCap(ctx, laneIndex, noteY, laneCount, color, alpha);
+    /* Start cap — only draw if head hasn't been hit yet */
+    if (!note.hit || note.judgement === 'miss') {
+      this._drawHoldCap(ctx, laneIndex, noteY, laneCount, color, alpha);
+    }
 
     /* End cap */
     this._drawHoldCap(ctx, laneIndex, holdEndY, laneCount, color, alpha);

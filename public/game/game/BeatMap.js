@@ -26,7 +26,13 @@ export default class BeatMap {
   getNotesInWindow(currentTime, lookahead = 3.0) {
     const start = currentTime - 0.5;
     const end = currentTime + lookahead;
-    return this.notes.filter(n => n.time >= start && n.time <= end);
+    return this.notes.filter(n => {
+      // Include notes whose start time is in the window
+      if (n.time >= start && n.time <= end) return true;
+      // Also include hold notes that started earlier but are still active
+      if (n.type === 'hold' && n.duration > 0 && n.time < start && (n.time + n.duration) >= start) return true;
+      return false;
+    });
   }
 
   findClosestNote(lane, currentTime, window = 0.25) {

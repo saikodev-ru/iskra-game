@@ -181,7 +181,22 @@ async function boot() {
     const missHandler = () => { if (!gameActive) return; if (hitSounds) hitSounds.miss(); };
     const comboBreakHandler = ({ combo }) => { judgementDisplay.showComboBreak(combo); };
 
+    // Hold note release handler
+    const releaseHandler = ({ lane, releaseTime }) => {
+      if (!gameActive) return;
+      const result = currentJudgement.judgeRelease(lane, releaseTime);
+      if (!result) return;
+
+      const pos = noteRenderer.getLaneHitPosition(lane, currentBeatMap.laneCount);
+      const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };
+      noteRenderer.addEffect(pos.x, pos.y, effectColors[result.judgement] || '#AAFF00', result.judgement);
+
+      if (hitSounds && result.judgement !== 'bad') hitSounds.hit();
+      judgementDisplay.checkMilestone(currentJudgement.combo);
+    };
+
     EventBus.on('input:hit', hitHandler);
+    EventBus.on('input:release', releaseHandler);
     EventBus.on('note:miss', missHandler);
     EventBus.on('combo:break', comboBreakHandler);
 
@@ -230,6 +245,7 @@ async function boot() {
 
     startGame._cleanup = () => {
       EventBus.off('input:hit', hitHandler);
+      EventBus.off('input:release', releaseHandler);
       EventBus.off('note:miss', missHandler);
       EventBus.off('combo:break', comboBreakHandler);
     };

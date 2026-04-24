@@ -23,21 +23,21 @@ export default class SongSelect {
   build() {
     return `
       <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;">
-        <!-- Top bar -->
-        <div style="display:flex;align-items:center;gap:12px;padding:16px 24px;flex-shrink:0;">
-          <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
-          <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." style="flex:1;max-width:320px;" />
-        </div>
-
         <!-- Song info (top-left) -->
-        <div id="ss-song-info" style="position:absolute;top:64px;left:24px;z-index:2;max-width:40%;pointer-events:none;"></div>
+        <div id="ss-song-info" style="position:absolute;top:16px;left:24px;z-index:2;max-width:40%;pointer-events:none;"></div>
 
-        <!-- Song list (right-aligned) -->
-        <div style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:0 24px 0 0;">
-          <div class="song-list-container" style="width:min(100%, 480px);display:flex;flex-direction:column;gap:8px;min-height:0;">
-            <div id="song-list" class="zzz-scroll" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;"></div>
+        <!-- Right column: back + search + list -->
+        <div style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:16px 24px 0 0;">
+          <div class="song-list-column" style="width:100%;max-width:480px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden;">
+            <!-- Top bar (right-aligned) -->
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+              <button id="back-btn" class="zzz-btn zzz-btn--sm">← BACK</button>
+              <input type="text" class="zzz-search" id="song-search" placeholder="SEARCH..." style="flex:1;min-width:0;" />
+            </div>
+            <!-- Song list -->
+            <div id="song-list" class="zzz-scroll" style="flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:6px;padding-right:4px;min-height:0;"></div>
             <!-- Import button at bottom of list, full width -->
-            <div style="flex-shrink:0;padding:4px 0;">
+            <div style="flex-shrink:0;padding:4px 0 8px;">
               <label class="zzz-btn zzz-btn--primary zzz-btn--sm zzz-import-btn" style="cursor:pointer;display:block;width:100%;text-align:center;" for="osz-input">IMPORT .OSZ</label>
               <input type="file" id="osz-input" accept=".osz" style="display:none;" multiple />
             </div>
@@ -295,17 +295,17 @@ export default class SongSelect {
 
   // ─── Song Selection ───────────────────────────────────────────────
 
-  _selectSong(setIndex) {
+  _selectSong(setIndex, fromDiffSwitch = false) {
     if (setIndex < 0 || setIndex >= this.beatmapSets.length) return;
     this.selectedIndex = setIndex;
-    this.selectedDiffIndex = 0;
+    if (!fromDiffSwitch) this.selectedDiffIndex = 0;
     this._expandedCard = setIndex;
     const set = this.beatmapSets[setIndex];
 
     this._renderSongList();
 
     const activeCard = document.querySelector(`.song-card-wrapper[data-index="${setIndex}"]`);
-    if (activeCard) activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (activeCard) activeCard.scrollIntoView({ behavior: fromDiffSwitch ? 'auto' : 'smooth', block: 'nearest' });
 
     // Update TV
     if (this.three) {
@@ -322,8 +322,45 @@ export default class SongSelect {
     const set = this.beatmapSets[this.selectedIndex];
     if (!set || diffIndex < 0 || diffIndex >= set.difficulties.length) return;
     this.selectedDiffIndex = diffIndex;
+    // Just update the info and highlight in-place — don't rebuild the list
     this._renderSongInfo(set);
-    this._renderSongList();
+    this._updateDiffHighlight(set);
+    // Update preview for new difficulty
+    this._playPreview(set);
+  }
+
+  /** Update diff dropdown active state without re-rendering the entire list */
+  _updateDiffHighlight(set) {
+    if (!set || this._expandedCard !== this.selectedIndex) return;
+
+    const wrapper = document.querySelector(`.song-card-wrapper[data-index="${this.selectedIndex}"]`);
+    if (!wrapper) return;
+
+    // Update the card's diff display
+    const card = wrapper.querySelector('.song-card');
+    if (card) {
+      const diff = set.difficulties[this.selectedDiffIndex] || set.difficulties[0];
+      const stars = diff.difficulty?.stars || 0;
+      const starColor = DifficultyAnalyzer.getStarColor(stars);
+      const diffName = DifficultyAnalyzer.getDiffName(stars);
+
+      const starsEl = card.querySelector('.song-card-stars');
+      const nameEl = card.querySelector('.song-card-diff-name');
+      if (starsEl) { starsEl.style.color = starColor; starsEl.textContent = `★ ${stars.toFixed(1)}`; }
+      if (nameEl) { nameEl.style.color = starColor; nameEl.textContent = diffName; }
+    }
+
+    // Update dropdown items
+    const items = wrapper.querySelectorAll('.diff-dropdown-item');
+    items.forEach((item, idx) => {
+      const isActive = idx === this.selectedDiffIndex;
+      const s = set.difficulties[idx]?.difficulty?.stars || 0;
+      const c = DifficultyAnalyzer.getStarColor(s);
+      item.classList.toggle('active', isActive);
+      item.style.background = isActive ? 'rgba(170,255,0,0.08)' : 'rgba(26,26,26,0.6)';
+      const nameSpan = item.querySelector('span:last-child');
+      if (nameSpan) nameSpan.style.color = isActive ? c : 'var(--zzz-text)';
+    });
   }
 
   // ─── Song Info (top-left) ────────────────────────────────────
@@ -379,12 +416,15 @@ export default class SongSelect {
     if (!set.audioBuffer) return;
 
     const previewTime = set.difficulties[this.selectedDiffIndex]?.metadata?.previewTime || 0;
+    const savedVolume = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
+    const previewVolume = savedVolume * 0.5; // preview at half the user's volume setting
+
     this.audio._ensureCtx();
     this.audio.fadeTo(0, 0.2);
     this._previewFadeTimeout = setTimeout(() => {
       if (set !== this.beatmapSets[this.selectedIndex]) return;
       this.audio.play(set.audioBuffer, Math.max(0, previewTime));
-      this.audio.fadeTo(0.4, 0.4);
+      this.audio.fadeTo(previewVolume, 0.4);
     }, 250);
   }
 
