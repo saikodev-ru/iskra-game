@@ -32,12 +32,12 @@ export default class Settings {
     }
 
     return `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:28px;background:transparent;padding:16px;">
-        <h2 class="zzz-title" style="font-size:36px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
-        <div class="zzz-panel" style="padding:24px;width:min(480px,90%);">
+      <div style="display:flex;flex-direction:column;align-items:center;height:100%;background:transparent;padding:16px;overflow-y:auto;" class="zzz-scroll">
+        <h2 class="zzz-title" style="font-size:36px;color:var(--zzz-lime);margin:0 0 28px 0;flex-shrink:0;">SETTINGS</h2>
+        <div class="zzz-panel" style="padding:24px;width:min(480px,90%);flex-shrink:0;">
           ${this._buildSettingsContent(aspectRatios, savedAspect, savedResScale)}
         </div>
-        <button class="zzz-btn" data-action="back">← BACK</button>
+        <button class="zzz-btn" data-action="back" style="flex-shrink:0;margin-top:28px;">← BACK</button>
       </div>
     `;
   }

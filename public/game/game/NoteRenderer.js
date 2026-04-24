@@ -23,6 +23,7 @@ export default class NoteRenderer {
     this.safeArea = { x: 0, y: 0, w: 0, h: 0 };
     this._safeAreaExplicit = false;
     this._health = 100;
+    this._displayHealth = 100; // animated HP value for smooth bar
     this._laneGlows = new Map();
     this._holdNoteDebugLogged = false;
     this._graphicsPreset = 'disco'; // 'low' | 'standard' | 'disco'
@@ -53,6 +54,7 @@ export default class NoteRenderer {
 
   setHealth(pct) {
     this._health = Math.max(0, Math.min(100, pct));
+    // _displayHealth is animated toward _health in render()
   }
 
   setBackgroundImage(url) {
@@ -138,12 +140,22 @@ export default class NoteRenderer {
   render({ notes, currentTime, laneCount }) {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
+
+    // Smooth HP animation
+    const healthDiff = this._health - this._displayHealth;
+    if (Math.abs(healthDiff) > 0.1) {
+      this._displayHealth += healthDiff * 0.12;
+    } else {
+      this._displayHealth = this._health;
+    }
+
     this._drawBackground(laneCount);
     this._drawEffects();         // Effects BEHIND notes (white, transparent)
     this._drawLaneGlows(laneCount);
     this._drawNotes(notes, currentTime, laneCount);
     this._drawJudgeLine(laneCount);
     this._drawHPBar(laneCount);
+    this._drawRedVignette();     // Low-HP danger overlay
     this._drawBlackBars();
   }
 
@@ -559,7 +571,7 @@ export default class NoteRenderer {
     const ctx = this.ctx;
     const sa = this.safeArea;
     const judgeLineY = this._getJudgeLineY();
-    const health = this._health;
+    const health = this._displayHealth;
     const gfx = this._gfx();
 
     // HP bar: 3x wider than before, only bottom half of playfield height
@@ -639,6 +651,36 @@ export default class NoteRenderer {
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    ctx.restore();
+  }
+
+  /* ── Red vignette when HP is low ───────────────────────────────── */
+
+  _drawRedVignette() {
+    const health = this._displayHealth;
+    if (health > 40) return; // Only show when HP < 40%
+
+    const ctx = this.ctx;
+    const sa = this.safeArea;
+    const cx = sa.x + sa.w / 2;
+    const cy = sa.y + sa.h / 2;
+    const maxR = Math.max(sa.w, sa.h) * 0.8;
+    const minR = Math.min(sa.w, sa.h) * 0.25;
+
+    // Intensity ramps from 0 at 40% HP to 1 at 0% HP
+    const intensity = (1 - health / 40) * 0.5;
+
+    // Pulse effect when very low HP
+    const pulse = health < 20 ? (0.7 + 0.3 * Math.sin(performance.now() * 0.005)) : 1;
+
+    const grad = ctx.createRadialGradient(cx, cy, minR, cx, cy, maxR);
+    grad.addColorStop(0, 'transparent');
+    grad.addColorStop(0.5, `rgba(255,30,30,${intensity * 0.15 * pulse})`);
+    grad.addColorStop(1, `rgba(255,0,0,${intensity * 0.55 * pulse})`);
+
+    ctx.save();
+    ctx.fillStyle = grad;
+    ctx.fillRect(sa.x, sa.y, sa.w, sa.h);
     ctx.restore();
   }
 

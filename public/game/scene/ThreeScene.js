@@ -39,6 +39,7 @@ export default class ThreeScene {
     this._bgImageTexture = null;
     this._safeArea = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
     this._graphicsPreset = 'disco'; // 'low' | 'standard' | 'disco'
+    this._missFlash = 0; // red overlay flash intensity on miss (0-1, decays)
 
     this._init();
     this._setupListeners();
@@ -163,6 +164,7 @@ export default class ThreeScene {
       uniform float uBeatIntensity;
       uniform float uBassIntensity;
       uniform float uAudioIntensity;
+      uniform float uMissFlash;
       varying vec2 vUv;
       void main() {
         vec2 uv = vUv;
@@ -194,6 +196,11 @@ export default class ThreeScene {
         vec3 edgeColor = vec3(0.1, 0.2, 0.0) * bassPulse * edge * 0.5;
 
         vec3 color = baseColor + audioColor + bassColor + beatColor + edgeColor;
+
+        // Miss flash — brief red overlay tint, stronger at edges
+        float missVig = smoothstep(0.2, 0.9, vig);
+        color += vec3(1.0, 0.1, 0.05) * uMissFlash * (0.6 + 0.4 * missVig);
+
         gl_FragColor = vec4(color, 1.0);
       }
     `;
@@ -203,6 +210,7 @@ export default class ThreeScene {
         uBeatIntensity: { value: 0 },
         uBassIntensity: { value: 0 },
         uAudioIntensity: { value: 0 },
+        uMissFlash: { value: 0 },
       },
       vertexShader, fragmentShader, side: THREE.DoubleSide
     });
@@ -269,6 +277,7 @@ export default class ThreeScene {
         uniform float uPlaneAspect;
         uniform float uBrightness;
         uniform float uOpacity;
+        uniform float uMissFlash;
         varying vec2 vUv;
         void main() {
           vec2 uv = vUv;
@@ -290,6 +299,11 @@ export default class ThreeScene {
           color += vec3(uBrightness * 0.15);
           float vig = distance(vUv, vec2(0.5));
           color *= smoothstep(0.9, 0.3, vig) * 0.5 + 0.5;
+
+          // Miss flash — red overlay
+          float missVig = smoothstep(0.2, 0.9, vig);
+          color += vec3(1.0, 0.1, 0.05) * uMissFlash * (0.6 + 0.4 * missVig);
+
           gl_FragColor = vec4(color, uOpacity);
         }
       `;
@@ -303,6 +317,7 @@ export default class ThreeScene {
           uPlaneAspect: { value: 1.0 },
           uBrightness: { value: 0 },
           uOpacity: { value: 0 },
+          uMissFlash: { value: 0 },
         },
         vertexShader: `
           varying vec2 vUv;
@@ -460,8 +475,8 @@ export default class ThreeScene {
     });
     EventBus.on('note:miss', () => {
       if (!this._disposed) {
-        this._shakeFrames = [3, -3, 1.5, -1.5, 0];
-        this._bloomTarget = 0.3;
+        // Red overlay flash instead of camera shake
+        this._missFlash = 0.5;
       }
     });
   }
@@ -586,12 +601,21 @@ export default class ThreeScene {
     // ── Accent light pulse ──
     this._accentLight.intensity = 0.4 + audioPulse * 0.8;
 
-    // ── Camera shake (all presets — gameplay feedback) ──
-    if (this._shakeFrames.length > 0) {
-      this.camera.position.x = this._shakeFrames.shift();
+    // ── Miss flash — decay the red overlay ──
+    if (this._missFlash > 0.005) {
+      this._missFlash *= 0.88;
     } else {
-      this.camera.position.x *= 0.8;
+      this._missFlash = 0;
     }
+    if (this._bgMaterial) {
+      this._bgMaterial.uniforms.uMissFlash.value = this._missFlash * gfx;
+    }
+    if (this._bgImageMaterial && this._bgImageMaterial.uniforms && this._bgImageMaterial.uniforms.uMissFlash) {
+      this._bgImageMaterial.uniforms.uMissFlash.value = this._missFlash * gfx;
+    }
+
+    // Camera position: always smoothly return to center (no shake)
+    this.camera.position.x *= 0.85;
 
     try {
       this.composer.render();
