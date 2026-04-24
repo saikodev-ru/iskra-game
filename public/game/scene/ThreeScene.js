@@ -22,7 +22,6 @@ export default class ThreeScene {
     this._tvSpinAnim = null;
     this._particles = null;
     this._aspectRatio = '16:9';
-    this._resScale = 1.0;
     this._disposed = false;
     this._contextLost = false;
     this._resizeHandler = null;
@@ -301,7 +300,6 @@ export default class ThreeScene {
   }
 
   setAspectRatio(ar) { this._aspectRatio = ar; this.resize(); }
-  setResScale(scale) { this._resScale = scale; this.resize(); }
 
   resize() {
     if (this._disposed) return;
@@ -316,6 +314,7 @@ export default class ThreeScene {
       this.camera.aspect = w / h;
     }
     this.camera.updateProjectionMatrix();
+    // Three.js always renders at full viewport resolution
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
     this.renderer.setClearColor(0x000000, 1);

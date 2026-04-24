@@ -17,11 +17,15 @@ import SongSelect    from './ui/screens/SongSelect.js';
 import Settings      from './ui/screens/Settings.js';
 import ResultScreen  from './ui/screens/ResultScreen.js';
 
+/**
+ * Calculate the safe area based on aspect ratio.
+ * This determines the LOGICAL visible area of the game.
+ * Resolution scale is NOT applied here — it only affects canvas pixel density.
+ */
 function calcSafeArea() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   const ar = localStorage.getItem('rhythm-os-aspect-ratio') || '16:9';
-  const resScale = parseInt(localStorage.getItem('rhythm-os-res-scale') || '100') / 100;
 
   let targetW, targetH;
   if (ar === 'Fill') {
@@ -35,11 +39,17 @@ function calcSafeArea() {
     if (screenAR > targetAR) { targetH = h; targetW = h * targetAR; }
     else { targetW = w; targetH = w / targetAR; }
   }
-  targetW = Math.round(targetW * resScale);
-  targetH = Math.round(targetH * resScale);
+  // DO NOT apply resScale here — safe area is always the full visible area
+  targetW = Math.round(targetW);
+  targetH = Math.round(targetH);
   const x = Math.round((w - targetW) / 2);
   const y = Math.round((h - targetH) / 2);
   return { x, y, w: targetW, h: targetH };
+}
+
+/** Get the resolution scale (affects canvas render resolution only) */
+function getResScale() {
+  return parseInt(localStorage.getItem('rhythm-os-res-scale') || '100') / 100;
 }
 
 async function boot() {
@@ -69,9 +79,7 @@ async function boot() {
   three.setAudioEngine(audio);
 
   const savedAR = localStorage.getItem('rhythm-os-aspect-ratio') || '16:9';
-  const savedResScale = parseInt(localStorage.getItem('rhythm-os-res-scale') || '100') / 100;
   three.setAspectRatio(savedAR);
-  three.setResScale(savedResScale);
 
   const gameCanvas = document.getElementById('game');
   const noteRenderer = new NoteRenderer(gameCanvas);
@@ -86,6 +94,7 @@ async function boot() {
 
   const initialSA = calcSafeArea();
   noteRenderer.setSafeArea(initialSA.x, initialSA.y, initialSA.w, initialSA.h);
+  noteRenderer.setResScale(getResScale());
   const applySafeAreaToContainers = (sa) => {
     [screenContainer, hudContainer, judgementContainer].forEach(c => {
       c.style.left = sa.x + 'px'; c.style.top = sa.y + 'px';
@@ -96,6 +105,7 @@ async function boot() {
 
   let gameLoop = null, currentBeatMap = null, currentJudgement = null, gameActive = false;
   let currentMapData = null;
+  let currentLaneCount = 4;
 
   const savedVolume = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
   audio._ensureCtx();
@@ -104,6 +114,7 @@ async function boot() {
   const updateSafeArea = () => {
     const sa = calcSafeArea();
     noteRenderer.setSafeArea(sa.x, sa.y, sa.w, sa.h);
+    noteRenderer.setResScale(getResScale());
     noteRenderer.resize();
     applySafeAreaToContainers(sa);
   };
@@ -113,7 +124,9 @@ async function boot() {
       updateSafeArea(); three.setAspectRatio(value);
       if (!gameActive) noteRenderer.clear();
     } else if (key === 'resScale') {
-      updateSafeArea(); three.setResScale(parseInt(value) / 100);
+      // Only affects canvas resolution, not layout
+      noteRenderer.setResScale(getResScale());
+      noteRenderer.resize();
       if (!gameActive) noteRenderer.clear();
     }
   });
@@ -128,6 +141,7 @@ async function boot() {
     currentJudgement.reset();
 
     input.setLaneCount(currentBeatMap.laneCount);
+    currentLaneCount = currentBeatMap.laneCount;
     const scrollSpeed = parseInt(localStorage.getItem('rhythm-os-scroll-speed') || '400');
     noteRenderer.scrollSpeed = scrollSpeed;
     noteRenderer.resize();
@@ -160,10 +174,15 @@ async function boot() {
       if (!gameActive) return;
       const result = currentJudgement.judgeHit(lane, hitTime);
 
+      // Always show a visual effect on the lane when a key is pressed
+      const pos = noteRenderer.getLaneHitPosition(lane, currentLaneCount);
+
       if (result) {
-        const pos = noteRenderer.getLaneHitPosition(lane, currentBeatMap.laneCount);
+        // Note was hit — show judgment-colored effect + lane glow
         const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };
         noteRenderer.addEffect(pos.x, pos.y, effectColors[result.judgement] || '#AAFF00', result.judgement);
+        // Project Sekai-style lane glow on hit
+        noteRenderer.addLaneGlow(lane, currentLaneCount, effectColors[result.judgement] || '#AAFF00');
 
         if (hitSounds) {
           if (result.judgement === 'perfect') hitSounds.perfect();
@@ -172,8 +191,9 @@ async function boot() {
         judgementDisplay.checkMilestone(currentJudgement.combo);
         if (hitSounds && [50, 100, 200, 500].includes(currentJudgement.combo)) hitSounds.milestone(currentJudgement.combo);
       } else {
-        // Empty key press (no note nearby) — still play a quiet sound like osu!lazer
+        // Empty key press — still play quiet sound and show subtle visual feedback
         if (hitSounds) hitSounds.emptyHit();
+        noteRenderer.addLaneGlow(lane, currentLaneCount, 'rgba(255,255,255,0.3)');
       }
     };
 
@@ -185,7 +205,7 @@ async function boot() {
       const result = currentJudgement.judgeRelease(lane, releaseTime);
       if (!result) return;
 
-      const pos = noteRenderer.getLaneHitPosition(lane, currentBeatMap.laneCount);
+      const pos = noteRenderer.getLaneHitPosition(lane, currentLaneCount);
       const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };
       noteRenderer.addEffect(pos.x, pos.y, effectColors[result.judgement] || '#AAFF00', result.judgement);
 
@@ -233,7 +253,7 @@ async function boot() {
       render() {
         if (!gameActive) return;
         const ct = audio.currentTime;
-        noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentBeatMap.laneCount });
+        noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount });
         three.update(performance.now());
       }
     });
@@ -257,6 +277,7 @@ async function boot() {
     hud.hide();
     noteRenderer.clearBackground();
     noteRenderer.clear();
+    noteRenderer.clearLaneGlows();
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
     EventBus.emit('game:over', stats);
@@ -272,9 +293,10 @@ async function boot() {
     audio.pause();
     if (gameLoop) gameLoop.stop();
 
+    const sa = calcSafeArea();
     const overlay = document.createElement('div');
     overlay.id = 'pause-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:50;animation:pause-fade-in 0.2s ease-out forwards;';
+    overlay.style.cssText = `position:fixed;left:${sa.x}px;top:${sa.y}px;width:${sa.w}px;height:${sa.h}px;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:50;animation:pause-fade-in 0.2s ease-out forwards;`;
     overlay.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;gap:24px;animation:pause-panel-in 0.3s cubic-bezier(0.22,1,0.36,1) forwards;">
         <div style="font-family:var(--zzz-font);font-weight:900;font-size:14px;color:var(--zzz-muted);letter-spacing:0.3em;text-transform:uppercase;">PAUSED</div>
@@ -302,9 +324,10 @@ async function boot() {
 
   const _openPauseSettings = () => {
     if (!_pauseOverlay) return;
+    const sa = calcSafeArea();
     const settingsPanel = document.createElement('div');
     settingsPanel.id = 'pause-settings';
-    settingsPanel.style.cssText = 'position:fixed;inset:0;z-index:60;display:flex;';
+    settingsPanel.style.cssText = `position:fixed;left:${sa.x}px;top:${sa.y}px;width:${sa.w}px;height:${sa.h}px;z-index:60;display:flex;`;
     settingsPanel.innerHTML = `
       <div id="pause-settings-inner" style="width:380px;height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 24px;animation:settings-slide-in 0.25s ease-out forwards;"></div>
       <div id="pause-settings-bg" style="flex:1;"></div>
@@ -340,6 +363,8 @@ async function boot() {
     if (panel) panel.remove();
     if (_pauseSettingsInstance) { _pauseSettingsInstance.destroy(); _pauseSettingsInstance = null; }
     if (_pauseOverlay) _pauseOverlay.style.display = '';
+    // Re-apply safe area in case aspect ratio changed
+    updateSafeArea();
   };
 
   EventBus.on('settings:close-overlay', () => { _closePauseSettings(); });

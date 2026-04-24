@@ -143,3 +143,28 @@ Stage Summary:
 - Judgement text is now 20px (smaller, more osu!mania-like)
 - Delta display is now 10px
 - Lint passes clean
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix settings panel DOM breakage, add Project Sekai lane glow effects, fix resolution scale
+
+Work Log:
+- Fixed main.js calcSafeArea(): Removed resScale from safe area calculation. Safe area is now always full logical size (aspect-ratio-constrained). resScale only affects canvas pixel density.
+- Fixed main.js pause overlay and pause settings panel: Both now use calcSafeArea() to position themselves within the safe area boundaries instead of using position:fixed;inset:0 which spanned the entire viewport.
+- Added noteRenderer.setResScale() and separate getResScale() function. Resolution scale now only affects canvas.width/canvas.height (pixel count), while canvas.style.width/style.height stay at full viewport size. ctx.scale() uses dpr*resScale so drawing coordinates remain in CSS pixels. Low resScale = blurry (fewer pixels stretched), High resScale = crisp (more pixels).
+- Added noteRenderer.addLaneGlow() — Project Sekai-style glowing lane column effect. When a key is pressed, the entire lane column lights up with a gradient glow that fades out. For note hits, the glow color matches the judgment color. For empty key presses, it uses a subtle white glow.
+- Added _drawLaneGlows() in NoteRenderer — renders active lane glows with gradient fill and center line, both with shadowBlur for bloom effect. Glows decay each frame.
+- Updated main.js hitHandler: Always shows visual feedback on key press. Note hits get judgment-colored effect + lane glow. Empty key presses get quiet sound + subtle white lane glow.
+- Added noteRenderer.clearLaneGlows() on game end.
+- Removed ThreeScene.setResScale() — Three.js always renders at full viewport resolution (background effects shouldn't be affected by resolution scale).
+- Removed _resScale field from ThreeScene constructor.
+- Updated Settings.js overlay mode: panel width uses min(380px, 80%) for better small-screen handling.
+
+Stage Summary:
+- Settings panel and pause overlay now respect safe area boundaries (no DOM breakage)
+- Resolution scale properly affects only canvas pixel count (blurry at 50%, crisp at 150%)
+- Key presses always show visual feedback: lane glow on every press, stronger colored glow on note hits
+- Project Sekai-style lane glow effect with gradient + center line + shadow bloom
+- Three.js scene always renders at full resolution (unaffected by resScale)
+- Lint passes clean

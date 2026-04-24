@@ -16,10 +16,10 @@ export default class Settings {
     const savedResScale = localStorage.getItem('rhythm-os-res-scale') || '100';
 
     if (this.overlayMode) {
-      // Overlay mode: slide-in panel from left
+      // Overlay mode: slide-in panel from left, constrained to safe area
       return `
         <div id="settings-overlay" style="position:absolute;inset:0;z-index:100;background:rgba(0,0,0,0.6);display:flex;">
-          <div style="width:380px;height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 24px;animation:settings-slide-in 0.25s ease-out forwards;">
+          <div style="width:min(380px, 80%);height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 24px;animation:settings-slide-in 0.25s ease-out forwards;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
               <h2 class="zzz-title" style="font-size:28px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
               <button id="settings-close" class="zzz-btn zzz-btn--sm" style="pointer-events:all;">✕</button>

@@ -9,6 +9,7 @@ export default class NoteRenderer {
     this.ctx = canvas.getContext('2d');
     this.scrollSpeed = 400;
     this.noteHeight = 20;
+    this._resScale = 1.0; // resolution scale: 1.0 = native, <1 = blurry, >1 = crisp
     this._effectsPool = new Array(48);
     for (let i = 0; i < 48; i++) {
       this._effectsPool[i] = {
@@ -22,6 +23,8 @@ export default class NoteRenderer {
     this.safeArea = { x: 0, y: 0, w: 0, h: 0 };
     this._safeAreaExplicit = false;
     this._health = 100; // 0–100
+    // Lane glow system — Project Sekai style
+    this._laneGlows = new Map(); // lane → { color, intensity, decay }
     this.resize();
   }
 
@@ -30,6 +33,11 @@ export default class NoteRenderer {
   setSafeArea(x, y, w, h) {
     this.safeArea = { x, y, w, h };
     this._safeAreaExplicit = true;
+  }
+
+  /** Set resolution scale — affects canvas pixel count only, not layout size */
+  setResScale(scale) {
+    this._resScale = Math.max(0.25, Math.min(2.0, scale));
   }
 
   setHealth(pct) {
@@ -69,6 +77,20 @@ export default class NoteRenderer {
     this._effectIndex++;
   }
 
+  /** Project Sekai-style lane glow — adds a glowing column effect when a key is pressed */
+  addLaneGlow(lane, laneCount, color) {
+    this._laneGlows.set(lane, {
+      color,
+      intensity: 1.0,
+      decay: 0.04 // fade out rate per frame
+    });
+  }
+
+  /** Clear all lane glows (used on game end) */
+  clearLaneGlows() {
+    this._laneGlows.clear();
+  }
+
   flashLane() { /* no-op */ }
 
   getLaneHitPosition(lane, laneCount) {
@@ -79,14 +101,28 @@ export default class NoteRenderer {
   }
 
   resize() {
+    // Canvas STYLE is always full viewport
+    const styleW = window.innerWidth;
+    const styleH = window.innerHeight;
+
+    // Canvas PIXEL dimensions are scaled by resScale
+    // Low resScale = fewer pixels = blurry, High resScale = more pixels = crisp
     const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = window.innerWidth * dpr;
-    this.canvas.height = window.innerHeight * dpr;
-    this.canvas.style.width = window.innerWidth + 'px';
-    this.canvas.style.height = window.innerHeight + 'px';
-    this.ctx.scale(dpr, dpr);
-    this.w = window.innerWidth;
-    this.h = window.innerHeight;
+    const pixelW = Math.round(styleW * dpr * this._resScale);
+    const pixelH = Math.round(styleH * dpr * this._resScale);
+
+    this.canvas.width = pixelW;
+    this.canvas.height = pixelH;
+    this.canvas.style.width = styleW + 'px';
+    this.canvas.style.height = styleH + 'px';
+
+    // Scale the context so all drawing commands use CSS pixel coordinates
+    // regardless of the actual pixel count
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0); // reset
+    this.ctx.scale(dpr * this._resScale, dpr * this._resScale);
+
+    this.w = styleW;
+    this.h = styleH;
     if (!this._safeAreaExplicit) {
       this.safeArea = { x: 0, y: 0, w: this.w, h: this.h };
     }
@@ -101,6 +137,7 @@ export default class NoteRenderer {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
     this._drawBackground(laneCount);
+    this._drawLaneGlows(laneCount);
     this._drawNotes(notes, currentTime, laneCount);
     this._drawJudgeLine(laneCount);
     this._drawHPBar(laneCount);
@@ -134,18 +171,6 @@ export default class NoteRenderer {
     const lw = cw / laneCount;
     const le = cx - cw / 2;
     return { x: le + laneIndex * lw, width: lw, centerX: le + (laneIndex + 0.5) * lw };
-  }
-
-  /** Get the right edge X of the entire lane group at a given Y */
-  _getPlayfieldRightX(y, laneCount) {
-    const geom = this._getLaneGeometry(laneCount, y, laneCount); // one past the last lane
-    return geom.x;
-  }
-
-  /** Get the left edge X of the entire lane group at a given Y */
-  _getPlayfieldLeftX(y, laneCount) {
-    const geom = this._getLaneGeometry(0, y, laneCount);
-    return geom.x;
   }
 
   /* ── Background ─────────────────────────────────────────────────── */
@@ -191,6 +216,62 @@ export default class NoteRenderer {
       ctx.moveTo(tg.x, topY);
       ctx.lineTo(bg.x, judgeLineY);
       ctx.stroke();
+    }
+  }
+
+  /* ── Lane Glows — Project Sekai style ──────────────────────────── */
+
+  _drawLaneGlows(laneCount) {
+    const ctx = this.ctx;
+    const topY = this._getTopY();
+    const judgeLineY = this._getJudgeLineY();
+
+    for (const [lane, glow] of this._laneGlows) {
+      if (glow.intensity <= 0.01) {
+        this._laneGlows.delete(lane);
+        continue;
+      }
+
+      const tg = this._getLaneGeometry(lane, topY, laneCount);
+      const bg = this._getLaneGeometry(lane, judgeLineY, laneCount);
+
+      ctx.save();
+      ctx.globalAlpha = glow.intensity * 0.4;
+
+      // Create gradient from top to bottom for the glow
+      const grad = ctx.createLinearGradient(0, topY, 0, judgeLineY);
+      grad.addColorStop(0, 'transparent');
+      grad.addColorStop(0.3, glow.color);
+      grad.addColorStop(0.85, glow.color);
+      grad.addColorStop(1, glow.color);
+
+      // Fill the lane trapezoid with the glow gradient
+      ctx.beginPath();
+      ctx.moveTo(tg.x, topY);
+      ctx.lineTo(tg.x + tg.width, topY);
+      ctx.lineTo(bg.x + bg.width, judgeLineY);
+      ctx.lineTo(bg.x, judgeLineY);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.shadowBlur = 30 * glow.intensity;
+      ctx.shadowColor = glow.color;
+      ctx.fill();
+
+      // Bright center line
+      ctx.globalAlpha = glow.intensity * 0.6;
+      ctx.shadowBlur = 20 * glow.intensity;
+      ctx.shadowColor = glow.color;
+      ctx.strokeStyle = glow.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(tg.centerX, topY);
+      ctx.lineTo(bg.centerX, judgeLineY);
+      ctx.stroke();
+
+      ctx.restore();
+
+      // Decay
+      glow.intensity -= glow.decay;
     }
   }
 
@@ -288,27 +369,6 @@ export default class NoteRenderer {
   }
 
   /* ── Hold note — osu!mania style ────────────────────────────────── */
-  /*
-    In osu!mania, notes scroll from top to bottom toward the judge line.
-    
-    Coordinate system:
-    - judgeLineY is near the bottom of the screen (high Y value)
-    - Notes come from above (lower Y values)
-    - headY approaches judgeLineY from below as time approaches note.time
-    - tailY = _noteY(headTime + duration) is always ABOVE headY (lower Y value)
-    
-    For a hold note:
-    - HEAD (start time) → closer to judge line (higher Y)
-    - TAIL (end time)   → further from judge line (lower Y)
-    
-    When holding:
-    - Head stays at judge line, body extends UP to tail
-    - No head cap drawn (body just starts at judge line)
-    
-    When not yet hit:
-    - Both head and tail caps are visible
-    - Body extends from headY (bottom) to tailY (top)
-  */
 
   _drawHoldNote(note, currentTime, laneCount, judgeLineY, topY) {
     const headTime = note.time;
@@ -326,21 +386,16 @@ export default class NoteRenderer {
     const alpha = isMissed ? 0.3 : 1;
 
     // ── Calculate Y positions ─────────────────────────────────────
-    // Head Y: if held, clamp to judge line. Otherwise compute normally.
     const rawHeadY = this._noteY(headTime, currentTime, judgeLineY);
     const headY = isHolding ? judgeLineY : rawHeadY;
-    // Tail Y: always computed from time
     const tailY = this._noteY(tailTime, currentTime, judgeLineY);
-
-    // tailY < headY (tail is above, further from judge line)
-    // headY approaches judgeLineY from below as note reaches judge line
 
     // ── Clip the body to visible bounds ───────────────────────────
     const clipTop = topY - 40;
     const clipBottom = judgeLineY;
 
-    const bodyTop = Math.max(tailY, clipTop);     // top of visible body (narrow end)
-    const bodyBottom = Math.min(headY, clipBottom); // bottom of visible body (wide end)
+    const bodyTop = Math.max(tailY, clipTop);
+    const bodyBottom = Math.min(headY, clipBottom);
 
     // ── Draw body (trapezoid with perspective) ────────────────────
     if (bodyTop < bodyBottom && bodyBottom > clipTop && bodyTop < clipBottom) {
@@ -464,16 +519,14 @@ export default class NoteRenderer {
 
   _drawHPBar(laneCount) {
     const ctx = this.ctx;
-    const sa = this.safeArea;
     const topY = this._getTopY();
     const judgeLineY = this._getJudgeLineY();
     const health = this._health;
 
     // HP bar dimensions — thin strip to the right of the playfield
-    const barGap = 6;  // gap from playfield edge
+    const barGap = 6;
     const barWidth = 6;
 
-    // Get the right edge of the playfield at top and bottom
     const topRightGeom = this._getLaneGeometry(laneCount - 1, topY, laneCount);
     const botRightGeom = this._getLaneGeometry(laneCount - 1, judgeLineY, laneCount);
 
@@ -499,11 +552,9 @@ export default class NoteRenderer {
     // Health fill — drawn from bottom up
     const fillRatio = health / 100;
     if (fillRatio > 0) {
-      // The fill Y position from bottom
       const fillHeight = (judgeLineY - topY) * fillRatio;
       const fillTopY = judgeLineY - fillHeight;
 
-      // Interpolate X and width at the fill top position
       const fillTopT = (fillTopY - topY) / (judgeLineY - topY);
       const fillTopScale = topScale + (botScale - topScale) * fillTopT;
       const fillTopBarX = topBarX + (botBarX - topBarX) * fillTopT;
@@ -516,7 +567,6 @@ export default class NoteRenderer {
       ctx.lineTo(botBarX, judgeLineY);
       ctx.closePath();
 
-      // Color based on health
       let fillColor, glowColor;
       if (health < 25) {
         fillColor = 'rgba(255,61,61,0.7)';
