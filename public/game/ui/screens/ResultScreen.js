@@ -1,34 +1,120 @@
+const GRADE_GRADIENTS = {
+  SS: { bg: 'linear-gradient(180deg, #67E8F9 0%, #FDA4AF 100%)', glow: 'rgba(103,232,249,0.4)', stroke: 'rgba(0,0,0,0.8)' },
+  S:  { bg: 'linear-gradient(180deg, #FDE68A 0%, #F97316 100%)', glow: 'rgba(253,230,138,0.4)', stroke: 'rgba(0,0,0,0.75)' },
+  A:  { bg: 'linear-gradient(180deg, #86EFAC 0%, #22D3EE 100%)', glow: 'rgba(134,239,172,0.35)', stroke: 'rgba(0,0,0,0.75)' },
+  B:  { bg: 'linear-gradient(180deg, #60A5FA 0%, #A855F7 100%)', glow: 'rgba(96,165,250,0.35)', stroke: 'rgba(0,0,0,0.75)' },
+  C:  { bg: 'linear-gradient(180deg, #C4B5FD 0%, #991B1B 100%)', glow: 'rgba(196,181,253,0.3)', stroke: 'rgba(0,0,0,0.8)' },
+  D:  { bg: 'linear-gradient(180deg, #EF4444 0%, #7F1D1D 100%)', glow: 'rgba(239,68,68,0.35)', stroke: 'rgba(0,0,0,0.85)' },
+};
+
+const JUDGE_COLORS = {
+  perfect: '#AAFF00',
+  great: '#00E5FF',
+  good: '#F5C518',
+  bad: '#FF8C00',
+  miss: '#FF3D3D',
+};
+
 export default class ResultScreen {
   constructor({ screens }) { this.screens = screens; this._stats = null; this._lastMap = null; this._keyHandler = null; }
 
   build() {
     const s = this._stats || { score: 0, accuracy: 100, maxCombo: 0, rank: 'D', hitCounts: { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 } };
-    const rc = { SS: '#AAFF00', S: '#AAFF00', A: '#00E5FF', B: '#F5C518', C: '#FF8C00', D: '#FF3D3D' };
-    const c = rc[s.rank] || '#FF3D3D';
+    const map = this._lastMap || {};
+    const meta = map.metadata || {};
+    const grade = GRADE_GRADIENTS[s.rank] || GRADE_GRADIENTS.D;
+
+    // Song info
+    const songTitle = meta.title || 'Unknown';
+    const songArtist = meta.artist || '';
+    const songDiff = meta.version || meta.difficulty || '';
+
+    // Judgment bar percentages
+    const total = Math.max(1, Object.values(s.hitCounts).reduce((a, b) => a + b, 0));
+    const pPct = (s.hitCounts.perfect / total * 100).toFixed(1);
+    const gPct = (s.hitCounts.great / total * 100).toFixed(1);
+    const goPct = (s.hitCounts.good / total * 100).toFixed(1);
+    const bPct = (s.hitCounts.bad / total * 100).toFixed(1);
+    const mPct = (s.hitCounts.miss / total * 100).toFixed(1);
+
     return `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:28px;background:transparent;">
-        <div style="font-family:var(--zzz-font);font-weight:900;font-size:120px;color:${c};text-shadow:0 0 50px ${c};letter-spacing:0.1em;line-height:1;">${s.rank}</div>
-        <div class="zzz-panel" style="padding:24px;width:480px;text-align:center;">
-          <div class="zzz-label" style="margin-bottom:6px;">SCORE</div>
-          <div class="zzz-value" style="font-size:38px;color:var(--zzz-lime);">${s.score.toLocaleString()}</div>
+      <div class="result-screen">
+
+        <!-- Song info -->
+        <div class="result-song-info">
+          <div class="result-song-title">${songTitle}</div>
+          ${songArtist ? `<div style="font-family:var(--zzz-font);font-weight:500;font-size:11px;color:rgba(255,255,255,0.35);letter-spacing:0.04em;margin-top:1px;text-shadow:0 2px 8px rgba(0,0,0,0.8);">${songArtist}</div>` : ''}
+          ${songDiff ? `<div class="result-song-diff">${songDiff}</div>` : ''}
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;width:480px;">
-          <div class="zzz-panel" style="padding:18px;text-align:center;"><div class="zzz-label">ACCURACY</div><div class="zzz-value" style="font-size:24px;color:var(--zzz-lime);">${s.accuracy.toFixed(2)}%</div></div>
-          <div class="zzz-panel" style="padding:18px;text-align:center;"><div class="zzz-label">MAX COMBO</div><div class="zzz-value" style="font-size:24px;color:var(--zzz-yellow);">${s.maxCombo}x</div></div>
-          <div class="zzz-panel" style="padding:18px;text-align:center;"><div class="zzz-label">NOTES</div><div class="zzz-value" style="font-size:24px;">${Object.values(s.hitCounts).reduce((a,b)=>a+b,0)}</div></div>
+
+        <!-- Grade letter -->
+        <div class="result-grade"
+             data-grade="${s.rank}"
+             style="background:${grade.bg};-webkit-text-stroke:4px ${grade.stroke};filter:drop-shadow(0 0 40px ${grade.glow}) drop-shadow(0 0 80px ${grade.glow});">
+          ${s.rank}
         </div>
-        <div class="zzz-panel" style="padding:18px;width:480px;">
-          <div style="display:flex;justify-content:space-around;">
-            <div style="text-align:center;"><div class="zzz-label">PERFECT</div><div style="font-size:20px;color:#AAFF00;font-weight:700;">${s.hitCounts.perfect}</div></div>
-            <div style="text-align:center;"><div class="zzz-label">GREAT</div><div style="font-size:20px;color:#00E5FF;font-weight:700;">${s.hitCounts.great}</div></div>
-            <div style="text-align:center;"><div class="zzz-label">GOOD</div><div style="font-size:20px;color:#F5C518;font-weight:700;">${s.hitCounts.good}</div></div>
-            <div style="text-align:center;"><div class="zzz-label">BAD</div><div style="font-size:20px;color:#FF8C00;font-weight:700;">${s.hitCounts.bad}</div></div>
-            <div style="text-align:center;"><div class="zzz-label">MISS</div><div style="font-size:20px;color:#FF3D3D;font-weight:700;">${s.hitCounts.miss}</div></div>
+
+        <!-- Score -->
+        <div class="result-score-panel">
+          <div class="result-score-label">SCORE</div>
+          <div class="result-score-value">${s.score.toLocaleString()}</div>
+        </div>
+
+        <!-- Stats grid -->
+        <div class="result-stats-grid">
+          <div class="result-stat-card">
+            <div class="result-stat-label">ACCURACY</div>
+            <div class="result-stat-value" style="color:var(--zzz-lime);">${s.accuracy.toFixed(2)}%</div>
+          </div>
+          <div class="result-stat-card">
+            <div class="result-stat-label">MAX COMBO</div>
+            <div class="result-stat-value" style="color:var(--zzz-yellow);">${s.maxCombo}<span style="font-size:14px;opacity:0.6;">x</span></div>
+          </div>
+          <div class="result-stat-card">
+            <div class="result-stat-label">NOTES</div>
+            <div class="result-stat-value" style="color:var(--zzz-text);">${total}</div>
           </div>
         </div>
-        <div style="display:flex;gap:16px;">
-          <button class="zzz-btn" data-action="retry">RETRY</button>
-          <button class="zzz-btn zzz-btn--primary" data-action="menu">MENU</button>
+
+        <!-- Judgment breakdown -->
+        <div class="result-judge-panel">
+          <!-- Stacked bar -->
+          <div class="result-judge-bar-track">
+            ${s.hitCounts.perfect > 0 ? `<div class="result-judge-bar-seg" data-width="${pPct}" style="width:0%;background:${JUDGE_COLORS.perfect};box-shadow:0 0 6px ${JUDGE_COLORS.perfect};"></div>` : ''}
+            ${s.hitCounts.great > 0 ? `<div class="result-judge-bar-seg" data-width="${gPct}" style="width:0%;background:${JUDGE_COLORS.great};box-shadow:0 0 6px ${JUDGE_COLORS.great};"></div>` : ''}
+            ${s.hitCounts.good > 0 ? `<div class="result-judge-bar-seg" data-width="${goPct}" style="width:0%;background:${JUDGE_COLORS.good};box-shadow:0 0 6px ${JUDGE_COLORS.good};"></div>` : ''}
+            ${s.hitCounts.bad > 0 ? `<div class="result-judge-bar-seg" data-width="${bPct}" style="width:0%;background:${JUDGE_COLORS.bad};box-shadow:0 0 6px ${JUDGE_COLORS.bad};"></div>` : ''}
+            ${s.hitCounts.miss > 0 ? `<div class="result-judge-bar-seg" data-width="${mPct}" style="width:0%;background:${JUDGE_COLORS.miss};box-shadow:0 0 6px ${JUDGE_COLORS.miss};"></div>` : ''}
+          </div>
+          <!-- Count row -->
+          <div class="result-judge-row">
+            <div class="result-judge-item">
+              <div class="result-judge-item-label">PERFECT</div>
+              <div class="result-judge-item-value" style="color:${JUDGE_COLORS.perfect};">${s.hitCounts.perfect}</div>
+            </div>
+            <div class="result-judge-item">
+              <div class="result-judge-item-label">GREAT</div>
+              <div class="result-judge-item-value" style="color:${JUDGE_COLORS.great};">${s.hitCounts.great}</div>
+            </div>
+            <div class="result-judge-item">
+              <div class="result-judge-item-label">GOOD</div>
+              <div class="result-judge-item-value" style="color:${JUDGE_COLORS.good};">${s.hitCounts.good}</div>
+            </div>
+            <div class="result-judge-item">
+              <div class="result-judge-item-label">BAD</div>
+              <div class="result-judge-item-value" style="color:${JUDGE_COLORS.bad};">${s.hitCounts.bad}</div>
+            </div>
+            <div class="result-judge-item">
+              <div class="result-judge-item-label">MISS</div>
+              <div class="result-judge-item-value" style="color:${JUDGE_COLORS.miss};">${s.hitCounts.miss}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="result-buttons">
+          <button class="result-btn result-btn--retry" data-action="retry">↻ RETRY</button>
+          <button class="result-btn result-btn--menu" data-action="menu">MENU</button>
         </div>
       </div>
     `;
@@ -37,6 +123,17 @@ export default class ResultScreen {
   init(data) {
     if (data && data.stats) this._stats = data.stats;
     if (data && data.map) this._lastMap = data.map;
+
+    // Animate judgment bar segments
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        document.querySelectorAll('.result-judge-bar-seg').forEach(seg => {
+          const w = seg.dataset.width;
+          if (w) seg.style.width = w + '%';
+        });
+      }, 400);
+    });
+
     document.querySelectorAll('[data-action]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const action = e.currentTarget.dataset.action;

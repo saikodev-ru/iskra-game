@@ -156,13 +156,24 @@ export default class HUD {
   setRank(rank) {
     if (!rank || rank === this._currentRank) return;
     this._currentRank = rank;
-    const rankColors = {
-      SS: '#FFD700', S: '#FFD700', A: '#00E5FF',
-      B: '#AAFF00', C: '#F5C518', D: '#FF3D3D'
+    const rankStyles = {
+      SS: { bg: 'linear-gradient(180deg, #67E8F9, #FDA4AF)', shadow: 'rgba(103,232,249,0.5)' },
+      S:  { bg: 'linear-gradient(180deg, #FDE68A, #F97316)', shadow: 'rgba(253,230,138,0.5)' },
+      A:  { bg: 'linear-gradient(180deg, #86EFAC, #22D3EE)', shadow: 'rgba(134,239,172,0.4)' },
+      B:  { bg: 'linear-gradient(180deg, #60A5FA, #A855F7)', shadow: 'rgba(96,165,250,0.4)' },
+      C:  { bg: 'linear-gradient(180deg, #C4B5FD, #991B1B)', shadow: 'rgba(196,181,253,0.35)' },
+      D:  { bg: 'linear-gradient(180deg, #EF4444, #7F1D1D)', shadow: 'rgba(239,68,68,0.4)' },
     };
     if (this.els.rank) {
+      const style = rankStyles[rank] || rankStyles.D;
       this.els.rank.textContent = rank;
-      this.els.rank.style.color = rankColors[rank] || 'var(--zzz-lime)';
+      this.els.rank.style.background = style.bg;
+      this.els.rank.style.webkitBackgroundClip = 'text';
+      this.els.rank.style.backgroundClip = 'text';
+      this.els.rank.style.webkitTextFillColor = 'transparent';
+      this.els.rank.style.color = 'transparent';
+      this.els.rank.style.filter = `drop-shadow(0 0 12px ${style.shadow})`;
+      this.els.rank.style.textShadow = 'none';
       this.els.rank.style.opacity = '1';
       this._rankScale = 1.5;
     }
