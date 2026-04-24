@@ -21,23 +21,23 @@ export default class HUD {
   _build() {
     this.container.innerHTML = `
       <div id="hud-inner" style="position:relative;width:100%;height:100%;pointer-events:none;display:none;">
-        <!-- Score — top-left -->
-        <div style="position:absolute;left:4%;top:24px;text-align:right;min-width:140px;">
-          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:700;font-size:28px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;transition:transform 0.08s;line-height:1;">0</div>
-          <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-size:14px;color:var(--zzz-muted);font-variant-numeric:tabular-nums;margin-top:2px;">100.00%</div>
+        <!-- Score + Accuracy — left side of playfield, vertically centered -->
+        <div style="position:absolute;left:4%;top:50%;transform:translateY(-50%);text-align:right;min-width:130px;">
+          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:700;font-size:30px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;transition:transform 0.08s;line-height:1;">0</div>
+          <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-size:13px;color:var(--zzz-muted);font-variant-numeric:tabular-nums;margin-top:4px;">100.00%</div>
         </div>
 
-        <!-- Combo + Grade — right side of playfield -->
-        <div style="position:absolute;right:6%;top:50%;transform:translateY(-50%);text-align:left;">
-          <div style="display:flex;align-items:baseline;gap:12px;">
-            <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:56px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;text-shadow:0 0 16px rgba(255,255,255,0.25);transition:transform 0.1s cubic-bezier(0.2,0,0,1);"></div>
-            <div id="hud-rank" style="font-family:var(--zzz-font);font-weight:900;font-size:32px;color:var(--zzz-lime);text-shadow:0 0 16px rgba(170,255,0,0.4);opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;"></div>
+        <!-- Combo + Grade — right side, above the HP bar -->
+        <div style="position:absolute;right:5%;top:38%;transform:translateY(-50%);text-align:left;">
+          <div style="display:flex;align-items:baseline;gap:10px;">
+            <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:52px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;text-shadow:0 0 16px rgba(255,255,255,0.25);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0x</div>
+            <div id="hud-rank" style="font-family:var(--zzz-font);font-weight:900;font-size:28px;color:var(--zzz-lime);text-shadow:0 0 16px rgba(170,255,0,0.4);opacity:0;transform:scale(0.5);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;"></div>
           </div>
         </div>
 
-        <!-- Health bar — bottom center -->
-        <div style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);width:40%;">
-          <div class="health-bar"><div id="hud-health-fill" class="health-bar-fill" style="width:100%;"></div></div>
+        <!-- Health bar — VERTICAL along the right edge of the playfield -->
+        <div id="hud-hp-container" style="position:absolute;right:3%;top:50%;transform:translateY(-50%);width:8px;height:40%;border-radius:9999px;overflow:hidden;background:rgba(255,255,255,0.06);">
+          <div id="hud-health-fill" style="position:absolute;bottom:0;left:0;width:100%;height:100%;background:linear-gradient(0deg, var(--zzz-lime), #CCFF66);box-shadow:0 0 12px rgba(170,255,0,0.5);transition:height 0.1s linear;border-radius:9999px;"></div>
         </div>
 
         <!-- Progress — top edge -->
@@ -82,18 +82,17 @@ export default class HUD {
       if (this.els.score) this.els.score.textContent = this._targetScore.toLocaleString();
     }
 
-    // Combo — with pop scale animation
+    // Combo
     const comboDiff = this._targetCombo - this._displayCombo;
     if (Math.abs(comboDiff) > 1) {
       this._displayCombo += comboDiff * 0.35;
       if (this.els.combo) {
-        const show = Math.round(this._displayCombo);
-        if (show > 0) this.els.combo.textContent = `${show}x`;
+        this.els.combo.textContent = `${Math.round(this._displayCombo)}x`;
       }
     } else if (comboDiff !== 0) {
       this._displayCombo = this._targetCombo;
       if (this.els.combo) {
-        this.els.combo.textContent = this._targetCombo > 0 ? `${this._targetCombo}x` : '';
+        this.els.combo.textContent = `${this._targetCombo}x`;
       }
     }
 
@@ -106,7 +105,7 @@ export default class HUD {
       if (this.els.combo) this.els.combo.style.transform = '';
     }
 
-    // Rank scale animation
+    // Rank scale
     if (this._rankScale > 1.01) {
       this._rankScale += (1 - this._rankScale) * 0.12;
       if (this.els.rank) this.els.rank.style.transform = `scale(${this._rankScale})`;
@@ -136,11 +135,9 @@ export default class HUD {
 
   setCombo(n) {
     this._targetCombo = n;
-    // Pop animation on combo increase
-    if (n > 0 && n > this._targetCombo - 1) {
+    if (n > 0) {
       this._comboPopScale = 1.2;
     }
-    // Milestone extra pop
     if ([50, 100, 200, 500].includes(n)) {
       this._comboPopScale = 1.4;
     }
@@ -149,12 +146,10 @@ export default class HUD {
   setRank(rank) {
     if (!rank || rank === this._currentRank) return;
     this._currentRank = rank;
-
     const rankColors = {
       SS: '#FFD700', S: '#FFD700', A: '#00E5FF',
       B: '#AAFF00', C: '#F5C518', D: '#FF3D3D'
     };
-
     if (this.els.rank) {
       this.els.rank.textContent = rank;
       this.els.rank.style.color = rankColors[rank] || 'var(--zzz-lime)';
@@ -168,12 +163,13 @@ export default class HUD {
   }
 
   setHealth(n) {
-    this.els.health.style.width = Math.max(0, Math.min(100, n)) + '%';
+    const pct = Math.max(0, Math.min(100, n));
+    this.els.health.style.height = pct + '%';
     if (n < 25) {
-      this.els.health.style.background = 'linear-gradient(90deg, var(--zzz-red), #ff6b6b)';
+      this.els.health.style.background = 'linear-gradient(0deg, var(--zzz-red), #ff6b6b)';
       this.els.health.style.boxShadow = '0 0 8px var(--zzz-red)';
     } else {
-      this.els.health.style.background = 'linear-gradient(90deg, var(--zzz-lime), #CCFF66)';
+      this.els.health.style.background = 'linear-gradient(0deg, var(--zzz-lime), #CCFF66)';
       this.els.health.style.boxShadow = '0 0 12px rgba(170,255,0,0.5)';
     }
   }

@@ -262,20 +262,86 @@ async function boot() {
     screens.show('result', { stats, map: currentMapData });
   };
 
+  let _pauseOverlay = null;
+  let _pauseSettingsInstance = null;
+
   const pauseGame = () => {
     if (!gameActive) return;
     gameActive = false;
     audio.pause();
     if (gameLoop) gameLoop.stop();
+
     const overlay = document.createElement('div');
     overlay.id = 'pause-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(17,17,17,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;gap:28px;';
-    overlay.innerHTML = `<h2 class="zzz-title" style="font-size:56px;color:var(--zzz-lime);">PAUSED</h2><button class="zzz-btn zzz-btn--primary" id="resume-btn" style="font-size:16px;">RESUME</button><button class="zzz-btn zzz-btn--danger" id="quit-btn">QUIT</button>`;
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:50;animation:pause-fade-in 0.2s ease-out forwards;';
+    overlay.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:24px;animation:pause-panel-in 0.3s cubic-bezier(0.22,1,0.36,1) forwards;">
+        <div style="font-family:var(--zzz-font);font-weight:900;font-size:14px;color:var(--zzz-muted);letter-spacing:0.3em;text-transform:uppercase;">PAUSED</div>
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:240px;">
+          <button class="zzz-btn zzz-btn--primary" id="resume-btn" style="width:100%;font-size:15px;padding:14px 32px;">▶ RESUME</button>
+          <button class="zzz-btn" id="settings-btn" style="width:100%;">⚙ SETTINGS</button>
+          <div style="height:1px;background:var(--zzz-graphite);margin:4px 0;"></div>
+          <button class="zzz-btn zzz-btn--danger" id="quit-btn" style="width:100%;">✕ QUIT</button>
+        </div>
+      </div>
+    `;
     document.body.appendChild(overlay);
-    document.getElementById('resume-btn').addEventListener('click', () => { overlay.remove(); resumeGame(); });
-    document.getElementById('quit-btn').addEventListener('click', () => { overlay.remove(); endGame(); screens.show('song-select'); });
+    _pauseOverlay = overlay;
+
+    document.getElementById('resume-btn').addEventListener('click', () => { _closePause(); resumeGame(); });
+    document.getElementById('settings-btn').addEventListener('click', () => { _openPauseSettings(); });
+    document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); endGame(); screens.show('song-select'); });
     EventBus.emit('game:pause');
   };
+
+  const _closePause = () => {
+    if (_pauseSettingsInstance) { _pauseSettingsInstance.destroy(); _pauseSettingsInstance = null; }
+    if (_pauseOverlay) { _pauseOverlay.remove(); _pauseOverlay = null; }
+  };
+
+  const _openPauseSettings = () => {
+    if (!_pauseOverlay) return;
+    const settingsPanel = document.createElement('div');
+    settingsPanel.id = 'pause-settings';
+    settingsPanel.style.cssText = 'position:fixed;inset:0;z-index:60;display:flex;';
+    settingsPanel.innerHTML = `
+      <div id="pause-settings-inner" style="width:380px;height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 24px;animation:settings-slide-in 0.25s ease-out forwards;"></div>
+      <div id="pause-settings-bg" style="flex:1;"></div>
+    `;
+    _pauseOverlay.style.display = 'none';
+    document.body.appendChild(settingsPanel);
+
+    // Build settings into the panel
+    const settings = new Settings({ audio, input, screens, overlayMode: true });
+    const inner = document.getElementById('pause-settings-inner');
+    inner.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
+        <h2 class="zzz-title" style="font-size:28px;color:var(--zzz-lime);margin:0;">SETTINGS</h2>
+        <button id="pause-settings-close" class="zzz-btn zzz-btn--sm" style="pointer-events:all;">✕</button>
+      </div>
+    `;
+    // Append the settings content
+    const aspectRatios = ['16:9', '16:10', '4:3', '21:9', 'Fill'];
+    const savedAspect = localStorage.getItem('rhythm-os-aspect-ratio') || '16:9';
+    const savedResScale = localStorage.getItem('rhythm-os-res-scale') || '100';
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = settings._buildSettingsContent(aspectRatios, savedAspect, savedResScale);
+    inner.appendChild(tempDiv);
+    settings.init();
+    _pauseSettingsInstance = settings;
+
+    document.getElementById('pause-settings-close').addEventListener('click', _closePauseSettings);
+    document.getElementById('pause-settings-bg').addEventListener('click', _closePauseSettings);
+  };
+
+  const _closePauseSettings = () => {
+    const panel = document.getElementById('pause-settings');
+    if (panel) panel.remove();
+    if (_pauseSettingsInstance) { _pauseSettingsInstance.destroy(); _pauseSettingsInstance = null; }
+    if (_pauseOverlay) _pauseOverlay.style.display = '';
+  };
+
+  EventBus.on('settings:close-overlay', () => { _closePauseSettings(); });
 
   const resumeGame = () => {
     gameActive = true;
@@ -287,7 +353,14 @@ async function boot() {
   };
 
   EventBus.on('game:pause', pauseGame);
-  window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && gameActive) { e.preventDefault(); pauseGame(); } });
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      if (_pauseSettingsInstance) { _closePauseSettings(); return; }
+      if (_pauseOverlay) { _closePause(); resumeGame(); return; }
+      if (gameActive) { pauseGame(); }
+    }
+  });
 
   screens.register('main-menu', () => new MainMenu({ audio, screens }));
   screens.register('song-select', () => new SongSelect({ audio, three, screens }));

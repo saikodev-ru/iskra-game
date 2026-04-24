@@ -89,7 +89,7 @@ body.zzz-active::before {
 .judgement-text {
   font-family: var(--zzz-font);
   font-weight: 900;
-  font-size: 22px;
+  font-size: 28px;
   text-transform: uppercase;
   letter-spacing: 0.15em;
   text-shadow: 0 0 12px currentColor;
@@ -349,6 +349,22 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 .parallax-layer {
   transition: transform 0.15s ease-out;
   will-change: transform;
+}
+
+/* Settings slide-in */
+@keyframes settings-slide-in {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+/* Pause overlay */
+@keyframes pause-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes pause-panel-in {
+  from { transform: translateY(20px) scale(0.95); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
 }
 `;
 

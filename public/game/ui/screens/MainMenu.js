@@ -1,4 +1,4 @@
-import ZZZTheme from '../theme/ZZZTheme.js';
+import ZZZTheme from '../../theme/ZZZTheme.js';
 
 export default class MainMenu {
   constructor({ audio, screens }) {

@@ -417,6 +417,7 @@ export default class OszLoader {
       const isCircle = (ho.type & 1) !== 0;
       const isSlider = (ho.type & 2) !== 0;
       const isSpinner = (ho.type & 8) !== 0;
+      const isHold = (ho.type & 128) !== 0; // osu!mania hold notes
 
       if (isSpinner) continue;
 
@@ -432,7 +433,7 @@ export default class OszLoader {
       let duration = 0;
       let noteType = 'tap';
 
-      if (isSlider && ho.endTime > ho.time) {
+      if ((isSlider || isHold) && ho.endTime > ho.time) {
         duration = (ho.endTime - ho.time) / 1000;
         noteType = 'hold';
       }

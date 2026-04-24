@@ -277,8 +277,8 @@ export default class NoteRenderer {
 
     // Skip fully faded misses
     if (isMissed && currentTime - headTime > 0.5) return;
-    // Skip fully released notes that have faded
-    if (note.released && !isMissed && currentTime - tailTime > 0.5) return;
+    // Released notes (head was hit, then released) — just disappear like osu!mania
+    if (note.released && !isMissed) return;
 
     const alpha = isMissed ? 0.3 : 1;
 

@@ -29,8 +29,10 @@ export default class BeatMap {
     return this.notes.filter(n => {
       // Include notes whose start time is in the window
       if (n.time >= start && n.time <= end) return true;
-      // Also include hold notes that started earlier but are still active
+      // Hold notes that started earlier but tail hasn't passed yet
       if (n.type === 'hold' && n.duration > 0 && n.time < start && (n.time + n.duration) >= start) return true;
+      // Hold notes being actively held (head hit but not released)
+      if (n.type === 'hold' && n.duration > 0 && n.hit && n.judgement !== 'miss' && !n.released) return true;
       return false;
     });
   }
