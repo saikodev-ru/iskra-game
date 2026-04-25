@@ -11,11 +11,11 @@ const GRADE_GRADIENTS = {
 };
 
 const JUDGE_ITEMS = [
-  { key: 'perfect', label: 'PF', color: '#AAFF00' },
-  { key: 'great',   label: 'GR', color: '#00E5FF' },
-  { key: 'good',    label: 'GD', color: '#F5C518' },
-  { key: 'bad',     label: 'BD', color: '#FF8C00' },
-  { key: 'miss',    label: 'MS', color: '#FF3D3D' },
+  { key: 'perfect', label: 'PERFECT', color: '#AAFF00' },
+  { key: 'great',   label: 'GREAT',   color: '#00E5FF' },
+  { key: 'good',    label: 'GOOD',    color: '#F5C518' },
+  { key: 'bad',     label: 'BAD',     color: '#FF8C00' },
+  { key: 'miss',    label: 'MISS',    color: '#FF3D3D' },
 ];
 
 export default class ResultScreen {
@@ -28,12 +28,9 @@ export default class ResultScreen {
     this._historySetId = null;
     this._historyDiffVersion = null;
     this._historyRecords = [];
-    this._activeRecordTs = null; // timestamp of currently selected/highlighted card
+    this._activeRecordTs = null;
   }
 
-  /**
-   * Setup for viewing historical records (called from SongSelect)
-   */
   setupHistory(setId, diffVersion, record, map) {
     this._viewingHistory = true;
     this._historySetId = setId;
@@ -43,60 +40,69 @@ export default class ResultScreen {
     this._historyRecords = RecordStore.getAll(setId, diffVersion);
   }
 
-  /** Build a single result card HTML */
   _buildResultCard(rec, idx, isActive) {
     const grade = GRADE_GRADIENTS[rec.rank] || GRADE_GRADIENTS.D;
     const isDeath = !!rec.died;
     const total = rec.totalNotes || Math.max(1, Object.values(rec.hitCounts || {}).reduce((a, b) => a + b, 0));
+    const hc = rec.hitCounts || {};
     const ts = rec.timestamp || 0;
+    const timeStr = RecordStore.formatTimestamp(ts);
 
-    // Judgment mini bars
-    const judgeHtml = JUDGE_ITEMS.map(jc => {
-      const count = (rec.hitCounts || {})[jc.key] || 0;
+    // Judgment rows with animated percentage bars
+    const judgeRows = JUDGE_ITEMS.map(jc => {
+      const count = hc[jc.key] || 0;
       const pct = total > 0 ? (count / total * 100) : 0;
-      const barH = count > 0 ? Math.max(3, pct * 0.36) : 0;
       return `
-        <div class="rs-card-judge" title="${jc.label}: ${count}">
-          <div class="rs-card-judge-bar" style="height:0;background:${jc.color};--rs-bar-h:${barH}px;" data-h="${barH}"></div>
-          <div class="rs-card-judge-label">${jc.label}</div>
-          <div class="rs-card-judge-count" style="color:${jc.color};">${count}</div>
+        <div class="rs-judge-row">
+          <div class="rs-judge-label" style="color:${jc.color};">${jc.label}</div>
+          <div class="rs-judge-bar-track">
+            <div class="rs-judge-bar-fill" style="background:${jc.color};" data-width="${pct.toFixed(1)}"></div>
+          </div>
+          <div class="rs-judge-count" style="color:${jc.color};">${count}</div>
+          <div class="rs-judge-pct">${pct.toFixed(1)}%</div>
         </div>
       `;
     }).join('');
 
-    const timeStr = RecordStore.formatTimestamp(ts);
-
     return `
       <div class="rs-card ${isActive ? 'rs-card--active' : ''}" data-record-ts="${ts}"
-           style="--rs-grade-bg: ${grade.bg}; --rs-grade-glow: ${grade.glow}; --rs-grade-solid: ${grade.bgSolid}; --rs-delay: ${idx * 0.06}s; ${isDeath ? '--rs-death: 1;' : ''}">
+           style="--rs-grade-bg:${grade.bg}; --rs-grade-glow:${grade.glow}; --rs-grade-solid:${grade.bgSolid}; --rs-delay:${idx * 0.08}s;">
         <div class="rs-card-glow"></div>
-        <div class="rs-card-header">
-          <div class="rs-card-rank grade-gradient" style="--gg-grad: ${grade.bg}; --gg-stroke: 2px rgba(0,0,0,0.7);">
+
+        <!-- Rank + Death + Time -->
+        <div class="rs-card-top">
+          <div class="rs-card-rank grade-gradient" style="--gg-grad:${grade.bg}; --gg-stroke:2.5px rgba(0,0,0,0.7);">
             ${rec.rank}<span class="gg-fill">${rec.rank}</span>
           </div>
           ${isDeath ? '<div class="rs-card-death-badge">FAILED</div>' : ''}
           <div class="rs-card-time">${timeStr}</div>
         </div>
+
+        <!-- Score + Accuracy -->
         <div class="rs-card-score">${rec.score.toLocaleString()}</div>
         <div class="rs-card-acc" style="color:${isDeath ? '#FF3D3D' : 'var(--zzz-lime)'};">${rec.accuracy.toFixed(2)}%</div>
-        <div class="rs-card-stats-row">
-          <div class="rs-card-stat">
-            <div class="rs-card-stat-val" style="color:var(--zzz-yellow);">${rec.maxCombo}<span class="rs-card-stat-x">x</span></div>
-            <div class="rs-card-stat-label">COMBO</div>
+
+        <!-- Stat pills -->
+        <div class="rs-card-stats">
+          <div class="rs-card-pill">
+            <div class="rs-card-pill-val" style="color:var(--zzz-yellow);">${rec.maxCombo}<span class="rs-card-pill-x">x</span></div>
+            <div class="rs-card-pill-label">MAX COMBO</div>
           </div>
-          <div class="rs-card-stat">
-            <div class="rs-card-stat-val">${total}</div>
-            <div class="rs-card-stat-label">NOTES</div>
+          <div class="rs-card-pill">
+            <div class="rs-card-pill-val">${total}</div>
+            <div class="rs-card-pill-label">NOTES</div>
           </div>
           ${rec.sliderBreaks > 0 ? `
-            <div class="rs-card-stat">
-              <div class="rs-card-stat-val" style="color:#FF8C00;">${rec.sliderBreaks}</div>
-              <div class="rs-card-stat-label">BREAKS</div>
+            <div class="rs-card-pill">
+              <div class="rs-card-pill-val" style="color:#FF8C00;">${rec.sliderBreaks}</div>
+              <div class="rs-card-pill-label">BREAKS</div>
             </div>
           ` : ''}
         </div>
+
+        <!-- Judgment breakdown -->
         <div class="rs-card-judges">
-          ${judgeHtml}
+          ${judgeRows}
         </div>
       </div>
     `;
@@ -111,16 +117,13 @@ export default class ResultScreen {
     const songArtist = meta.artist || '';
     const songDiff = meta.version || meta.difficulty || '';
 
-    // Determine which records to show
     let records = [];
     if (isHistory) {
       records = this._historyRecords;
     } else if (this._stats) {
-      // Fresh result: show current play + any history
       const setId = meta.setId;
       const diffVer = meta.version || '';
       const historyRecs = (setId && diffVer) ? RecordStore.getAll(setId, diffVer) : [];
-      // Build a pseudo-record from current stats
       const currentRec = {
         score: this._stats.score,
         accuracy: this._stats.accuracy,
@@ -141,32 +144,29 @@ export default class ResultScreen {
     }
 
     const activeTs = this._activeRecordTs;
+    const activeRec = records.find(r => r.timestamp === activeTs);
+    const isDeath = activeRec && activeRec.died;
 
-    // Build all cards
     const cardsHtml = records.map((rec, idx) => {
       const isActive = rec.timestamp === activeTs;
       return this._buildResultCard(rec, idx, isActive);
     }).join('');
 
-    const deathLabel = records.length > 0 && records.find(r => r.timestamp === activeTs)?.died
-      ? '<div class="rc-death-label">FAILED</div>' : '';
-
     return `
-      <div class="result-screen result-screen--carousel ${records.length > 0 && records.find(r => r.timestamp === activeTs)?.died ? 'result-screen--death' : ''}">
+      <div class="result-screen result-screen--carousel ${isDeath ? 'result-screen--death' : ''}">
 
-        <!-- Song info header -->
+        <!-- Song info -->
         <div class="result-song-info">
-          ${deathLabel}
+          ${isDeath ? '<div class="rc-death-label">FAILED</div>' : ''}
           <div class="result-song-title">${songTitle}</div>
           ${songArtist ? `<div class="result-song-artist">${songArtist}</div>` : ''}
           ${songDiff ? `<div class="result-song-diff">${songDiff}</div>` : ''}
           <div class="rs-plays-count">${records.length} PLAY${records.length !== 1 ? 'S' : ''}</div>
         </div>
 
-        <!-- Scroll indicator -->
-        ${records.length > 1 ? '<div class="rs-scroll-hint">← SCROLL →</div>' : ''}
+        ${records.length > 1 ? '<div class="rs-scroll-hint">⟵ SCROLL ⟶</div>' : ''}
 
-        <!-- Horizontal carousel of result cards -->
+        <!-- Carousel -->
         <div class="rs-carousel" id="rs-carousel">
           ${cardsHtml}
         </div>
@@ -189,31 +189,28 @@ export default class ResultScreen {
     if (data && data.stats && !this._viewingHistory) this._stats = data.stats;
     if (data && data.map && !this._viewingHistory) this._lastMap = data.map;
 
-    // Animate judgment bars in cards
+    // Animate judgment bars
     requestAnimationFrame(() => {
       setTimeout(() => {
-        document.querySelectorAll('.rs-card-judge-bar[data-h]').forEach(bar => {
-          const h = bar.dataset.h;
-          if (h) bar.style.height = h + 'px';
+        document.querySelectorAll('.rs-judge-bar-fill[data-width]').forEach(bar => {
+          bar.style.width = bar.dataset.width + '%';
         });
-      }, 400);
+      }, 500);
     });
 
-    // Auto-scroll to active card
+    // Auto-scroll to active card and center it
     requestAnimationFrame(() => {
       setTimeout(() => {
         const activeCard = document.querySelector('.rs-card--active');
         const carousel = document.getElementById('rs-carousel');
         if (activeCard && carousel) {
-          const cardRect = activeCard.getBoundingClientRect();
-          const carouselRect = carousel.getBoundingClientRect();
-          const scrollLeft = activeCard.offsetLeft - (carouselRect.width / 2) + (cardRect.width / 2);
+          const scrollLeft = activeCard.offsetLeft - (carousel.clientWidth / 2) + (activeCard.offsetWidth / 2);
           carousel.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
         }
-      }, 300);
+      }, 350);
     });
 
-    // Card click → select it (highlight, scroll to)
+    // Card click
     const carousel = document.getElementById('rs-carousel');
     if (carousel) {
       carousel.addEventListener('click', (e) => {
@@ -251,34 +248,25 @@ export default class ResultScreen {
     window.addEventListener('keydown', this._keyHandler);
   }
 
-  /** Highlight a card by timestamp and scroll it into view */
   _selectCard(ts, carousel) {
     this._activeRecordTs = ts;
-    // Update visual state
     document.querySelectorAll('.rs-card').forEach(c => {
       const cardTs = parseInt(c.dataset.recordTs);
       if (cardTs === ts) {
         c.classList.add('rs-card--active');
-        // Scroll into view
         if (carousel) {
-          const cardRect = c.getBoundingClientRect();
-          const carouselRect = carousel.getBoundingClientRect();
-          const scrollLeft = c.offsetLeft - (carouselRect.width / 2) + (cardRect.width / 2);
+          const scrollLeft = c.offsetLeft - (carousel.clientWidth / 2) + (c.offsetWidth / 2);
           carousel.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
         }
-        // Update death class on screen
         const screen = c.closest('.result-screen');
         const rec = this._historyRecords.find(r => r.timestamp === ts);
-        if (screen && rec) {
-          screen.classList.toggle('result-screen--death', !!rec.died);
-        }
+        if (screen && rec) screen.classList.toggle('result-screen--death', !!rec.died);
       } else {
         c.classList.remove('rs-card--active');
       }
     });
   }
 
-  /** Navigate left/right through cards */
   _navigateCard(dir) {
     const cards = document.querySelectorAll('.rs-card');
     if (cards.length === 0) return;
@@ -299,15 +287,11 @@ export default class ResultScreen {
       setId: this._historySetId,
       diffVersion: this._historyDiffVersion,
     });
-    // Rebuild records and re-render
     this._historyRecords = RecordStore.getAll(this._historySetId, this._historyDiffVersion);
     if (this._historyRecords.length === 0) {
-      // No more records, go back
       this.screens.show('song-select');
     } else {
-      // Select the first remaining record
       this._activeRecordTs = this._historyRecords[0].timestamp;
-      // Re-render by destroying and re-building
       this.screens.container.innerHTML = this.build();
       this.init({});
     }

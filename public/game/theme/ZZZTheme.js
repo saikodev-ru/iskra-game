@@ -1220,124 +1220,132 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 
 /* ── RESULT CAROUSEL (horizontal scrollable result cards) ── */
 .result-screen--carousel {
-  gap: 12px;
+  gap: 10px;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+.result-screen--carousel > .rs-carousel {
+  max-width: none;
 }
 .rs-scroll-hint {
-  font-family: var(--zzz-font); font-weight: 700; font-size: 9px;
-  color: rgba(255,255,255,0.2); letter-spacing: 0.2em;
-  animation: rs-scroll-pulse 2s ease-in-out infinite;
+  font-family: var(--zzz-font); font-weight: 700; font-size: 10px;
+  color: rgba(255,255,255,0.18); letter-spacing: 0.25em;
+  animation: rs-scroll-pulse 2.5s ease-in-out infinite;
 }
 @keyframes rs-scroll-pulse {
-  0%, 100% { opacity: 0.2; }
-  50% { opacity: 0.5; }
+  0%, 100% { opacity: 0.18; }
+  50% { opacity: 0.45; }
 }
 .rs-plays-count {
-  font-family: var(--zzz-font); font-weight: 700; font-size: 10px;
-  color: rgba(255,255,255,0.2); letter-spacing: 0.12em; margin-top: 4px;
+  font-family: var(--zzz-font); font-weight: 700; font-size: 11px;
+  color: rgba(255,255,255,0.2); letter-spacing: 0.15em; margin-top: 6px;
 }
+
+/* Carousel container — takes full width, centered cards */
 .rs-carousel {
   display: flex;
-  gap: 14px;
+  gap: 20px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 8px 24px 16px;
-  scroll-snap-type: x proximity;
+  padding: 12px calc(50vw - 170px) 20px;
+  scroll-snap-type: x center;
   -webkit-overflow-scrolling: touch;
   width: 100%;
-  max-width: 100%;
-  mask-image: linear-gradient(to right, transparent 0px, black 32px, black calc(100% - 32px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0px, black 32px, black calc(100% - 32px), transparent 100%);
+  align-items: center;
+  scroll-behavior: smooth;
+  /* Edge fade masks */
+  mask-image: linear-gradient(to right, transparent 0px, black 48px, black calc(100% - 48px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0px, black 48px, black calc(100% - 48px), transparent 100%);
 }
 .rs-carousel::-webkit-scrollbar {
-  height: 4px;
+  height: 5px;
 }
 .rs-carousel::-webkit-scrollbar-track {
   background: rgba(255,255,255,0.03);
-  border-radius: 2px;
+  border-radius: 3px;
 }
 .rs-carousel::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1);
-  border-radius: 2px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 3px;
 }
 .rs-carousel::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.25);
 }
 
-/* Individual result card */
+/* ── Individual result card (big, content-rich) ── */
 .rs-card {
   flex-shrink: 0;
-  width: 200px;
-  background: rgba(14, 14, 14, 0.8);
+  width: 340px;
+  background: rgba(12, 12, 12, 0.85);
   border: 1.5px solid rgba(255,255,255,0.06);
-  border-radius: 18px;
-  padding: 16px 14px 14px;
+  border-radius: 22px;
+  padding: 24px 22px 20px;
   text-align: center;
   position: relative;
   overflow: hidden;
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(18px);
   scroll-snap-align: center;
   cursor: pointer;
   opacity: 0;
-  animation: rs-card-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: rs-card-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   animation-delay: var(--rs-delay, 0s);
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
               border-color 0.3s ease,
-              box-shadow 0.3s ease,
+              box-shadow 0.35s ease,
               opacity 0.3s ease;
 }
 @keyframes rs-card-enter {
-  from { opacity: 0; transform: translateY(20px) scale(0.92); }
-  to   { opacity: 0.5; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(24px) scale(0.93); }
+  to   { opacity: 0.45; transform: translateY(0) scale(1); }
 }
 .rs-card:hover {
-  transform: translateY(-4px) scale(1.02);
+  transform: translateY(-5px) scale(1.015);
   border-color: rgba(255,255,255,0.12);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
 }
 
-/* Active card — highlighted, larger, glowing */
+/* Active card */
 .rs-card--active {
   opacity: 1 !important;
   border-color: var(--rs-grade-solid, rgba(255,255,255,0.3));
   box-shadow:
-    0 0 24px var(--rs-grade-glow, rgba(255,255,255,0.15)),
-    0 0 48px rgba(0,0,0,0.3),
+    0 0 28px var(--rs-grade-glow, rgba(255,255,255,0.12)),
+    0 0 56px rgba(0,0,0,0.25),
     inset 0 1px 0 rgba(255,255,255,0.06);
-  transform: scale(1.04) translateY(-2px);
-  background: rgba(20, 20, 20, 0.92);
+  transform: scale(1.025) translateY(-2px);
+  background: rgba(18, 18, 18, 0.94);
 }
 .rs-card--active:hover {
-  transform: scale(1.06) translateY(-4px);
+  transform: scale(1.04) translateY(-5px);
 }
 
-/* Card glow overlay */
+/* Glow overlay */
 .rs-card-glow {
   position: absolute;
-  top: -40%; left: -20%; right: -20%; height: 80%;
+  top: -50%; left: -30%; right: -30%; height: 100%;
   background: var(--rs-grade-bg, linear-gradient(180deg, #555, #333));
   opacity: 0;
-  filter: blur(40px);
+  filter: blur(50px);
   pointer-events: none;
   transition: opacity 0.4s ease;
 }
 .rs-card--active .rs-card-glow {
-  opacity: 0.08;
+  opacity: 0.07;
 }
 
 /* Top color bar */
 .rs-card::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2.5px;
   background: var(--rs-grade-bg, #555);
-  opacity: 0.4;
+  opacity: 0.35;
   transition: opacity 0.3s ease;
 }
 .rs-card--active::before {
   opacity: 0.9;
-  height: 2.5px;
+  height: 3px;
 }
 
-/* Death card tint */
-.rs-card[data-style*="--rs-death: 1"] .rs-card-glow,
+/* Death tint */
 .rs-card:has(.rs-card-death-badge) .rs-card-glow {
   background: linear-gradient(180deg, #EF4444, #7F1D1D) !important;
 }
@@ -1345,134 +1353,152 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   background: linear-gradient(90deg, #EF4444, #7F1D1D) !important;
 }
 
-/* Card header: rank + time */
-.rs-card-header {
+/* ── Card header: rank + badge + time ── */
+.rs-card-top {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 12px;
   position: relative;
 }
 .rs-card-rank {
-  font-family: var(--zzz-font); font-weight: 900; font-size: 34px;
+  font-family: var(--zzz-font); font-weight: 900; font-size: 48px;
   line-height: 1; letter-spacing: 0.04em;
-  filter: drop-shadow(0 0 10px var(--rs-grade-glow, rgba(255,255,255,0.2)));
+  filter: drop-shadow(0 0 12px var(--rs-grade-glow, rgba(255,255,255,0.2)));
 }
 .rs-card--active .rs-card-rank {
-  font-size: 40px;
-  filter: drop-shadow(0 0 16px var(--rs-grade-glow, rgba(255,255,255,0.4)));
+  font-size: 56px;
+  filter: drop-shadow(0 0 20px var(--rs-grade-glow, rgba(255,255,255,0.4)));
 }
 .rs-card-death-badge {
-  font-family: var(--zzz-font); font-weight: 800; font-size: 7px;
+  font-family: var(--zzz-font); font-weight: 800; font-size: 9px;
   color: #FF3D3D; letter-spacing: 0.2em;
   background: rgba(239,68,68,0.1);
   border: 1px solid rgba(239,68,68,0.25);
-  border-radius: 6px; padding: 2px 6px;
+  border-radius: 8px; padding: 3px 8px;
 }
 .rs-card-time {
-  font-family: var(--zzz-font); font-weight: 600; font-size: 8px;
-  color: rgba(255,255,255,0.2); letter-spacing: 0.08em;
-  position: absolute; top: 0; right: 0;
+  font-family: var(--zzz-font); font-weight: 600; font-size: 10px;
+  color: rgba(255,255,255,0.22); letter-spacing: 0.1em;
+  position: absolute; top: 2px; right: 0;
 }
 
 /* Score */
 .rs-card-score {
-  font-family: var(--zzz-font); font-weight: 900; font-size: 20px;
+  font-family: var(--zzz-font); font-weight: 900; font-size: 30px;
   color: #fff; font-variant-numeric: tabular-nums; line-height: 1.1;
-  text-shadow: 0 0 16px rgba(255,255,255,0.08), 0 2px 8px rgba(0,0,0,0.9);
-  margin-bottom: 2px;
+  text-shadow: 0 0 20px rgba(255,255,255,0.08), 0 2px 10px rgba(0,0,0,0.9);
+  margin-bottom: 3px;
 }
 .rs-card--active .rs-card-score {
-  font-size: 24px;
-  text-shadow: 0 0 24px rgba(255,255,255,0.12), 0 2px 10px rgba(0,0,0,0.9);
+  font-size: 34px;
+  text-shadow: 0 0 28px rgba(255,255,255,0.12), 0 2px 12px rgba(0,0,0,0.9);
 }
 
 /* Accuracy */
 .rs-card-acc {
-  font-family: var(--zzz-font); font-weight: 800; font-size: 14px;
+  font-family: var(--zzz-font); font-weight: 800; font-size: 18px;
   font-variant-numeric: tabular-nums; line-height: 1;
-  margin-bottom: 10px;
-  opacity: 0.7;
+  margin-bottom: 14px;
+  opacity: 0.65;
 }
 .rs-card--active .rs-card-acc {
-  font-size: 16px;
+  font-size: 20px;
   opacity: 1;
 }
 
-/* Stats row (combo, notes, breaks) */
-.rs-card-stats-row {
-  display: flex; gap: 6px; justify-content: center; margin-bottom: 10px;
+/* ── Stat pills (combo, notes, breaks) ── */
+.rs-card-stats {
+  display: flex; gap: 8px; justify-content: center; margin-bottom: 16px;
 }
-.rs-card-stat {
+.rs-card-pill {
   flex: 1;
   background: rgba(255,255,255,0.03);
-  border-radius: 10px;
-  padding: 5px 2px;
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 12px;
+  padding: 8px 6px;
 }
-.rs-card-stat-val {
-  font-family: var(--zzz-font); font-weight: 900; font-size: 14px;
+.rs-card-pill-val {
+  font-family: var(--zzz-font); font-weight: 900; font-size: 18px;
   font-variant-numeric: tabular-nums; line-height: 1; color: var(--zzz-text);
 }
-.rs-card-stat-x {
-  font-size: 9px; opacity: 0.5;
+.rs-card-pill-x {
+  font-size: 11px; opacity: 0.5;
 }
-.rs-card-stat-label {
-  font-family: var(--zzz-font); font-weight: 600; font-size: 7px;
-  color: rgba(255,255,255,0.2); letter-spacing: 0.08em; margin-top: 2px;
+.rs-card-pill-label {
+  font-family: var(--zzz-font); font-weight: 600; font-size: 8px;
+  color: rgba(255,255,255,0.22); letter-spacing: 0.1em; margin-top: 3px;
 }
 
-/* Judgment mini bars */
+/* ── Judgment breakdown (full rows with bars) ── */
 .rs-card-judges {
-  display: flex; gap: 4px; align-items: flex-end; justify-content: center;
-  height: 48px; padding-top: 4px;
-  border-top: 1px solid rgba(255,255,255,0.04);
+  display: flex; flex-direction: column; gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.05);
 }
-.rs-card-judge {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  flex: 1; min-width: 0;
+.rs-judge-row {
+  display: flex; align-items: center; gap: 8px;
 }
-.rs-card-judge-bar {
-  width: 100%; max-width: 22px;
-  border-radius: 3px 3px 1px 1px;
-  transition: height 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+.rs-judge-label {
+  font-family: var(--zzz-font); font-weight: 700; font-size: 9px;
+  letter-spacing: 0.06em; width: 58px; text-align: right; flex-shrink: 0;
+}
+.rs-judge-bar-track {
+  flex: 1; height: 6px; border-radius: 3px;
+  background: rgba(255,255,255,0.04); overflow: hidden;
+}
+.rs-judge-bar-fill {
+  height: 100%; border-radius: 3px; width: 0%;
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
   opacity: 0.6;
-  min-height: 0;
+  box-shadow: 0 0 6px currentColor;
 }
-.rs-card--active .rs-card-judge-bar {
+.rs-card--active .rs-judge-bar-fill {
   opacity: 0.85;
 }
-.rs-card-judge-label {
-  font-family: var(--zzz-font); font-weight: 700; font-size: 7px;
-  color: rgba(255,255,255,0.2); letter-spacing: 0.04em;
+.rs-judge-count {
+  font-family: var(--zzz-font); font-weight: 800; font-size: 11px;
+  font-variant-numeric: tabular-nums; width: 28px; text-align: right; flex-shrink: 0;
 }
-.rs-card-judge-count {
-  font-family: var(--zzz-font); font-weight: 800; font-size: 8px;
-  font-variant-numeric: tabular-nums;
+.rs-judge-pct {
+  font-family: var(--zzz-mono); font-weight: 600; font-size: 9px;
+  color: rgba(255,255,255,0.25); width: 40px; text-align: right; flex-shrink: 0;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
+/* ── Responsive ── */
+@media (max-width: 900px) {
   .rs-card {
-    width: 170px;
-    padding: 12px 10px 10px;
-    border-radius: 14px;
+    width: 300px;
+    padding: 20px 18px 16px;
+    border-radius: 18px;
   }
-  .rs-card-rank { font-size: 28px; }
-  .rs-card--active .rs-card-rank { font-size: 34px; }
-  .rs-card-score { font-size: 17px; }
-  .rs-card--active .rs-card-score { font-size: 20px; }
-  .rs-card-acc { font-size: 12px; }
-  .rs-card-stat-val { font-size: 12px; }
-  .rs-carousel { gap: 10px; padding: 6px 16px 12px; }
+  .rs-card-rank { font-size: 40px; }
+  .rs-card--active .rs-card-rank { font-size: 48px; }
+  .rs-card-score { font-size: 26px; }
+  .rs-card--active .rs-card-score { font-size: 30px; }
+  .rs-card-acc { font-size: 16px; }
+  .rs-card-pill-val { font-size: 16px; }
+  .rs-carousel { gap: 16px; padding: 10px calc(50vw - 150px) 16px; }
+  .rs-judge-label { width: 50px; font-size: 8px; }
 }
-@media (max-width: 480px) {
+@media (max-width: 600px) {
   .rs-card {
-    width: 150px;
-    padding: 10px 8px 8px;
+    width: 260px;
+    padding: 16px 14px 14px;
+    border-radius: 16px;
   }
-  .rs-card-stats-row { gap: 4px; }
-  .rs-card-judges { height: 36px; }
+  .rs-card-rank { font-size: 36px; }
+  .rs-card--active .rs-card-rank { font-size: 42px; }
+  .rs-card-score { font-size: 22px; }
+  .rs-card-acc { font-size: 14px; }
+  .rs-card-pill-val { font-size: 14px; }
+  .rs-card-pill { padding: 6px 4px; }
+  .rs-card-pill-label { font-size: 7px; }
+  .rs-carousel { gap: 12px; padding: 8px calc(50vw - 130px) 14px; }
+  .rs-judge-label { width: 44px; font-size: 7px; }
+  .rs-judge-count { font-size: 10px; }
+  .rs-judge-pct { font-size: 8px; width: 34px; }
 }
 
 /* ── GRADE GRADIENT (two-element approach) ──── */
