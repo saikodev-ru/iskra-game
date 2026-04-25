@@ -1453,3 +1453,26 @@ Stage Summary:
 - OszLoader parses effects column and builds kiaiSections by tracking state changes
 - NoteRenderer kiai rendering works regardless of graphics preset setting
 
+---
+Task ID: 1
+Agent: main
+Task: Redesign kiai effects + fix input controls bug
+
+Work Log:
+- Completely redesigned _drawKiaiEffect() with new approach:
+  - Layer 1: Horizontal warm color tint (not radial) — wider, more visible
+  - Layer 2: Beat-pulsed horizontal band sweeping from judge line
+  - Layer 3: Glowing side rails along playfield edges with bloom
+  - Layer 4: Enhanced judge line glow with broader bloom
+- Added _drawKiaiParticles() — rising orange-gold particles below playfield (behind playfield, above background)
+- Added particle pool (_kiaiParticles, _kiaiParticleTimer) to constructor
+- Updated render order: background → particles → kiai effect → beat lines → ...
+- Fixed input bug: added visibilitychange handler to auto-pause on tab switch
+- Fixed focus handler: clear stale key states + resume AudioContext
+- Guarded hitHandler, missHandler, sliderBreakHandler, releaseHandler against _inCountdown
+
+Stage Summary:
+- Kiai effects now much more visible with 4 distinct visual layers + particle system
+- Input no longer breaks on tab switch (auto-pause + state cleanup on focus)
+- No phantom judgements during countdown after resume
+

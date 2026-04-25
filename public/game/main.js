@@ -253,7 +253,7 @@ async function boot() {
 
   const _actuallyStartGame = (map) => {
     const hitHandler = ({ lane, hitTime }) => {
-      if (!gameActive) return;
+      if (!gameActive || _inCountdown) return;
       const result = currentJudgement.judgeHit(lane, hitTime);
 
       // Always show a visual effect on the lane when a key is pressed
@@ -287,9 +287,9 @@ async function boot() {
       }
     };
 
-    const missHandler = ({ sliderBreak } = {}) => { if (!gameActive) return; if (hitSounds) hitSounds.miss(); };
+    const missHandler = ({ sliderBreak } = {}) => { if (!gameActive || _inCountdown) return; if (hitSounds) hitSounds.miss(); };
     const sliderBreakHandler = ({ note }) => {
-      if (!gameActive) return;
+      if (!gameActive || _inCountdown) return;
       if (hitSounds) hitSounds.miss();
       // Red flash on the lane at judge line
       noteRenderer.addMissFlash(note.lane, currentLaneCount);
@@ -306,7 +306,7 @@ async function boot() {
     };
 
     const releaseHandler = ({ lane, releaseTime }) => {
-      if (!gameActive) return;
+      if (!gameActive || _inCountdown) return;
       const result = currentJudgement.judgeRelease(lane, releaseTime);
       if (!result) return;
 
@@ -827,6 +827,17 @@ async function boot() {
     if (gameActive) {
       // Re-assert input manager is enabled
       if (!input._enabled) input.enable();
+      // Clear stale key states from before the tab switch
+      input._active.clear();
+      // Resume AudioContext if browser suspended it
+      if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
+    }
+  });
+
+  // Auto-pause when tab becomes hidden (prevents audio desync and stale input state)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && gameActive && !_dying && !_inCountdown) {
+      pauseGame();
     }
   });
 
