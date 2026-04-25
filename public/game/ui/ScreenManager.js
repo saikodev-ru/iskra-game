@@ -78,6 +78,8 @@ export default class ScreenManager {
 
   /** 3D exit: current screen flies back and fades with perspective */
   _3DExit(callback) {
+    // Set black background so nothing bleeds through during animation
+    this.container.style.background = '#000000';
     this.container.style.perspective = '1200px';
     this.container.style.transformStyle = 'preserve-3d';
     this.container.classList.add('screen-3d-exit');
@@ -86,6 +88,7 @@ export default class ScreenManager {
       this.container.classList.remove('screen-3d-exit');
       this.container.style.perspective = '';
       this.container.style.transformStyle = '';
+      this.container.style.background = '';
       callback();
     }, 280);
   }

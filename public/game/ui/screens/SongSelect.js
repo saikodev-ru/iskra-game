@@ -324,11 +324,22 @@ export default class SongSelect {
     };
     EventBus.on('records:changed', this._recordsChangedHandler);
 
-    // Render current selection info
+    // Render current selection info + auto-play preview
     if (this.selectedIndex >= 0 && this.selectedIndex < this.beatmapSets.length) {
       const set = this.beatmapSets[this.selectedIndex];
       this._renderSongInfo(set);
       this._renderPlayButton(set);
+      // Restore Three.js background for selected song
+      if (this.three) {
+        if (set.videoUrl) {
+          this.three.setBackgroundVideo(set.videoUrl, this.audio);
+        } else if (set.backgroundUrl) {
+          this.three.setTVTexture(set.backgroundUrl);
+        } else {
+          this.three.setTVStatic();
+        }
+      }
+      this._playPreview(set);
     }
     EventBus.emit('song:select', { map: this.beatmapSets[this.selectedIndex] || null });
   }

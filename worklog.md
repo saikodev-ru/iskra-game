@@ -1690,3 +1690,20 @@ Stage Summary:
 - Background image is blurred (24px blur + brightness/saturation adjustments) and shows through at 18% opacity creating frosted glass look
 - Opaque dark base blocks Three.js video/image background from bleeding through the playfield
 - No performance impact (blur is applied once to cached offscreen canvas, not per-frame)
+
+---
+Task ID: 2
+Agent: Main
+Task: Fix transition bleed-through and missing preview on return from game
+
+Work Log:
+- Identified that `_3DExit` animation in ScreenManager.js had no background on the `#screen` container — during the 280ms fade-out, content became transparent and revealed Three.js dark background underneath
+- Added `this.container.style.background = '#000000'` before the 3D exit animation starts, cleared after animation completes
+- Identified that `_reenable()` in SongSelect.js rendered song info but never called `_playPreview()` — audio preview didn't start when returning from game
+- Added `_playPreview(set)` call in `_reenable()` after rendering song info
+- Also added Three.js background restoration (video/image/static) in `_reenable()` so the song's background shows again after the game clears it
+
+Stage Summary:
+- Screen transitions now have a solid black background during 3D fade-out — no more bleed-through
+- Song preview auto-plays when returning from game to song select
+- Song background (video/image) is also restored on return
