@@ -395,10 +395,10 @@ export default class NoteRenderer {
     };
 
     if (this._bgImage) {
-      // Draw semi-transparent dark base under playfield (frosted glass — let bg show through)
+      // Opaque dark base — blocks raw Three.js background completely
       cctx.save();
       pfFullPath();
-      cctx.fillStyle = 'rgba(6,6,8,0.50)';
+      cctx.fillStyle = 'rgba(6,6,8,1)';
       cctx.fill();
       cctx.restore();
 
@@ -406,8 +406,8 @@ export default class NoteRenderer {
       cctx.save();
       pfFullPath();
       cctx.clip();
-      cctx.globalAlpha = 0.55;
-      cctx.filter = 'blur(18px) brightness(0.7) saturate(1.2)';
+      cctx.globalAlpha = 0.45;
+      cctx.filter = 'blur(20px) brightness(0.65) saturate(1.3)';
       const ia = this._bgImage.width / this._bgImage.height;
       const ca = this.w / this.h;
       let dw, dh, dx, dy;
@@ -418,10 +418,10 @@ export default class NoteRenderer {
       cctx.filter = 'none';
       cctx.restore();
     } else {
-      // No background image — draw dark base under playfield
+      // No background image — opaque dark base
       cctx.save();
       pfFullPath();
-      cctx.fillStyle = 'rgba(6,6,8,0.50)';
+      cctx.fillStyle = 'rgba(6,6,8,1)';
       cctx.fill();
       cctx.restore();
     }

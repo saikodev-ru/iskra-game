@@ -213,22 +213,25 @@ async function boot() {
     noteRenderer.scrollSpeed = scrollSpeed;
     noteRenderer.resize();
 
-    // Only use canvas background when ThreeScene has no background
-    if (!map.videoUrl && !map.backgroundUrl) noteRenderer.clearBackground();
-    else noteRenderer.clearBackground();
+    // Clear previous background state
+    noteRenderer.clearBackground();
 
     // Enable lead-in offset for video sync (game has 1s silence prepended to audio)
     three._leadInOffset = LEAD_IN;
 
     // Hide Three.js dark gradient bg mesh to prevent "double background"
-    // (NoteRenderer's lane fills will be the only visible background)
     three.hideBgMesh();
 
     // Use video background if available, otherwise use image background
     if (map.videoUrl) {
       three.setBackgroundVideo(map.videoUrl, audio);
+      // For video maps, grab a frame for the frosted glass blur in NoteRenderer
+      three.setBackgroundImage(map.backgroundUrl); // fallback still image if available
+      noteRenderer.setBackgroundImage(map.backgroundUrl);
     } else if (map.backgroundUrl) {
       three.setBackgroundImage(map.backgroundUrl);
+      // Also set on NoteRenderer for frosted glass blur effect
+      noteRenderer.setBackgroundImage(map.backgroundUrl);
     } else {
       three._clearBackgroundImage();
       three._clearBackgroundVideo();
