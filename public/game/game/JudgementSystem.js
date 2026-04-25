@@ -20,10 +20,10 @@ const RELEASE_WINDOWS = {
 const ACC_WEIGHT = { perfect: 305, great: 300, good: 200, bad: 50, miss: 0 };
 
 // HP recovery/loss per judgement (osu!mania drain system)
-const HP_JUDGEMENT = { perfect: 2.0, great: 1.5, good: 0.8, bad: -0.5, miss: -1.5 };
+const HP_JUDGEMENT = { perfect: 2.0, great: 1.2, good: 0.4, bad: -1.2, miss: -2.5 };
 
 // HP drain rate per second (base, before difficulty scaling)
-const HP_DRAIN_RATE = 0.8;
+const HP_DRAIN_RATE = 1.0;
 
 // Hold note grace period: if player releases during hold but re-presses
 // within this time, no penalty. Tightened from 150ms to 80ms.
@@ -180,7 +180,7 @@ export default class JudgementSystem {
     this.score = Math.max(0, this.score + scoreDiff); // scoreDiff is negative
 
     // HP: moderate penalty (harsher than before)
-    this.hp = Math.max(0, Math.min(100, this.hp - 0.8));
+    this.hp = Math.max(0, Math.min(100, this.hp - 1.5));
 
     // DON'T break combo from slider break!
 
