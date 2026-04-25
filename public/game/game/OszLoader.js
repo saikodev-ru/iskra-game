@@ -1,5 +1,4 @@
 import DifficultyAnalyzer from './DifficultyAnalyzer.js';
-import ChorusDetector from './ChorusDetector.js';
 
 // ── IndexedDB-backed storage for beatmap sets ──────────────────────────────
 
@@ -451,20 +450,9 @@ export default class OszLoader {
         bpm: 60000 / tp.msPerBeat,
       }));
 
-    // ── Auto-detect chorus sections via audio energy + note density analysis ──
-    const kiaiSections = [];
-    console.log(`[OszLoader] _buildDifficulty: audioBuffer=${audioBuffer ? audioBuffer.duration.toFixed(1) + 's' : 'null'}, notes=${notes.length}`);
-    if (audioBuffer && notes.length > 0) {
-      try {
-        const detected = ChorusDetector.detect(audioBuffer, notes);
-        kiaiSections.push(...detected);
-        // ChorusDetector logs its own results internally
-      } catch (err) {
-        console.warn('[OszLoader] ChorusDetector failed:', err);
-      }
-    } else {
-      console.log('[OszLoader] Skipping chorus detection (no audio buffer or no notes)');
-    }
+    // ── Build kiai sections from timing points' effects flag ──
+    const kiaiSections = this._buildKiaiSections(parsed.timingPoints);
+    console.log(`[OszLoader] _buildDifficulty: audioBuffer=${audioBuffer ? audioBuffer.duration.toFixed(1) + 's' : 'null'}, notes=${notes.length}, kiaiSections=${kiaiSections.length}`);
 
     const primaryBpm = bpmChanges.length > 0 ? bpmChanges[0].bpm : 120;
 
@@ -706,7 +694,11 @@ export default class OszLoader {
           const msPerBeat = parseFloat(parts[1]);
           const meter = parts.length > 2 ? parseInt(parts[2], 10) : 4;
           const inherited = msPerBeat < 0;
-          result.timingPoints.push({ offset, msPerBeat, meter, inherited });
+          // effects is column index 7 (osu! format: offset,beatLength,meter,sampleSet,sampleIndex,volume,uninherited,effects)
+          // fallback to index 6 for maps without uninherited column
+          const effects = parts.length > 7 ? parseInt(parts[7], 10) : (parts.length > 6 ? parseInt(parts[6], 10) : 0);
+          const kiai = !!(effects & 1); // bit 0 = kiai time
+          result.timingPoints.push({ offset, msPerBeat, meter, inherited, kiai });
         }
       }
       else if (section === 'HitObjects') {
@@ -759,6 +751,43 @@ export default class OszLoader {
     }
 
     return result;
+  }
+
+  /** Build kiai sections from timing points by tracking effects flag state changes */
+  _buildKiaiSections(timingPoints) {
+    // Sort by offset and walk through, tracking kiai on/off state
+    const sorted = [...timingPoints].sort((a, b) => a.offset - b.offset);
+    const sections = [];
+    let kiaiStart = null;
+
+    for (const tp of sorted) {
+      if (tp.kiai && kiaiStart === null) {
+        // Kiai turned ON
+        kiaiStart = tp.offset / 1000; // convert ms → seconds
+      } else if (!tp.kiai && kiaiStart !== null) {
+        // Kiai turned OFF
+        sections.push({
+          startTime: kiaiStart,
+          endTime: tp.offset / 1000,
+        });
+        kiaiStart = null;
+      }
+    }
+
+    // If kiai is still on at the end of timing points, close the section at the last note
+    // (it will be clamped later by BeatMap)
+    if (kiaiStart !== null) {
+      sections.push({
+        startTime: kiaiStart,
+        endTime: kiaiStart + 60, // default 60s cap, will be clamped
+      });
+    }
+
+    if (sections.length > 0) {
+      console.log(`[OszLoader] 🎵 Kiai sections from timing points: ${sections.map(s => s.startTime.toFixed(1) + 's–' + s.endTime.toFixed(1) + 's').join(', ')}`);
+    }
+
+    return sections;
   }
 
   _findTimingPoint(timingPoints, time) {

@@ -1435,3 +1435,21 @@ Stage Summary:
 - NoteRenderer.js kiai effects now always render regardless of graphics preset
 - Visual effect intensity increased ~50%
 
+---
+Task ID: 1
+Agent: main
+Task: Replace ChorusDetector with native osu! kiai timing points
+
+Work Log:
+- Removed ChorusDetector import from OszLoader.js
+- Added effects column parsing to TimingPoints section (column index 7, fallback to 6)
+- Added kiai boolean flag (effects & 1) to each timing point object
+- Created _buildKiaiSections() method that tracks kiai on/off state changes across sorted timing points
+- Replaced ChorusDetector.detect() call with _buildKiaiSections(parsed.timingPoints)
+- Kiai effects now work on ALL graphics presets (fixed in previous session)
+
+Stage Summary:
+- ChorusDetector no longer used — kiai comes directly from .osu timing point effects flag
+- OszLoader parses effects column and builds kiaiSections by tracking state changes
+- NoteRenderer kiai rendering works regardless of graphics preset setting
+
