@@ -1384,3 +1384,35 @@ Stage Summary:
 - Import flow now shows a progress overlay with stages: Unpacking archive → Analyzing chorus → Import complete
 - Only first .osz file is imported (changed from multi-file loop to single file)
 - Lint passes clean
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix ChorusDetector not working, remove kiai time detection, improve import panel
+
+Work Log:
+- Diagnosed ChorusDetector issue: algorithm was too strict, returned empty array silently with no logging
+- Rewrote ChorusDetector.js with note-density-first approach:
+  - Primary signal: note density in sliding windows (most reliable for rhythm games)
+  - Secondary signal: audio RMS energy (optional, used as辅助)
+  - Three-tier fallback thresholds: normal → relaxed (p50*0.85) → absolute minimum (p50*0.7)
+  - Lower minimum duration: 5s (was 6s)
+  - More lenient adaptive threshold: p50*1.15 and p90*0.55 (was p60 and p85*0.65)
+  - Comprehensive diagnostic logging at every step
+  - ChorusDetector no longer requires AudioBuffer (can work with notes-only)
+- Removed kiai time detection from OszLoader._parseOsu():
+  - Removed kiai flag parsing from timing points (effects bitmask)
+  - kiaiSections are now exclusively populated from ChorusDetector
+- Updated OszLoader._buildDifficulty() with diagnostic logging:
+  - Logs audioBuffer status and note count before detection
+  - Logs skip reason if detection is bypassed
+- Updated SongSelect._handleOszFiles():
+  - Added _setImportProgress() method for granular progress control
+  - Fixed import progress stages: 20% → 80% → 100%
+  - More descriptive status text during import
+
+Stage Summary:
+- ChorusDetector now has comprehensive logging and 3-tier fallback thresholds
+- Kiai time parsing removed from .osu format (kiai sections only from auto-detection)
+- Import panel shows improved progress stages
+- Files modified: ChorusDetector.js, OszLoader.js, SongSelect.js

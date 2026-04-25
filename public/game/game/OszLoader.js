@@ -453,16 +453,17 @@ export default class OszLoader {
 
     // ── Auto-detect chorus sections via audio energy + note density analysis ──
     const kiaiSections = [];
+    console.log(`[OszLoader] _buildDifficulty: audioBuffer=${audioBuffer ? audioBuffer.duration.toFixed(1) + 's' : 'null'}, notes=${notes.length}`);
     if (audioBuffer && notes.length > 0) {
       try {
         const detected = ChorusDetector.detect(audioBuffer, notes);
         kiaiSections.push(...detected);
-        if (detected.length > 0) {
-          console.log(`[OszLoader] 🎵 Chorus: ${detected.map(s => s.startTime.toFixed(1) + 's–' + s.endTime.toFixed(1) + 's').join(', ')}`);
-        }
+        // ChorusDetector logs its own results internally
       } catch (err) {
         console.warn('[OszLoader] ChorusDetector failed:', err);
       }
+    } else {
+      console.log('[OszLoader] Skipping chorus detection (no audio buffer or no notes)');
     }
 
     const primaryBpm = bpmChanges.length > 0 ? bpmChanges[0].bpm : 120;
@@ -705,10 +706,7 @@ export default class OszLoader {
           const msPerBeat = parseFloat(parts[1]);
           const meter = parts.length > 2 ? parseInt(parts[2], 10) : 4;
           const inherited = msPerBeat < 0;
-          // effects field (index 7): bitmask where bit 0 = kiai time
-          const effects = parts.length > 7 ? parseInt(parts[7], 10) || 0 : 0;
-          const kiai = (effects & 1) !== 0;
-          result.timingPoints.push({ offset, msPerBeat, meter, inherited, kiai });
+          result.timingPoints.push({ offset, msPerBeat, meter, inherited });
         }
       }
       else if (section === 'HitObjects') {

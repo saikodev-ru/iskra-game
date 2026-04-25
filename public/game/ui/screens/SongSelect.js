@@ -1212,11 +1212,13 @@ export default class SongSelect {
     try {
       await new Promise(resolve => setTimeout(resolve, 50)); // yield to let overlay render
 
+      this._setImportProgress(20);
+
       const result = await this.oszLoader.load(file);
 
-      this._setImportStatus('analyzing', 'Analyzing chorus...');
+      this._setImportStatus('analyzing', 'Analyzing difficulties...');
+      this._setImportProgress(80);
 
-      // Small delay to let the UI update before heavy post-load work
       await new Promise(resolve => setTimeout(resolve, 100));
 
       if (result && result.difficulties && result.difficulties.length > 0) {
@@ -1228,6 +1230,7 @@ export default class SongSelect {
       }
 
       this._setImportStatus('done', 'Import complete!');
+      this._setImportProgress(100);
       await new Promise(resolve => setTimeout(resolve, 600));
       this._hideImportOverlay();
     } catch (err) {
@@ -1269,8 +1272,13 @@ export default class SongSelect {
     const bar = document.getElementById('import-progress-bar');
     const status = document.getElementById('import-status');
     if (status) status.textContent = text;
-    const pct = { unpacking: 40, analyzing: 75, done: 100, error: 0 };
+    const pct = { unpacking: 40, analyzing: 80, done: 100, error: 0 };
     if (bar) bar.style.width = (pct[stage] || 0) + '%';
+  }
+
+  _setImportProgress(pct) {
+    const bar = document.getElementById('import-progress-bar');
+    if (bar) bar.style.width = pct + '%';
   }
 
   _hideImportOverlay() {
