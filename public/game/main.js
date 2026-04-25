@@ -121,6 +121,7 @@ async function boot() {
   let _dying = false;       // true during death animation (HP depleted)
   let _deadPause = false;    // true when pause menu is shown after death (no resume)
   let _deathTimeout = null; // timeout ID for death sequence → endGame
+  let _deathFreezeTime = 0; // frozen game time when death starts (notes stop moving)
   let _skipResult = false;  // when true, endGame() rAF won't show result screen (restart)
   let _quitGame = false;    // when true, endGame() skips saving result to records
   let _quickRestartKey = null; // key code for quick restart (e.g. 'ShiftLeft')
@@ -356,7 +357,8 @@ async function boot() {
     gameLoop = new GameLoop({
       update(delta) {
         if (!gameActive) return;
-        const ct = audio.currentTime; // Single source of truth: game time = audio time
+        // During death animation, freeze game time so notes stop being judged
+        const ct = _dying ? _deathFreezeTime : audio.currentTime;
         // During countdown (after resume), skip game logic
         if (_inCountdown) return;
 
@@ -389,18 +391,17 @@ async function boot() {
         // Death: HP depleted — start death sequence (once only)
         if (gameActive && stats.health <= 0 && !_dying) {
           _dying = true;
+          _deathFreezeTime = ct; // Freeze game time — notes stop moving
           currentJudgement._died = true; // Force D rank
           if (hitSounds) hitSounds.fail();
           input.disable();
-          // Slow music down over 2.5 seconds
+          // Slow music down over 2.5 seconds (audio-only effect)
           audio.slowDown(2.5);
-          // Slow note scroll to a crawl
-          noteRenderer.scrollSpeed = 40; // was ~400
-          // Break the game canvases (CSS animation)
-          const gameCanvas = document.getElementById('game');
-          const threeCanvas = document.getElementById('three');
-          if (gameCanvas) gameCanvas.classList.add('dying');
-          if (threeCanvas) threeCanvas.classList.add('dying');
+          // Fade canvases to dark (CSS animation — no skew distortion)
+          const gameCanvasEl = document.getElementById('game');
+          const threeCanvasEl = document.getElementById('three');
+          if (gameCanvasEl) gameCanvasEl.classList.add('dying');
+          if (threeCanvasEl) threeCanvasEl.classList.add('dying');
           // Red scanline overlay
           const deathEl = document.createElement('div');
           deathEl.className = 'death-overlay';
@@ -419,11 +420,10 @@ async function boot() {
             _dying = false;
             const deathOverlay = document.getElementById('death-overlay');
             if (deathOverlay) deathOverlay.remove();
-            const gameCanvas = document.getElementById('game');
-            const threeCanvas = document.getElementById('three');
-            if (gameCanvas) gameCanvas.classList.remove('dying');
-            if (threeCanvas) threeCanvas.classList.remove('dying');
-            noteRenderer.scrollSpeed = 400;
+            const gcEl = document.getElementById('game');
+            const tcEl = document.getElementById('three');
+            if (gcEl) gcEl.classList.remove('dying');
+            if (tcEl) tcEl.classList.remove('dying');
             // Show pause menu without Continue button (mark as quit so result not saved)
             _quitGame = true;
             pauseGame({ noResume: true });
@@ -432,7 +432,8 @@ async function boot() {
       },
       render(delta) {
         if (!gameActive) return;
-        const ct = audio.currentTime;
+        // During death animation, freeze game time so notes stop moving
+        const ct = _dying ? _deathFreezeTime : audio.currentTime;
         // Compute kiai intensity for the renderer
         const kiaiIntensity = currentBeatMap ? currentBeatMap.getKiaiIntensity(ct) : 0;
         noteRenderer.setKiaiIntensity(kiaiIntensity);
@@ -471,11 +472,11 @@ async function boot() {
     if (cdOverlay) cdOverlay.remove();
     const deathOverlay = document.getElementById('death-overlay');
     if (deathOverlay) deathOverlay.remove();
-    // Remove dying classes from canvases
-    const gameCanvas = document.getElementById('game');
-    const threeCanvas = document.getElementById('three');
-    if (gameCanvas) gameCanvas.classList.remove('dying');
-    if (threeCanvas) threeCanvas.classList.remove('dying');
+    // Remove dying classes from canvases (in case endGame called during death animation)
+    const gameCanvasEl = document.getElementById('game');
+    const threeCanvasEl = document.getElementById('three');
+    if (gameCanvasEl) gameCanvasEl.classList.remove('dying');
+    if (threeCanvasEl) threeCanvasEl.classList.remove('dying');
     if (gameLoop) { gameLoop.stop(); gameLoop = null; }
     audio.stop();
     audio.stopBeatScheduler();

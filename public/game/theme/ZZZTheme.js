@@ -226,33 +226,28 @@ body.zzz-active::before {
 
 /* ── DEATH ANIMATION ──────────────────────────── */
 
-/* Game canvas — splits apart with skew */
+/* Game canvas — gentle fade to dark (no skew distortion) */
 #game.dying {
-  animation: death-canvas-break 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: death-canvas-fade 2.5s ease-in forwards;
 }
-@keyframes death-canvas-break {
-  0%   { transform: none; filter: none; opacity: 1; }
-  5%   { filter: brightness(2) saturate(0); }
-  10%  { filter: brightness(1.2) saturate(0.3); }
-  20%  { transform: skewX(1.5deg) translateX(6px); filter: none; }
-  30%  { transform: skewX(-2deg) translateX(-8px); }
-  40%  { transform: skewX(1deg) translateY(3px) scale(1.01); }
-  50%  { transform: skewX(-1.5deg) skewY(0.5deg) translateX(-4px); filter: brightness(0.7) contrast(1.5); }
-  65%  { transform: skewX(2deg) skewY(-0.8deg) translateX(6px) scale(0.98); filter: brightness(0.4) contrast(2) saturate(0.5); }
-  80%  { transform: skewX(-1deg) skewY(0.5deg) translateX(3px) scale(0.96); filter: brightness(0.2) contrast(2.5) saturate(0.2); }
-  100% { transform: skewX(0.5deg) translateX(1px) scale(0.95); filter: brightness(0) contrast(3) saturate(0); opacity: 0.3; }
+@keyframes death-canvas-fade {
+  0%   { filter: none; opacity: 1; }
+  10%  { filter: brightness(2) saturate(0); }
+  20%  { filter: brightness(1.2) saturate(0.3); }
+  40%  { filter: brightness(0.8) saturate(0.5) contrast(1.3); }
+  70%  { filter: brightness(0.3) contrast(1.8) saturate(0.2); }
+  100% { filter: brightness(0) saturate(0); opacity: 0.2; }
 }
 
-/* Three.js background canvas — milder distortion */
+/* Three.js background canvas — subtle dim */
 #three.dying {
-  animation: death-three-break 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: death-three-fade 2.5s ease-in forwards;
 }
-@keyframes death-three-break {
-  0%   { transform: none; filter: none; }
-  20%  { transform: scale(1.01) translateX(3px); }
-  40%  { transform: scale(1.02) translateX(-4px); filter: hue-rotate(30deg) brightness(0.8); }
-  60%  { transform: scale(1.01) translateX(2px); filter: hue-rotate(60deg) brightness(0.5) saturate(0.5); }
-  100% { transform: scale(1.03); filter: hue-rotate(90deg) brightness(0.1) saturate(0); }
+@keyframes death-three-fade {
+  0%   { opacity: 1; }
+  30%  { filter: hue-rotate(30deg) brightness(0.8); }
+  60%  { filter: hue-rotate(60deg) brightness(0.4) saturate(0.5); }
+  100% { filter: hue-rotate(90deg) brightness(0.1) saturate(0); }
 }
 
 /* Red scanline overlay */

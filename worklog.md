@@ -1627,3 +1627,27 @@ Stage Summary:
 - Song list no longer reloads from IndexedDB when returning from game
 - Custom cursor is now a BPM-pulsing neon ring with comet trail, visible on any surface
 - All changes pass lint (0 errors, 1 pre-existing warning)
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix note sprites perspective and game-over death behavior
+
+Work Log:
+- Analyzed NoteRenderer.js: tap notes and hold caps were drawn as flat rectangles, not matching the trapezoid playfield perspective
+- Created `_drawPerspectiveRoundRect()` method using arcTo for smooth rounded corners on non-rectangular quads
+- Created `_getNoteCorners()` helper that computes TL/TR/BR/BL corners using lane geometry at top and bottom edges of each note
+- Rewrote `_drawTapNote()` to use perspective-correct trapezoid paths
+- Rewrote `_drawHoldCap()` to use perspective-correct trapezoid paths
+- Rewrote `_drawTapNoteTrail()` to use perspective-correct trapezoid paths
+
+- Analyzed death sequence in main.js: `audio.slowDown()` changes playbackRate but `audio.currentTime` uses wall-clock time (Web Audio context time), so game time kept advancing at real speed
+- Fixed death: added `_deathFreezeTime` variable, set on death trigger, used in both update() and render() callbacks to freeze game time
+- Removed `noteRenderer.scrollSpeed = 40` hack (no longer needed with frozen time)
+- Removed harsh CSS `skewX/skewY` transforms from `#game.dying` that made notes look visually broken/corrupted
+- Replaced with gentle `death-canvas-fade` animation (brightness/saturation/opacity only, no transform distortion)
+- Replaced `death-three-break` with `death-three-fade` (simple hue-rotate + brightness dim)
+
+Stage Summary:
+- Notes now render as perspective-correct trapezoids matching the playfield
+- Death animation: game time freezes, notes stop moving, audio slows down independently
+- No more visual "breaking" of notes during death (removed CSS skew transforms)

@@ -1190,54 +1190,105 @@ export default class NoteRenderer {
     const trailY = noteY - trailOffset;
     if (trailY <= this._getJudgeLineY()) return;
 
-    const geom = this._getLaneGeometry(lane, noteY, laneCount);
-    const scale = this._getNoteScale(noteY);
-    const pad = 5 * scale;
-    const x = geom.x + pad;
-    const w = geom.width - pad * 2;
-    const h = this.noteHeight * scale;
-    const r = Math.max(2, 8 * scale);
+    const corners = this._getNoteCorners(lane, trailY, laneCount);
+    const r = Math.max(2, 8 * corners.scale);
 
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
-    this._roundRect(ctx, x, trailY - h / 2, w, h, r);
+    this._drawPerspectiveRoundRect(ctx, corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y, corners.br.x, corners.br.y, corners.bl.x, corners.bl.y, r);
     ctx.fill();
     ctx.restore();
+  }
+
+  /* ── Perspective-correct rounded trapezoid path ── */
+
+  /**
+   * Draw a perspective-correct rounded-corner shape.
+   * Points: TL, TR (top edge), BR, BL (bottom edge).
+   * Uses arcTo for smooth corners on non-rectangular quads.
+   */
+  _drawPerspectiveRoundRect(ctx, tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y, r) {
+    const topW = tr_x - tl_x;
+    const botW = br_x - bl_x;
+    const height = bl_y - tl_y;
+    if (height <= 0) return;
+    const maxR = Math.min(topW / 2, botW / 2, height / 2);
+    r = Math.max(0, Math.min(r, maxR));
+    if (r < 0.5) {
+      // No rounding — simple quad
+      ctx.beginPath();
+      ctx.moveTo(tl_x, tl_y);
+      ctx.lineTo(tr_x, tr_y);
+      ctx.lineTo(br_x, br_y);
+      ctx.lineTo(bl_x, bl_y);
+      ctx.closePath();
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(tl_x + r, tl_y);
+    ctx.lineTo(tr_x - r, tr_y);
+    ctx.arcTo(tr_x, tr_y, br_x, br_y, r);
+    ctx.arcTo(br_x, br_y, bl_x, bl_y, r);
+    ctx.lineTo(bl_x + r, bl_y);
+    ctx.arcTo(bl_x, bl_y, tl_x, tl_y, r);
+    ctx.arcTo(tl_x, tl_y, tr_x, tr_y, r);
+    ctx.closePath();
+  }
+
+  /**
+   * Get the 4 corner coordinates of a perspective-correct note.
+   * Returns { tl, tr, br, bl } with {x, y} each.
+   */
+  _getNoteCorners(lane, noteY, laneCount, padOverride) {
+    const h = this.noteHeight * this._getNoteScale(noteY);
+    const topY = noteY - h / 2;
+    const botY = noteY + h / 2;
+    const topScale = this._getNoteScale(topY);
+    const botScale = this._getNoteScale(botY);
+    const topGeom = this._getLaneGeometry(lane, topY, laneCount);
+    const botGeom = this._getLaneGeometry(lane, botY, laneCount);
+    const topPad = padOverride !== undefined ? padOverride * topScale : 5 * topScale;
+    const botPad = padOverride !== undefined ? padOverride * botScale : 5 * botScale;
+    return {
+      tl: { x: topGeom.x + topPad, y: topY },
+      tr: { x: topGeom.x + topGeom.width - topPad, y: topY },
+      br: { x: botGeom.x + botGeom.width - botPad, y: botY },
+      bl: { x: botGeom.x + botPad, y: botY },
+      centerX: (topGeom.centerX + botGeom.centerX) / 2,
+      width: ((topGeom.width - topPad * 2) + (botGeom.width - botPad * 2)) / 2,
+      height: h,
+      scale: this._getNoteScale(noteY)
+    };
   }
 
   /* ── Tap note ── */
 
   _drawTapNote(lane, noteY, laneCount, color, alpha) {
     const ctx = this.ctx;
-    const geom = this._getLaneGeometry(lane, noteY, laneCount);
-    const scale = this._getNoteScale(noteY);
-    const pad = 5 * scale;
-    const x = geom.x + pad;
-    const w = geom.width - pad * 2;
-    const h = this.noteHeight * scale;
-    const r = Math.max(2, 8 * scale);
+    const corners = this._getNoteCorners(lane, noteY, laneCount);
+    const r = Math.max(2, 8 * corners.scale);
 
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
-    this._roundRect(ctx, x, noteY - h / 2, w, h, r);
+    this._drawPerspectiveRoundRect(ctx, corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y, corners.br.x, corners.br.y, corners.bl.x, corners.bl.y, r);
     ctx.fill();
 
     // Glow via pre-rendered sprite (reduced intensity)
     const glowSprite = this._getGlowSprite(color);
     if (glowSprite) {
-      const gs = Math.max(w, h) * 1.2 * scale;
+      const gs = Math.max(corners.width, corners.height) * 1.2 * corners.scale;
       ctx.globalAlpha = alpha * 0.08;
-      ctx.drawImage(glowSprite, x + w / 2 - gs / 2, noteY - gs / 2, gs, gs);
+      ctx.drawImage(glowSprite, corners.centerX - gs / 2, noteY - gs / 2, gs, gs);
       ctx.globalAlpha = alpha;
     }
-    const grad = ctx.createLinearGradient(x, noteY - h / 2, x, noteY + h / 2);
+    const grad = ctx.createLinearGradient(corners.centerX, corners.tl.y, corners.centerX, corners.bl.y);
     grad.addColorStop(0, 'rgba(255,255,255,0.35)');
     grad.addColorStop(0.3, 'rgba(255,255,255,0.05)');
     grad.addColorStop(1, 'rgba(0,0,0,0.2)');
     ctx.fillStyle = grad;
-    this._roundRect(ctx, x, noteY - h / 2, w, h, r);
+    this._drawPerspectiveRoundRect(ctx, corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y, corners.br.x, corners.br.y, corners.bl.x, corners.bl.y, r);
     ctx.fill();
     ctx.restore();
   }
@@ -1380,34 +1431,29 @@ export default class NoteRenderer {
 
   _drawHoldCap(laneIndex, y, laneCount, color, alpha) {
     const ctx = this.ctx;
-    const geom = this._getLaneGeometry(laneIndex, y, laneCount);
-    const scale = this._getNoteScale(y);
-    const pad = 5 * scale;
-    const x = geom.x + pad;
-    const w = geom.width - pad * 2;
-    const h = this.noteHeight * scale;
-    const r = Math.max(2, 8 * scale);
+    const corners = this._getNoteCorners(laneIndex, y, laneCount);
+    const r = Math.max(2, 8 * corners.scale);
 
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
-    this._roundRect(ctx, x, y - h / 2, w, h, r);
+    this._drawPerspectiveRoundRect(ctx, corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y, corners.br.x, corners.br.y, corners.bl.x, corners.bl.y, r);
     ctx.fill();
 
     // Glow via pre-rendered sprite (reduced intensity)
     const glowSprite = this._getGlowSprite(color);
     if (glowSprite) {
-      const gs = Math.max(w, h) * 1.2 * scale;
+      const gs = Math.max(corners.width, corners.height) * 1.2 * corners.scale;
       ctx.globalAlpha = alpha * 0.06;
-      ctx.drawImage(glowSprite, x + w / 2 - gs / 2, y - gs / 2, gs, gs);
+      ctx.drawImage(glowSprite, corners.centerX - gs / 2, y - gs / 2, gs, gs);
       ctx.globalAlpha = alpha;
     }
-    const grad = ctx.createLinearGradient(x, y - h / 2, x, y + h / 2);
+    const grad = ctx.createLinearGradient(corners.centerX, corners.tl.y, corners.centerX, corners.bl.y);
     grad.addColorStop(0, 'rgba(255,255,255,0.35)');
     grad.addColorStop(0.35, 'rgba(255,255,255,0)');
     grad.addColorStop(1, 'rgba(0,0,0,0.15)');
     ctx.fillStyle = grad;
-    this._roundRect(ctx, x, y - h / 2, w, h, r);
+    this._drawPerspectiveRoundRect(ctx, corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y, corners.br.x, corners.br.y, corners.bl.x, corners.bl.y, r);
     ctx.fill();
     ctx.restore();
   }
