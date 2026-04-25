@@ -123,24 +123,14 @@ export default class ResultScreen {
     } else if (this._stats) {
       const setId = meta.setId;
       const diffVer = meta.version || '';
-      const historyRecs = (setId && diffVer) ? RecordStore.getAll(setId, diffVer) : [];
-      const currentRec = {
-        score: this._stats.score,
-        accuracy: this._stats.accuracy,
-        maxCombo: this._stats.maxCombo,
-        rank: this._stats.rank,
-        sliderBreaks: this._stats.sliderBreaks || 0,
-        died: !!this._stats.died,
-        hitCounts: this._stats.hitCounts || {},
-        totalNotes: this._stats.totalNotes || 0,
-        timestamp: Date.now(),
-        _isCurrent: true,
-      };
-      records = [currentRec, ...historyRecs];
+      // RecordStore.add() was already called in main.js before showing this screen,
+      // so historyRecs already includes the just-saved play. No need to prepend a duplicate.
+      records = (setId && diffVer) ? RecordStore.getAll(setId, diffVer) : [];
       this._historyRecords = records;
       this._historySetId = setId;
       this._historyDiffVersion = diffVer;
-      this._activeRecordTs = currentRec.timestamp;
+      // Highlight the latest record (the one we just played)
+      this._activeRecordTs = records.length > 0 ? records[0].timestamp : 0;
     }
 
     const activeTs = this._activeRecordTs;

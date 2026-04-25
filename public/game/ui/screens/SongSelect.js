@@ -672,6 +672,13 @@ export default class SongSelect {
   _selectDifficulty(diffIndex) {
     const set = this.beatmapSets[this.selectedIndex];
     if (!set || diffIndex < 0 || diffIndex >= set.difficulties.length) return;
+
+    // If clicking the already-selected difficulty → start the game
+    if (diffIndex === this.selectedDiffIndex) {
+      this._confirmSong();
+      return;
+    }
+
     this.selectedDiffIndex = diffIndex;
     this._updateSelection();
     this._renderSongInfo(set);
@@ -1036,6 +1043,9 @@ export default class SongSelect {
     if (this._transitioning) return;
     this._transitioning = true;
     this._leavingToGame = true;
+
+    // Play satisfying game start sound
+    ZZZTheme.playGameStartSound();
 
     this._stopPreview();
 

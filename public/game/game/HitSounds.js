@@ -280,4 +280,66 @@ export default class HitSounds {
       });
     });
   }
+
+  /** Game start — a satisfying "whoosh + rising tone" that signals the game is launching */
+  gameStart() {
+    // Layer 1: Short rising sweep (the anticipation rise)
+    this._play(g => {
+      const dur = 0.25;
+      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const t = i / data.length;
+        const freq = 300 + t * 1200; // sweep from 300Hz to 1500Hz
+        data[i] = Math.sin(2 * Math.PI * freq * t * dur) * 0.3 * Math.pow(1 - t, 1.5);
+        // Add subtle harmonics
+        data[i] += Math.sin(2 * Math.PI * freq * 2 * t * dur) * 0.1 * Math.pow(1 - t, 2);
+      }
+      const src = this._ctx.createBufferSource();
+      src.buffer = buf;
+      const filt = this._ctx.createBiquadFilter();
+      filt.type = 'bandpass'; filt.frequency.value = 800; filt.Q.value = 1.2;
+      src.connect(filt); filt.connect(g);
+      g.gain.setValueAtTime(0.8, this._ctx.currentTime);
+      g.gain.linearRampToValueAtTime(1.0, this._ctx.currentTime + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
+    });
+
+    // Layer 2: Crisp impact click at the peak
+    this._play(g => {
+      const dur = 0.06;
+      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const t = i / data.length;
+        // Sharp attack noise burst with fast decay
+        data[i] = (Math.random() * 2 - 1) * (t < 0.05 ? 1.0 : Math.pow(1 - (t - 0.05) / 0.95, 4) * 0.6);
+      }
+      const src = this._ctx.createBufferSource();
+      src.buffer = buf;
+      const bp = this._ctx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = 3000; bp.Q.value = 1.5;
+      const hp = this._ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 1500;
+      src.connect(bp); bp.connect(hp); hp.connect(g);
+      g.gain.setValueAtTime(1.0, this._ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
+    });
+
+    // Layer 3: Resonant "ding" tone (the satisfying confirmation)
+    this._play(g => {
+      const o = this._ctx.createOscillator();
+      const env = this._ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(880, this._ctx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(1320, this._ctx.currentTime + 0.08);
+      o.connect(env); env.connect(g);
+      env.gain.setValueAtTime(0.4, this._ctx.currentTime);
+      env.gain.linearRampToValueAtTime(0.5, this._ctx.currentTime + 0.02);
+      env.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + 0.35);
+      o.start(); o.stop(this._ctx.currentTime + 0.35);
+    });
+  }
 }

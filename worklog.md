@@ -998,3 +998,50 @@ Stage Summary:
 - Audio-reactive brightness via CSS filter instead of GLSL shader
 - Bloom reduced to 0.05 when video active (from 0.18)
 - ~50% less GPU work per frame when video is playing (no texture upload, no per-pixel shader, less bloom)
+---
+Task ID: 2-a
+Agent: Main Agent
+Task: Revert video background to original Three.js VideoTexture approach
+
+Work Log:
+- Reverted all CSS-based video changes in ThreeScene.js
+- Restored constructor variables: _videoTexture, _videoMesh, _videoMaterial, _skipVideoFrame
+- Restored clearColor from alpha=0 to alpha=1 (opaque)
+- Restored full setBackgroundVideo() with VideoTexture + shader material + mesh
+- Restored _clearBackgroundVideo() with proper Three.js resource disposal
+- Restored _resizeBackgroundImage() with video mesh resize
+- Restored video section in update() with texture frame-skip + shader uniforms
+- Restored video mesh parallax
+- Removed CSS overlay div and brightness CSS filter logic
+
+Stage Summary:
+- Video background fully reverted to original Three.js VideoTexture pipeline
+- No CSS-based video remnants remain
+
+---
+Task ID: 2-b
+Agent: Main Agent
+Task: Clicking already-selected difficulty starts game + add start sound
+
+Work Log:
+- Added early-return in _selectDifficulty(): if diffIndex === this.selectedDiffIndex, call _confirmSong() and return
+- Added gameStart() method to HitSounds.js — a satisfying 3-layer sound: rising sweep + crisp click + resonant ding
+- Added playGameStartSound() bridge to ZZZTheme.js
+- Called ZZZTheme.playGameStartSound() in _confirmSong() when game launch begins
+
+Stage Summary:
+- Re-clicking same difficulty immediately starts the game (no switch sound)
+- Beautiful game start sound plays on both PLAY button click and difficulty re-click
+
+---
+Task ID: 2-c
+Agent: Main Agent
+Task: Fix duplicate result cards after game
+
+Work Log:
+- Identified root cause in ResultScreen.js build(): it created a new `currentRec` with `timestamp: Date.now()` AND prepended it to `historyRecs` — but RecordStore.add() had already saved the same play to localStorage with a slightly earlier timestamp
+- Fixed by removing the duplicate currentRec prepend entirely — historyRecs already contains the just-saved record since RecordStore.add() is called before screens.show('result') in main.js
+- Set _activeRecordTs to records[0].timestamp (latest record) instead of currentRec.timestamp
+
+Stage Summary:
+- No more duplicate cards after game — each play shows exactly one card

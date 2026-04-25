@@ -1869,6 +1869,11 @@ const ZZZTheme = {
     if (_crtSounds) _crtSounds.crtSwitch();
   },
 
+  /** Play game start sound — satisfying whoosh + ding */
+  playGameStartSound() {
+    if (_crtSounds) _crtSounds.gameStart();
+  },
+
   /** Create a CRT overlay element for the song select screen */
   createCrtOverlay() {
     const overlay = document.createElement('div');
