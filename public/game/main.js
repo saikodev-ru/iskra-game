@@ -748,8 +748,73 @@ async function boot() {
       e.stopPropagation();
       return;
     }
-    // Block Ctrl+key and Alt+key combinations that may steal focus
-    if (e.ctrlKey || e.altKey || e.metaKey) {
+    // ── osu!-style Volume Control (LAlt + Mouse Wheel) ──
+  let _volumeOverlay = null;
+  let _volumeHideTimer = null;
+
+  const _showVolumeOverlay = () => {
+    const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70');
+    if (_volumeOverlay) _volumeOverlay.remove();
+    _volumeHideTimer && clearTimeout(_volumeHideTimer);
+    const sa = calcSafeArea();
+    const overlay = document.createElement('div');
+    overlay.id = 'volume-overlay';
+    overlay.style.cssText = `position:fixed;bottom:${sa.y + 60}px;left:50%;transform:translateX(-50%);z-index:200;pointer-events:none;animation:pause-fade-in 0.15s ease-out forwards;`;
+    overlay.innerHTML = `
+      <div style="display:flex;align-items:center;gap:14px;padding:12px 24px;border-radius:14px;background:rgba(0,0,0,0.88);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.06);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 15 20 9"/><line x1="4" y1="9" x2="20" y2="9"/></svg>
+        <div style="width:180px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+          <div id="vol-bar" style="width:${vol}%;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--zzz-lime),rgba(200,255,100,0.9));box-shadow:0 0 10px rgba(170,255,0,0.4);transition:width 0.06s linear;"></div>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 18 15 22 9 4 9 20"/><line x1="4" y1="15" x2="20" y2="15"/></svg>
+        <div id="vol-pct" style="font-family:var(--zzz-font);font-weight:900;font-size:13px;color:rgba(255,255,255,0.55);min-width:32px;text-align:center;letter-spacing:0.05em;">${vol}%</div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    _volumeOverlay = overlay;
+    _volumeHideTimer = setTimeout(_hideVolumeOverlay, 1200);
+  };
+
+  const _updateVolumeOverlay = (vol) => {
+    const bar = document.getElementById('vol-bar');
+    const pct = document.getElementById('vol-pct');
+    if (bar) bar.style.width = vol + '%';
+    if (pct) pct.textContent = vol + '%';
+  };
+
+  const _hideVolumeOverlay = () => {
+    if (_volumeOverlay) {
+      _volumeOverlay.style.transition = 'opacity 0.25s ease-out';
+      _volumeOverlay.style.opacity = '0';
+      const ref = _volumeOverlay;
+      _volumeOverlay = null;
+      setTimeout(() => { if (ref.parentNode) ref.remove(); }, 300);
+    }
+  };
+
+  const _adjustVolume = (delta) => {
+    let vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70');
+    vol = Math.max(0, Math.min(100, vol + delta));
+    localStorage.setItem('rhythm-os-volume', vol.toString());
+    audio.setVolume(vol / 100);
+    if (hitSounds) hitSounds.setVolume(vol / 100);
+    _showVolumeOverlay();
+    _updateVolumeOverlay(vol);
+  };
+
+  // LAlt + wheel: osu!-style volume control
+  window.addEventListener('wheel', (e) => {
+    if (!e.altKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const delta = e.deltaY > 0 ? -5 : 5; // scroll down = volume up
+    _adjustVolume(delta);
+  }, { passive: false });
+
+  // Block Ctrl+key and Meta+key combinations (but allow plain Alt for volume)
+  window.addEventListener('keydown', (e) => {
+    if (!gameActive) return;
+    if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
     }

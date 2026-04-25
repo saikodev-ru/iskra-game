@@ -300,6 +300,7 @@ export default class NoteRenderer {
   }
 
   render({ notes, currentTime, laneCount, delta = 0.016, bpm = 120, bpmChanges = null }) {
+    if (!laneCount || laneCount < 1) return; // guard against invalid lane count
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
 
@@ -666,7 +667,7 @@ export default class NoteRenderer {
     ctx.clip();
 
     // Gradient: warm tint centered on judge line, fading up and down
-    const gradH = judgeLineY - topY;
+    const gradH = Math.max(1, judgeLineY - topY);
     const grad = ctx.createRadialGradient(
       sa.x + sa.w / 2, judgeLineY, 0,
       sa.x + sa.w / 2, judgeLineY, gradH * 1.2
@@ -682,9 +683,10 @@ export default class NoteRenderer {
     // ── Layer 2: Bright white flash at judge line on beat ──
     if (this._kiaiSmoothPulse > 0.05) {
       const flashAlpha = this._kiaiSmoothPulse * 0.12 * gfx;
+      const flashR = Math.max(1, sa.w * 0.35);
       const flashGrad = ctx.createRadialGradient(
         sa.x + sa.w / 2, judgeLineY, 0,
-        sa.x + sa.w / 2, judgeLineY, sa.w * 0.35
+        sa.x + sa.w / 2, judgeLineY, flashR
       );
       flashGrad.addColorStop(0, `rgba(255,255,255,${flashAlpha})`);
       flashGrad.addColorStop(0.4, `rgba(255,240,200,${flashAlpha * 0.5})`);
@@ -1514,13 +1516,13 @@ export default class NoteRenderer {
     const sa = this.safeArea;
     const cx = sa.x + sa.w / 2;
     const cy = sa.y + sa.h / 2;
-    const maxR = Math.max(sa.w, sa.h) * 0.8;
-    const minR = Math.min(sa.w, sa.h) * 0.25;
+    const maxR = Math.max(1, Math.max(sa.w, sa.h) * 0.8);
+    const minR = Math.max(0, Math.min(sa.w, sa.h) * 0.25);
 
     const intensity = (1 - health / 40) * 0.5;
     const pulse = health < 20 ? (0.7 + 0.3 * Math.sin(performance.now() * 0.005)) : 1;
 
-    const grad = ctx.createRadialGradient(cx, cy, minR, cx, cy, maxR);
+    const grad = ctx.createRadialGradient(cx, cy, Math.min(minR, maxR), cx, cy, maxR);
     grad.addColorStop(0, 'transparent');
     grad.addColorStop(0.5, `rgba(255,30,30,${intensity * 0.15 * pulse})`);
     grad.addColorStop(1, `rgba(255,0,0,${intensity * 0.55 * pulse})`);
@@ -1581,7 +1583,7 @@ export default class NoteRenderer {
       if (p >= 1) { e.active = false; continue; }
 
       const ep = 1 - (1 - p) * (1 - p); // ease-out quad
-      const r = e.maxRadius * ep;
+      const r = Math.max(0, e.maxRadius * ep);
       const fade = 1 - p * p;
 
       // ── Layer 1: Expanding radial gradient flash (single fillRect) ──
@@ -1618,7 +1620,7 @@ export default class NoteRenderer {
       ctx.strokeStyle = e.color;
       ctx.lineWidth = Math.max(0.5, 1.8 * (1 - p));
       ctx.beginPath();
-      ctx.arc(e.x, e.y, r * 0.55, 0, Math.PI * 2);
+      ctx.arc(e.x, e.y, Math.max(0, r * 0.55), 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
@@ -1640,7 +1642,7 @@ export default class NoteRenderer {
           const dy = e.y + Math.sin(angle) * d - 8 * dP;
           const sz = size * (1 - dP * 0.7);
           ctx.moveTo(dx + sz, dy);
-          ctx.arc(dx, dy, sz, 0, Math.PI * 2);
+          ctx.arc(dx, dy, Math.max(0, sz), 0, Math.PI * 2);
         }
         ctx.fill();
         ctx.restore();
