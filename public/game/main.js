@@ -11,6 +11,7 @@ import JudgementSystem from './game/JudgementSystem.js';
 import NoteRenderer  from './game/NoteRenderer.js';
 import ColorExtractor from './game/ColorExtractor.js';
 import RecordStore   from './game/RecordStore.js';
+import ChorusDetector from './game/ChorusDetector.js';
 import JudgementDisplay from './ui/JudgementDisplay.js';
 import HUD           from './ui/HUD.js';
 import ScreenManager from './ui/ScreenManager.js';
@@ -179,6 +180,20 @@ async function boot() {
     judgementContainer.style.opacity = '';
 
     currentMapData = map;
+
+    // ── Auto-detect chorus sections when no kiai time is present ──
+    if ((!map.kiaiSections || map.kiaiSections.length === 0) && map.audioBuffer && map.notes) {
+      try {
+        const detected = ChorusDetector.detect(map.audioBuffer, map.notes);
+        if (detected.length > 0) {
+          map.kiaiSections = detected;
+          console.log(`[RHYMIX] 🎵 Auto-detected ${detected.length} chorus section(s):`,
+            detected.map(s => `${s.startTime.toFixed(1)}s–${s.endTime.toFixed(1)}s`).join(', '));
+        }
+      } catch (err) {
+        console.warn('[RHYMIX] ChorusDetector failed:', err);
+      }
+    }
 
     // Shift all notes by LEAD_IN so the first second has no notes (player prep time).
     // CRITICAL: We also prepend LEAD_IN seconds of silence to the audio buffer so that
