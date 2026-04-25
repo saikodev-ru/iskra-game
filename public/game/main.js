@@ -612,7 +612,15 @@ async function boot() {
     const panel = document.getElementById('pause-settings');
     if (panel) panel.remove();
     if (_pauseSettingsInstance) { _pauseSettingsInstance.destroy(); _pauseSettingsInstance = null; }
-    if (_pauseOverlay) _pauseOverlay.style.display = '';
+    if (_pauseOverlay) {
+      // Reposition pause overlay to match current safe area
+      const sa = calcSafeArea();
+      _pauseOverlay.style.left = sa.x + 'px';
+      _pauseOverlay.style.top = sa.y + 'px';
+      _pauseOverlay.style.width = sa.w + 'px';
+      _pauseOverlay.style.height = sa.h + 'px';
+      _pauseOverlay.style.display = '';
+    }
     // Re-apply safe area in case aspect ratio changed
     updateSafeArea();
   };

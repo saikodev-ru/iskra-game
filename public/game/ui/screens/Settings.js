@@ -177,11 +177,14 @@ export default class Settings {
 
     this._renderKeybinds();
 
-    // Overlay mode close handlers
-    const closeBtn = document.getElementById('settings-close');
-    const overlayBg = document.getElementById('settings-overlay-bg');
-    if (closeBtn) closeBtn.addEventListener('click', () => this._closeOverlay());
-    if (overlayBg) overlayBg.addEventListener('click', () => this._closeOverlay());
+    // Overlay close handlers — ONLY attach when NOT in pause context
+    // (pause context sets _onClose before init(), main menu context does not)
+    if (!this._onClose) {
+      const closeBtn = document.getElementById('settings-close');
+      const overlayBg = document.getElementById('settings-overlay-bg');
+      if (closeBtn) closeBtn.addEventListener('click', () => this._closeOverlay());
+      if (overlayBg) overlayBg.addEventListener('click', () => this._closeOverlay());
+    }
 
     // Watch for safe area changes and adjust panel width
     this._settingsChangedHandler = ({ key }) => {
@@ -243,15 +246,16 @@ export default class Settings {
   }
 
   _closeOverlay() {
-    // If caller provided a close callback (pause context), call it first
+    // If caller provided a close callback (pause context), call it once only
     if (this._onClose) {
       const cb = this._onClose;
       this._onClose = null;
       cb();
       return; // Callback handles everything including DOM cleanup
     }
-    // Default: just close via screen manager (main menu context)
-    if (this.screens && this.screens._closeOverlay) {
+    // Default: close via screen manager (main menu context)
+    // Guard: don't call if we're not in a valid state (e.g., double-fire from ESC)
+    if (this.screens && this.screens._overlay === this && this.screens._closeOverlay) {
       this.screens._closeOverlay();
     }
   }

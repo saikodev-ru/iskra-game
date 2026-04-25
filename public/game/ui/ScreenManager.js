@@ -32,6 +32,10 @@ export default class ScreenManager {
         // Disable pointer events when no interactive screen is shown
         this.container.style.pointerEvents = 'none';
       }
+      // Clean up any stale overlay reference from previous screen
+      if (this._overlay) {
+        this._overlay = null;
+      }
     };
 
     if (this._current) {
@@ -68,6 +72,7 @@ export default class ScreenManager {
     this.container.style.opacity = '';
     this.container.style.animation = '';
     this.container.style.transform = '';
+    this.container.style.background = '';
     this._transitioning = false;
 
     this.container.style.pointerEvents = name === 'game' ? 'none' : 'auto';
