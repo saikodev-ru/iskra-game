@@ -168,7 +168,7 @@ export default class JudgementSystem {
 
   /** Apply a slider break (hold note dropped after grace period).
    *  Degrades note to BAD for accuracy (50/305), reduces score, moderate HP penalty.
-   *  Does NOT break combo. */
+   *  Breaks combo and shows MISS judgement. */
   _applySliderBreak(note) {
     this.sliderBreaks++;
     note._sliderBreak = true;
@@ -182,12 +182,16 @@ export default class JudgementSystem {
     // HP: moderate penalty (harsher than before)
     this.hp = Math.max(0, Math.min(100, this.hp - 1.5));
 
-    // DON'T break combo from slider break!
+    // Break combo on slider break
+    if (this.combo > 0) EventBus.emit('combo:break', { combo: this.combo });
+    this.combo = 0;
 
     note.releaseJudgement = 'bad';
     note.released = true;
 
     EventBus.emit('note:sliderbreak', { note });
+    // Also emit note:miss so JudgementDisplay shows MISS text
+    EventBus.emit('note:miss', { note, sliderBreak: true });
   }
 
   /** Apply a head judgement: update score, combo, HP, and counts.

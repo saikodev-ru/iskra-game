@@ -1162,3 +1162,24 @@ Stage Summary:
 - Loading screen shows before main menu, preloads all resources
 - Game boot flow: Loading Screen → Resources Preloaded → Click to Start → Main Menu
 - All 4 hit sound files accessible at /game/sounds/*.ogg
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Four game fixes: sliderbreak combo break + MISS, key focus, playfield style, beat line sync
+
+Work Log:
+- JudgementSystem.js: Modified _applySliderBreak() to break combo (emit combo:break, reset combo to 0) and emit note:miss event so JudgementDisplay shows MISS text on sliderbreak
+- main.js: Added sliderBreakHandler that plays miss sound and shows red flash on the lane via addMissFlash(). Added cleanup for sliderBreak event listener
+- main.js: Added global keydown handler in capture phase that blocks Space, Tab, F1-F12, Ctrl+key, Alt+key when gameActive is true. Added focus handler to re-enable InputManager on window focus. Added contextmenu prevention during gameplay
+- InputManager.js: Added e.stopPropagation() to both _onKeyDown and _onKeyUp for mapped keys. Added e.preventDefault() to _onKeyUp
+- NoteRenderer.js: Changed below-judge-line playfield from fading-to-black gradient to solid dark fills matching above-judge style (rgba(10,10,12) / rgba(14,14,16)). Added subtle fade-to-black only at the very bottom 35% for smooth edge blending. Made below-judge walls use same gradient style as above (stronger opacity). Made below-judge lane dividers more visible (matching above opacity)
+- NoteRenderer.js: Added bpmChanges parameter to render(). Added _bpmChanges field. Rewrote _drawBeatLines() to use new _getVisibleBeats() helper that computes beat times from actual timing points (bpmChanges array). Falls back to simple constant BPM mode when no bpmChanges available. Each timing segment calculates beats from its startTime with proper beatInterval. Handles BPM changes, offset alignment, and half-beat markers
+
+Stage Summary:
+- Sliderbreak now breaks combo and shows MISS judgement text with red flash
+- Key presses no longer stop working — browser defaults blocked during gameplay, focus restored on window focus
+- Playfield below judge line now matches above style (solid dark, not fading to black) with unified wall/divider styling
+- Beat lines now properly synced to actual map timing points (BPM changes, offsets) instead of simple constant BPM from time 0
+- Files modified: JudgementSystem.js, main.js, InputManager.js, NoteRenderer.js
+- Lint passes clean

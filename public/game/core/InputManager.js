@@ -50,12 +50,15 @@ export default class InputManager {
     const lane = this.keyMap[e.code];
     if (lane === undefined) return;
     e.preventDefault();
+    e.stopPropagation();
     this._active.add(e.code);
     EventBus.emit('input:hit', { lane, hitTime: this.audio.currentTime });
   }
   _onKeyUp(e) {
     const lane = this.keyMap[e.code];
     if (lane !== undefined) {
+      e.preventDefault();
+      e.stopPropagation();
       EventBus.emit('input:release', { lane, releaseTime: this.audio.currentTime });
     }
     this._active.delete(e.code);

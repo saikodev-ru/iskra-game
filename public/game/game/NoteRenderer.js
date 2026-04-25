@@ -284,12 +284,13 @@ export default class NoteRenderer {
     this._drawBlackBars();
   }
 
-  render({ notes, currentTime, laneCount, delta = 0.016, bpm = 120 }) {
+  render({ notes, currentTime, laneCount, delta = 0.016, bpm = 120, bpmChanges = null }) {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
 
     this._frameDelta = delta;
     this._currentBpm = bpm;
+    this._bpmChanges = bpmChanges;
 
     // Smooth HP animation
     const healthDiff = this._health - this._displayHealth;
@@ -417,19 +418,32 @@ export default class NoteRenderer {
       cctx.fillRect(topGeom.x - 2, highlightY - 6, topGeom.width + 4, 12);
       cctx.restore();
 
-      // Below judge line: fade to black
+      // Below judge line: same solid dark as above (unified style)
       cctx.beginPath();
       cctx.moveTo(judgeGeom.x, judgeLineY);
       cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
       cctx.lineTo(bottomGeom.x + bottomGeom.width, bottomY);
       cctx.lineTo(bottomGeom.x, bottomY);
       cctx.closePath();
-      const belowGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
-      belowGrad.addColorStop(0, 'rgba(10,10,12,1)');
-      belowGrad.addColorStop(0.4, 'rgba(6,6,8,1)');
-      belowGrad.addColorStop(1, 'rgba(0,0,0,1)');
-      cctx.fillStyle = belowGrad;
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(10,10,12,1)' : 'rgba(14,14,16,1)';
       cctx.fill();
+
+      // Subtle fade-to-black at the very bottom edge for smooth edge blending
+      cctx.save();
+      cctx.beginPath();
+      cctx.moveTo(judgeGeom.x, judgeLineY);
+      cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
+      cctx.lineTo(bottomGeom.x + bottomGeom.width, bottomY);
+      cctx.lineTo(bottomGeom.x, bottomY);
+      cctx.closePath();
+      cctx.clip();
+      const fadeH = (bottomY - judgeLineY) * 0.35;
+      const bottomFadeGrad = cctx.createLinearGradient(0, bottomY - fadeH, 0, bottomY);
+      bottomFadeGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      bottomFadeGrad.addColorStop(1, 'rgba(0,0,0,0.6)');
+      cctx.fillStyle = bottomFadeGrad;
+      cctx.fillRect(bottomGeom.x - 2, bottomY - fadeH, bottomGeom.width + 4, fadeH);
+      cctx.restore();
     }
 
     // ── Light gray walls (left + right edges) ──
@@ -463,14 +477,14 @@ export default class NoteRenderer {
     cctx.stroke();
     cctx.restore();
 
-    // Below-judge walls (fading quickly)
+    // Below-judge walls (same gradient style as above)
     cctx.save();
     const bwGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
-    bwGrad.addColorStop(0, 'rgba(180,180,185,0.10)');
-    bwGrad.addColorStop(0.25, 'rgba(180,180,185,0.03)');
-    bwGrad.addColorStop(1, 'rgba(180,180,185,0)');
+    bwGrad.addColorStop(0, 'rgba(180,180,185,0.12)');
+    bwGrad.addColorStop(0.5, 'rgba(180,180,185,0.06)');
+    bwGrad.addColorStop(1, 'rgba(180,180,185,0.01)');
     cctx.strokeStyle = bwGrad;
-    cctx.lineWidth = 1;
+    cctx.lineWidth = 1.5;
     cctx.beginPath();
     cctx.moveTo(leftJudge.x, judgeLineY);
     cctx.lineTo(leftBottom.x, bottomY);
@@ -502,12 +516,12 @@ export default class NoteRenderer {
       cctx.stroke();
       cctx.restore();
 
-      // Below judge line
+      // Below judge line (same subtle style as above)
       cctx.save();
       const belowDivGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
-      belowDivGrad.addColorStop(0, 'rgba(255,255,255,0.03)');
-      belowDivGrad.addColorStop(0.3, 'rgba(255,255,255,0.01)');
-      belowDivGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      belowDivGrad.addColorStop(0, 'rgba(255,255,255,0.06)');
+      belowDivGrad.addColorStop(0.5, 'rgba(255,255,255,0.04)');
+      belowDivGrad.addColorStop(1, 'rgba(255,255,255,0.01)');
       cctx.strokeStyle = belowDivGrad;
       cctx.lineWidth = 0.5;
       cctx.beginPath();
@@ -584,34 +598,19 @@ export default class NoteRenderer {
     const judgeLineY = this._getJudgeLineY();
     const topY = this._getTopY();
 
-    const bpm = this._currentBpm;
-    const beatInterval = 60 / bpm; // seconds per beat
     const pixelsPerSecond = this.scrollSpeed;
 
-    // How many beats fit on screen
+    // How many beats fit on screen (above judge line)
     const visibleTime = (judgeLineY - topY) / pixelsPerSecond;
-    const beatCount = Math.ceil(visibleTime / beatInterval) + 1;
 
-    // Find the first beat line after current time that's still visible
-    const firstBeatTime = Math.ceil((currentTime - visibleTime) / beatInterval) * beatInterval;
+    // Build visible beat times using actual timing points (bpmChanges)
+    const visibleBeats = this._getVisibleBeats(currentTime, visibleTime);
 
-    const leftGeom0 = this._getLaneGeometry(0, judgeLineY, laneCount);
-    const rightGeomN = this._getLaneGeometry(laneCount, judgeLineY, laneCount);
-    const maxX = rightGeomN.x - leftGeom0.x; // max playfield width
-
-    for (let i = 0; i < beatCount * 2; i++) {
-      const beatTime = firstBeatTime + i * beatInterval / 2; // half-beat lines too
-      const y = this._noteY(beatTime, currentTime, judgeLineY);
+    for (const { time, isWholeBeat } of visibleBeats) {
+      const y = this._noteY(time, currentTime, judgeLineY);
 
       if (y < topY - 5 || y > judgeLineY + 5) continue;
       if (y <= topY) continue;
-
-      const isWholeBeat = Math.abs((beatTime / beatInterval) - Math.round(beatTime / beatInterval)) < 0.01;
-
-      // Perspective scale at this Y
-      const scale = this._getPerspectiveScale(y);
-      const sa = this.safeArea;
-      const pw = sa.w * 0.48 * scale;
 
       // Lane geometry at this Y
       const leftG = this._getLaneGeometry(0, y, laneCount);
@@ -645,6 +644,86 @@ export default class NoteRenderer {
 
       ctx.restore();
     }
+  }
+
+  /**
+   * Compute visible beat times using actual BPM changes and timing offsets.
+   * Returns array of { time, isWholeBeat } for beats visible on screen.
+   */
+  _getVisibleBeats(currentTime, visibleTime) {
+    const beats = [];
+
+    // Use bpmChanges if available, otherwise fall back to simple BPM
+    const bpmChanges = this._bpmChanges;
+    if (!bpmChanges || bpmChanges.length === 0) {
+      // Simple mode: constant BPM, first beat at the first note's aligned time
+      const bpm = this._currentBpm;
+      const beatInterval = 60 / bpm;
+      const firstBeatTime = Math.ceil((currentTime - visibleTime) / beatInterval) * beatInterval;
+      const beatCount = Math.ceil(visibleTime / beatInterval) * 2 + 2;
+
+      for (let i = 0; i < beatCount; i++) {
+        const t = firstBeatTime + i * beatInterval / 2;
+        if (t > currentTime + 0.1) break;
+        beats.push({ time: t, isWholeBeat: Math.abs((t / beatInterval) - Math.round(t / beatInterval)) < 0.01 });
+      }
+      return beats;
+    }
+
+    // Advanced mode: use actual timing points from the map
+    // Each bpmChange has: { time (seconds), bpm }
+    // Build timing segments: [{ startTime, endTime, bpm, beatInterval }]
+    const segments = [];
+    for (let i = 0; i < bpmChanges.length; i++) {
+      const tp = bpmChanges[i];
+      const beatInterval = 60 / tp.bpm;
+      const endTime = (i + 1 < bpmChanges.length) ? bpmChanges[i + 1].time : Infinity;
+      segments.push({ startTime: tp.time, endTime, bpm: tp.bpm, beatInterval });
+    }
+
+    // The first timing point defines when beats start
+    // Find the first beat time: align to the first timing point
+    const firstSegment = segments[0];
+    if (!firstSegment) return beats;
+
+    // Window of visible times (slightly extended for half-beats)
+    const windowStart = currentTime - visibleTime - 1.0;
+    const windowEnd = currentTime + 0.2;
+
+    // For each segment, compute beats that fall in the visible window
+    for (const seg of segments) {
+      if (seg.endTime < windowStart) continue; // Segment is entirely before visible window
+      if (seg.startTime > windowEnd) break; // Segment is entirely after visible window
+
+      // First beat in this segment = startTime
+      // Subsequent beats at startTime + n * beatInterval
+      const effStart = Math.max(seg.startTime, windowStart - seg.beatInterval);
+      const effEnd = Math.min(seg.endTime, windowEnd);
+
+      // Find the first beat at or after effStart
+      // beatN = (effStart - seg.startTime) / beatInterval
+      let firstN;
+      if (effStart <= seg.startTime) {
+        firstN = 0;
+      } else {
+        firstN = Math.ceil((effStart - seg.startTime) / seg.beatInterval);
+      }
+
+      const lastN = Math.floor((effEnd - seg.startTime) / seg.beatInterval);
+
+      for (let n = firstN; n <= lastN; n++) {
+        const beatTime = seg.startTime + n * seg.beatInterval;
+        beats.push({ time: beatTime, isWholeBeat: true });
+        // Half beat
+        if (beatTime + seg.beatInterval / 2 <= seg.endTime && beatTime + seg.beatInterval / 2 <= windowEnd) {
+          beats.push({ time: beatTime + seg.beatInterval / 2, isWholeBeat: false });
+        }
+      }
+    }
+
+    // Sort by time for consistent rendering order
+    beats.sort((a, b) => a.time - b.time);
+    return beats;
   }
 
   /* ── Layout (Perspective) ── */

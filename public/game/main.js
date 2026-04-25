@@ -277,7 +277,13 @@ async function boot() {
       }
     };
 
-    const missHandler = () => { if (!gameActive) return; if (hitSounds) hitSounds.miss(); };
+    const missHandler = ({ sliderBreak } = {}) => { if (!gameActive) return; if (hitSounds) hitSounds.miss(); };
+    const sliderBreakHandler = ({ note }) => {
+      if (!gameActive) return;
+      if (hitSounds) hitSounds.miss();
+      // Red flash on the lane at judge line
+      noteRenderer.addMissFlash(note.lane, currentLaneCount);
+    };
     const comboBreakHandler = ({ combo }) => { judgementDisplay.showComboBreak(combo); };
 
     const releaseHandler = ({ lane, releaseTime }) => {
@@ -304,6 +310,7 @@ async function boot() {
     EventBus.on('input:hit', hitHandler);
     EventBus.on('input:release', releaseHandler);
     EventBus.on('note:miss', missHandler);
+    EventBus.on('note:sliderbreak', sliderBreakHandler);
     EventBus.on('combo:break', comboBreakHandler);
 
     hud.show();
@@ -382,7 +389,7 @@ async function boot() {
       render(delta) {
         if (!gameActive) return;
         const ct = audio.currentTime;
-        noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount, delta, bpm: currentBeatMap.metadata.bpm || 120 });
+        noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount, delta, bpm: currentBeatMap.metadata.bpm || 120, bpmChanges: currentBeatMap.bpmChanges });
         three.update(performance.now());
       }
     });
@@ -393,6 +400,7 @@ async function boot() {
       EventBus.off('input:hit', hitHandler);
       EventBus.off('input:release', releaseHandler);
       EventBus.off('note:miss', missHandler);
+      EventBus.off('note:sliderbreak', sliderBreakHandler);
       EventBus.off('combo:break', comboBreakHandler);
     };
   };
@@ -598,6 +606,38 @@ async function boot() {
 
     showStep();
   };
+
+  // ── Prevent browser defaults on game keys when game is active ──
+  // This fixes the issue where keypresses stop working after browser shortcuts
+  // (Space scrolling, Tab focus, Ctrl+D bookmark, F5 refresh, etc.)
+  window.addEventListener('keydown', (e) => {
+    if (!gameActive) return;
+    // Block keys that can steal focus or cause browser navigation
+    const blockedCodes = ['Space', 'Tab', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'];
+    if (blockedCodes.includes(e.code)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    // Block Ctrl+key and Alt+key combinations that may steal focus
+    if (e.ctrlKey || e.altKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true); // capture phase — runs before InputManager's handler
+
+  // Keep focus on the game when window regains focus during gameplay
+  window.addEventListener('focus', () => {
+    if (gameActive) {
+      // Re-assert input manager is enabled
+      if (!input._enabled) input.enable();
+    }
+  });
+
+  // Prevent context menu during gameplay (right-click)
+  window.addEventListener('contextmenu', (e) => {
+    if (gameActive) e.preventDefault();
+  });
 
   EventBus.on('game:pause', pauseGame);
   window.addEventListener('keydown', (e) => {
