@@ -829,15 +829,32 @@ async function boot() {
     try {
       const actx = audio.ctx;
       if (!actx || actx.state === 'suspended') return;
-      const len = Math.max(1, Math.floor(actx.sampleRate * 0.012));
+      // Layer 1: Tonal click (short sine ping)
+      const o = actx.createOscillator();
+      const oEnv = actx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(1800, actx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(900, actx.currentTime + 0.015);
+      o.connect(oEnv);
+      oEnv.gain.setValueAtTime(0.35, actx.currentTime);
+      oEnv.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 0.02);
+      o.start(); o.stop(actx.currentTime + 0.02);
+      // Layer 2: Mechanical tick (filtered noise click)
+      const len = Math.max(1, Math.floor(actx.sampleRate * 0.008));
       const buf = actx.createBuffer(1, len, actx.sampleRate);
       const d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.1));
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.05));
       const src = actx.createBufferSource();
       src.buffer = buf;
+      const hp = actx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 2500;
+      const bp = actx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = 4000; bp.Q.value = 1.5;
       const g = actx.createGain();
-      g.gain.setValueAtTime(0.09, actx.currentTime);
-      src.connect(g); g.connect(actx.destination);
+      g.gain.setValueAtTime(0.25, actx.currentTime);
+      src.connect(hp); hp.connect(bp); bp.connect(g);
+      g.connect(actx.destination);
+      oEnv.connect(actx.destination);
       src.start();
     } catch (_) {}
   };
@@ -852,7 +869,7 @@ async function boot() {
   };
 
   const _knobSVG = (k, vol, active, size) => {
-    const arcOff = KNOB_ARC * (1 - vol / 100);
+    const filled = KNOB_ARC * (vol / 100);
     const indAngle = -135 + (vol / 100) * 270;
     const glowA = active ? 0.18 : 0.06;
     return `
@@ -862,18 +879,18 @@ async function boot() {
           <circle cx="50" cy="50" r="${KNOB_R}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"
             stroke-dasharray="${KNOB_ARC} ${KNOB_GAP}" stroke-linecap="round" transform="rotate(135 50 50)" />
           <circle cx="50" cy="50" r="${KNOB_R}" fill="none" stroke="${k.color}" stroke-width="5"
-            stroke-dasharray="${KNOB_ARC} ${KNOB_GAP}" stroke-linecap="round"
+            stroke-linecap="round"
             transform="rotate(135 50 50)" class="vk-prog" data-knob="${k.id}"
-            style="stroke-dashoffset:${arcOff}px;transition:stroke-dashoffset 0.15s cubic-bezier(0.25,0.46,0.45,0.94);" />
+            style="stroke-dasharray:${filled} ${KNOB_CIRC};transition:stroke-dasharray 0.15s cubic-bezier(0.25,0.46,0.45,0.94);" />
           <circle cx="50" cy="50" r="28" fill="rgba(14,14,16,0.95)" stroke="rgba(255,255,255,${active ? 0.12 : 0.06})" stroke-width="1.2" class="vk-face" data-knob="${k.id}" />
           <circle cx="50" cy="50" r="25" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="0.5" />
+          <text x="50" y="54" text-anchor="middle" fill="${active ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.35)'}" font-family="var(--zzz-font)" font-weight="800" font-size="8" letter-spacing="0.18em" class="vk-inner-label" data-knob="${k.id}">${k.label}</text>
           <line x1="50" y1="50" x2="50" y2="24" stroke="${k.color}" stroke-width="2.5" stroke-linecap="round"
             transform="rotate(${indAngle} 50 50)" class="vk-ind" data-knob="${k.id}"
             style="transition:transform 0.15s cubic-bezier(0.25,0.46,0.45,0.94);" />
           <circle cx="50" cy="50" r="2.5" fill="rgba(255,255,255,0.1)" />
         </svg>
       </div>
-      <span class="vk-label" data-knob="${k.id}" style="color:${active ? k.color : 'rgba(255,255,255,0.4)'};">${k.label}</span>
       <span class="vk-val" data-knob="${k.id}">${vol}%</span>
     </div>`;
   };
@@ -906,10 +923,10 @@ async function boot() {
       const on = el.dataset.knob === id;
       el.classList.toggle('vol-knob--active', on);
       const k = KNOBS.find(x => x.id === el.dataset.knob);
-      const lbl = el.querySelector('.vk-label');
+      const lbl = el.querySelector('.vk-inner-label');
       const bg = el.querySelector('.vol-knob-bg');
       const face = el.querySelector('.vk-face');
-      if (lbl && k) lbl.style.color = on ? k.color : 'rgba(255,255,255,0.4)';
+      if (lbl && k) lbl.setAttribute('fill', on ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.35)');
       if (bg && k) {
         const a = on ? 0.09 : 0.04;
         const gl = on ? 0.35 : 0.18;
@@ -920,10 +937,10 @@ async function boot() {
   };
 
   const _updKnob = (id, v) => {
-    const arcOff = KNOB_ARC * (1 - v / 100);
+    const filled = KNOB_ARC * (v / 100);
     const ang = -135 + (v / 100) * 270;
     const prog = _volumeOverlay?.querySelector(`.vk-prog[data-knob="${id}"]`);
-    if (prog) prog.style.strokeDashoffset = arcOff + 'px';
+    if (prog) prog.style.strokeDasharray = `${filled} ${KNOB_CIRC}`;
     const ind = _volumeOverlay?.querySelector(`.vk-ind[data-knob="${id}"]`);
     if (ind) ind.setAttribute('transform', `rotate(${ang} 50 50)`);
     const val = _volumeOverlay?.querySelector(`.vk-val[data-knob="${id}"]`);

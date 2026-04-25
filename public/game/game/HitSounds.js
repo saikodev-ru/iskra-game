@@ -90,7 +90,7 @@ export default class HitSounds {
 
   /** Perfect / MAX hit */
   perfect() {
-    if (this._playBuffer('perfect', 0.6)) return;
+    if (this._playBuffer('perfect', 0.9)) return;
     // Synthesized fallback
     this._play(g => {
       const dur = 0.08;
@@ -107,7 +107,7 @@ export default class HitSounds {
       const hp = this._ctx.createBiquadFilter();
       hp.type = 'highpass'; hp.frequency.value = 6000;
       src.connect(filt); filt.connect(hp); hp.connect(g);
-      g.gain.setValueAtTime(0.3, this._ctx.currentTime);
+      g.gain.setValueAtTime(0.9, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start(); src.stop(this._ctx.currentTime + dur);
     });
@@ -119,7 +119,7 @@ export default class HitSounds {
       o.frequency.setValueAtTime(6800, this._ctx.currentTime);
       o.frequency.exponentialRampToValueAtTime(5200, this._ctx.currentTime + 0.04);
       o.connect(env); env.connect(g);
-      env.gain.setValueAtTime(0.06, this._ctx.currentTime);
+      env.gain.setValueAtTime(0.18, this._ctx.currentTime);
       env.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + 0.04);
       o.start(); o.stop(this._ctx.currentTime + 0.04);
     });
@@ -127,7 +127,7 @@ export default class HitSounds {
 
   /** Great hit */
   great() {
-    if (this._playBuffer('great', 0.5)) return;
+    if (this._playBuffer('great', 0.85)) return;
     // Synthesized fallback — crisp open-hat
     this._play(g => {
       const dur = 0.06;
@@ -144,7 +144,7 @@ export default class HitSounds {
       const hp = this._ctx.createBiquadFilter();
       hp.type = 'highpass'; hp.frequency.value = 5000;
       src.connect(filt); filt.connect(hp); hp.connect(g);
-      g.gain.setValueAtTime(0.25, this._ctx.currentTime);
+      g.gain.setValueAtTime(0.75, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start(); src.stop(this._ctx.currentTime + dur);
     });
@@ -152,7 +152,7 @@ export default class HitSounds {
 
   /** Good hit */
   good() {
-    if (this._playBuffer('good', 0.4)) return;
+    if (this._playBuffer('good', 0.75)) return;
     // Synthesized fallback — softer tick
     this._play(g => {
       const dur = 0.05;
@@ -167,7 +167,7 @@ export default class HitSounds {
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'bandpass'; filt.frequency.value = 6000; filt.Q.value = 1.0;
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.2, this._ctx.currentTime);
+      g.gain.setValueAtTime(0.6, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start(); src.stop(this._ctx.currentTime + dur);
     });
@@ -180,7 +180,7 @@ export default class HitSounds {
 
   /** Empty key press / tap — quiet tick */
   emptyHit() {
-    if (this._playBuffer('tap', 0.25)) return;
+    if (this._playBuffer('tap', 0.6)) return;
     this._play(g => {
       const dur = 0.03;
       const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
@@ -193,7 +193,7 @@ export default class HitSounds {
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'highpass'; filt.frequency.value = 7000;
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.1, this._ctx.currentTime);
+      g.gain.setValueAtTime(0.3, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start(); src.stop(this._ctx.currentTime + dur);
     });
@@ -232,7 +232,7 @@ export default class HitSounds {
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'lowpass'; filt.frequency.value = 400;
       src.buffer = buf; src.connect(filt); filt.connect(g);
-      g.gain.value = 0.8; src.start(); src.stop(this._ctx.currentTime + dur);
+      g.gain.value = 1.0; src.start(); src.stop(this._ctx.currentTime + dur);
     });
   }
 
@@ -328,7 +328,7 @@ export default class HitSounds {
         o.type = 'sine'; o.connect(env); env.connect(g);
         o.frequency.value = pitch + i * 200;
         env.gain.setValueAtTime(0, this._ctx.currentTime + delay);
-        env.gain.linearRampToValueAtTime(0.9, this._ctx.currentTime + delay + 0.02);
+        env.gain.linearRampToValueAtTime(1.0, this._ctx.currentTime + delay + 0.02);
         env.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + delay + 0.1);
         o.start(this._ctx.currentTime + delay); o.stop(this._ctx.currentTime + delay + 0.1);
       });

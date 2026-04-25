@@ -42,25 +42,27 @@ body.zzz-active::before {
   position: fixed; inset: 0; z-index: 1;
   pointer-events: none;
   background:
-    repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(0,0,0,0.14) 4px, rgba(0,0,0,0.14) 6px),
-    repeating-linear-gradient(0deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 14px);
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px),
+    repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(0,0,0,0.06) 8px, rgba(0,0,0,0.06) 10px),
+    repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(0,0,0,0.02) 3px, rgba(0,0,0,0.02) 4px);
   mix-blend-mode: multiply;
 }
 .crt-overlay::before {
   content: '';
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.35) 100%);
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.4) 100%);
 }
 .crt-overlay::after {
   content: '';
   position: absolute; inset: 0;
-  animation: crt-flicker 0.15s infinite;
-  opacity: 0.015;
+  animation: crt-flicker 0.1s infinite;
+  opacity: 0.025;
   background: white;
 }
 @keyframes crt-flicker {
-  0%, 100% { opacity: 0.01; }
-  50% { opacity: 0.025; }
+  0%, 100% { opacity: 0.015; }
+  30% { opacity: 0.035; }
+  70% { opacity: 0.01; }
 }
 
 /* ── GLITCH TRANSITION ────────────────────── */
@@ -1884,13 +1886,12 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 }
 
 /* VOLUME KNOBS */
-.vol-knob-wrap { display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;user-select:none;transition:transform 0.2s ease; }
+.vol-knob-wrap { display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;user-select:none;transition:transform 0.2s ease; }
 .vol-knob-wrap:hover { transform:scale(1.06); }
 .vol-knob-wrap:hover .vol-knob-bg { box-shadow:0 6px 28px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.07),inset 0 1px 0 rgba(255,255,255,0.06); }
 .vol-knob-wrap:active { transform:scale(0.97); }
 .vol-knob-bg { transition:box-shadow 0.25s ease,transform 0.2s ease; }
-.vk-label { font-family:var(--zzz-font);font-weight:700;font-size:8.5px;letter-spacing:0.16em;text-transform:uppercase;transition:color 0.2s ease;margin-top:-2px; }
-.vk-val { font-family:var(--zzz-font);font-weight:900;font-size:13px;color:rgba(255,255,255,0.7);letter-spacing:0.04em;min-width:32px;text-align:center; }
+.vk-val { font-family:var(--zzz-font);font-weight:900;font-size:15px;color:rgba(255,255,255,0.85);letter-spacing:0.06em;min-width:36px;text-align:center;-webkit-text-stroke:0.3px rgba(255,255,255,0.3);text-shadow:0 0 8px rgba(255,255,255,0.08); }
 `;
 
 let _crtSounds = null;

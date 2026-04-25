@@ -35,7 +35,14 @@ export default class SongSelect {
     // Transition state
     this._transitioning = false;
     this._leavingToGame = false;  // true when transitioning to game screen
+    this._leavingToMenu = false;  // true when going back to main menu (keep audio playing)
     this._initialized = false;  // true after first init() completes
+  }
+
+  /** Navigate back to main menu — keeps music preview playing */
+  _goBackToMenu() {
+    this._leavingToMenu = true;
+    this.screens.show('main-menu');
   }
 
   /** Get local best record for a beatmap difficulty (legacy compat) */
@@ -135,7 +142,7 @@ export default class SongSelect {
     if (this.beatmapSets.length > 0) this._restoreSelection();
     else this._renderEmptyState();
 
-    document.getElementById('back-btn').addEventListener('click', () => this.screens.show('main-menu'));
+    document.getElementById('back-btn').addEventListener('click', () => this._goBackToMenu());
     document.getElementById('osz-input').addEventListener('change', (e) => this._handleOszFiles(e.target.files));
     document.getElementById('song-search').addEventListener('input', (e) => this._filterSongs(e.target.value));
 
@@ -201,14 +208,14 @@ export default class SongSelect {
       else if (e.code === 'ArrowLeft') { e.preventDefault(); this._navigateDiffLeft(); }
       else if (e.code === 'ArrowRight') { e.preventDefault(); this._navigateDiffRight(); }
       else if (e.code === 'Enter') { e.preventDefault(); this._confirmSong(); }
-      else if (e.code === 'Escape') { e.preventDefault(); this.screens.show('main-menu'); }
+      else if (e.code === 'Escape') { e.preventDefault(); this._goBackToMenu(); }
       else if (e.code === 'Delete') { e.preventDefault(); this._deleteSelected(); }
     };
     window.addEventListener('keydown', this._keyHandler);
 
     if (this.three) {
       // Enable CRT effect on song select (scanlines, barrel distortion)
-      this.three.setCrtIntensity(0.7);
+      this.three.setCrtIntensity(0.85);
       // Disable chromatic aberration (RGB shift) on song select — keep it clean
       this.three.setChromaticAberration(0);
       // Create CRT overlay for additional scanline effect
@@ -242,7 +249,7 @@ export default class SongSelect {
 
     // DOM event listeners (re-attach since DOM is rebuilt by build())
     const backBtn = document.getElementById('back-btn');
-    if (backBtn) backBtn.addEventListener('click', () => this.screens.show('main-menu'));
+    if (backBtn) backBtn.addEventListener('click', () => this._goBackToMenu());
     const oszInput = document.getElementById('osz-input');
     if (oszInput) oszInput.addEventListener('change', (e) => this._handleOszFiles(e.target.files));
     const searchInput = document.getElementById('song-search');
@@ -294,14 +301,14 @@ export default class SongSelect {
       else if (e.code === 'ArrowLeft') { e.preventDefault(); this._navigateDiffLeft(); }
       else if (e.code === 'ArrowRight') { e.preventDefault(); this._navigateDiffRight(); }
       else if (e.code === 'Enter') { e.preventDefault(); this._confirmSong(); }
-      else if (e.code === 'Escape') { e.preventDefault(); this.screens.show('main-menu'); }
+      else if (e.code === 'Escape') { e.preventDefault(); this._goBackToMenu(); }
       else if (e.code === 'Delete') { e.preventDefault(); this._deleteSelected(); }
     };
     window.addEventListener('keydown', this._keyHandler);
 
     // CRT effects
     if (this.three) {
-      this.three.setCrtIntensity(0.7);
+      this.three.setCrtIntensity(0.85);
       this.three.setChromaticAberration(0);
       ZZZTheme.createCrtOverlay();
     }
@@ -1403,10 +1410,9 @@ export default class SongSelect {
     if (this._dragUpHandler) window.removeEventListener('mouseup', this._dragUpHandler);
     if (this._recordsChangedHandler) EventBus.off('records:changed', this._recordsChangedHandler);
 
-    // Stop preview — but if we're leaving to game, DON'T call _stopPreview()
-    // because it would schedule audio.stop() 200ms later, which would kill
-    // the game's audio that startGame() just started playing.
-    if (this._leavingToGame) {
+    // Stop preview — but if we're leaving to game or main-menu, DON'T call _stopPreview()
+    // because it would schedule audio.stop() which would kill ongoing audio.
+    if (this._leavingToGame || this._leavingToMenu) {
       // Just clean up timers/intervals without scheduling new audio.stop()
       if (this._previewFadeTimeout) { clearTimeout(this._previewFadeTimeout); this._previewFadeTimeout = null; }
       if (this._previewInterval) { clearInterval(this._previewInterval); this._previewInterval = null; }
@@ -1415,10 +1421,13 @@ export default class SongSelect {
       this._stopPreview();
     }
 
-    // Clean up CRT
-    if (this.three) {
+    // Clean up CRT — but keep it when going back to main menu
+    if (this.three && !this._leavingToMenu) {
       this.three.setCrtIntensity(0);
       ZZZTheme.removeCrtOverlay();
+    } else if (this.three && this._leavingToMenu) {
+      // Reduce CRT intensity for main menu
+      this.three.setCrtIntensity(0.3);
     }
 
     // Clean up transition overlay if still present
@@ -1428,5 +1437,6 @@ export default class SongSelect {
     // Reset transitioning state
     this._transitioning = false;
     this._leavingToGame = false;
+    this._leavingToMenu = false;
   }
 }

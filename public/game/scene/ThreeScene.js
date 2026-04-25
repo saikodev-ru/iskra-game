@@ -370,13 +370,16 @@ export default class ThreeScene {
           float cornerDark = smoothstep(0.0, 0.12, cornerLen);
           color *= 1.0 - cornerDark * 0.5;
 
-          // CRT: scanlines + phosphor flicker (wider scanlines: 500 instead of 800)
+          // CRT: scanlines + phosphor flicker + color fringing
           if (uCrtIntensity > 0.01) {
-            float scanline = sin(vUv.y * 500.0 + uTime * 2.0) * 0.5 + 0.5;
-            float scanDark = 1.0 - scanline * 0.12 * uCrtIntensity;
+            float scanline = sin(vUv.y * 600.0 + uTime * 2.0) * 0.5 + 0.5;
+            float scanDark = 1.0 - scanline * 0.18 * uCrtIntensity;
             color *= scanDark;
-            float flicker = 1.0 - 0.02 * uCrtIntensity * hash(uTime * 60.0);
+            float flicker = 1.0 - 0.04 * uCrtIntensity * hash(uTime * 60.0);
             color *= flicker;
+            // Subtle RGB shift for CRT color fringing
+            color.r *= 1.0 + 0.015 * uCrtIntensity;
+            color.b *= 1.0 - 0.015 * uCrtIntensity;
           }
 
           // Miss flash — red overlay
@@ -690,13 +693,16 @@ export default class ThreeScene {
           float cornerDark = smoothstep(0.0, 0.12, cornerLen);
           color *= 1.0 - cornerDark * 0.5;
 
-          // CRT: scanlines + phosphor flicker (wider scanlines: 500 instead of 800)
+          // CRT: scanlines + phosphor flicker + color fringing
           if (uCrtIntensity > 0.01) {
-            float scanline = sin(vUv.y * 500.0 + uTime * 2.0) * 0.5 + 0.5;
-            float scanDark = 1.0 - scanline * 0.12 * uCrtIntensity;
+            float scanline = sin(vUv.y * 600.0 + uTime * 2.0) * 0.5 + 0.5;
+            float scanDark = 1.0 - scanline * 0.18 * uCrtIntensity;
             color *= scanDark;
-            float flicker = 1.0 - 0.02 * uCrtIntensity * hash(uTime * 60.0);
+            float flicker = 1.0 - 0.04 * uCrtIntensity * hash(uTime * 60.0);
             color *= flicker;
+            // Subtle RGB shift for CRT color fringing
+            color.r *= 1.0 + 0.015 * uCrtIntensity;
+            color.b *= 1.0 - 0.015 * uCrtIntensity;
           }
 
           // Miss flash — red overlay
