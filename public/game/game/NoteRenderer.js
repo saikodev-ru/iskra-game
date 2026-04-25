@@ -621,7 +621,6 @@ export default class NoteRenderer {
     }
 
     const ctx = this.ctx;
-    const sa = this.safeArea;
     const topY = this._getTopY();
     const judgeLineY = this._getJudgeLineY();
     const bottomY = this._getBottomY();
@@ -633,181 +632,215 @@ export default class NoteRenderer {
     const intensity = this._kiaiIntensity;
     const pulse = this._kiaiSmoothPulse;
 
-    // Geometry
-    const leftTop = this._getLaneGeometry(0, topY, laneCount);
-    const rightTop = this._getLaneGeometry(laneCount, topY, laneCount);
-    const leftJudge = this._getLaneGeometry(0, judgeLineY, laneCount);
-    const rightJudge = this._getLaneGeometry(laneCount, judgeLineY, laneCount);
-    const leftBottom = this._getLaneGeometry(0, bottomY, laneCount);
-    const rightBottom = this._getLaneGeometry(laneCount, bottomY, laneCount);
+    // Geometry — key edge points
+    const lxT = this._getLaneGeometry(0, topY, laneCount).x;
+    const rxT = this._getLaneGeometry(laneCount, topY, laneCount).x;
+    const lxJ = this._getLaneGeometry(0, judgeLineY, laneCount).x;
+    const rxJ = this._getLaneGeometry(laneCount, judgeLineY, laneCount).x;
+    const lxB = this._getLaneGeometry(0, bottomY, laneCount).x;
+    const rxB = this._getLaneGeometry(laneCount, bottomY, laneCount).x;
+
+    // Perspective helper: get left/right X at any Y along the playfield edges
+    const perspX = (y) => {
+      if (y <= judgeLineY) {
+        const t = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
+        return { l: lxT + (lxJ - lxT) * t, r: rxT + (rxJ - rxT) * t };
+      }
+      const t = Math.max(0, Math.min(1, (y - judgeLineY) / (bottomY - judgeLineY)));
+      return { l: lxJ + (lxB - lxJ) * t, r: rxJ + (rxB - rxJ) * t };
+    };
+
+    // Perspective scale factor: 0 at top (far), 1 at bottom (near)
+    const perspScale = (y) => (y - topY) / (bottomY - topY);
+
+    // Draw the playfield trapezoid path (reused)
+    const pfPath = () => {
+      ctx.beginPath();
+      ctx.moveTo(lxT, topY); ctx.lineTo(rxT, topY);
+      ctx.lineTo(rxJ, judgeLineY); ctx.lineTo(rxB, bottomY);
+      ctx.lineTo(lxB, bottomY); ctx.lineTo(lxJ, judgeLineY);
+      ctx.closePath();
+    };
 
     // Flame flicker noise
     this._kiaiFlamePhase += delta * 15;
     const noise = (Math.sin(this._kiaiFlamePhase * 3.7) * 0.3 + Math.sin(this._kiaiFlamePhase * 7.1) * 0.2 + Math.sin(this._kiaiFlamePhase * 13.3) * 0.15) * 0.65 + 0.5;
 
-    // ── Layer 1: Brighter playfield (subtle white tint overlay) ──
+    // ════════════════════════════════════════════════════════
+    //  Layer 1: Brighter playfield — perspective gradient
+    //  (brighter at bottom = closer to viewer = more lit)
+    // ════════════════════════════════════════════════════════
     ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(leftTop.x, topY);
-    ctx.lineTo(rightTop.x, topY);
-    ctx.lineTo(rightJudge.x, judgeLineY);
-    ctx.lineTo(rightBottom.x, bottomY);
-    ctx.lineTo(leftBottom.x, bottomY);
-    ctx.lineTo(leftJudge.x, judgeLineY);
-    ctx.closePath();
-    ctx.clip();
+    pfPath(); ctx.clip();
 
-    const brightnessBase = intensity * 0.06;
-    const brightnessPulse = pulse * 0.08;
-    ctx.fillStyle = `rgba(255,255,255,${brightnessBase + brightnessPulse})`;
-    ctx.fillRect(leftTop.x - 20, topY - 20, rightTop.x - leftTop.x + 40, bottomY - topY + 40);
+    // Draw as horizontal bands following perspective width at each Y
+    const brightBase = intensity * 0.06;
+    const brightPulse = pulse * 0.08;
+    const bands = 16;
+    for (let i = 0; i < bands; i++) {
+      const y0 = topY + (bottomY - topY) * (i / bands);
+      const y1 = topY + (bottomY - topY) * ((i + 1) / bands);
+      const p0 = perspX(y0);
+      const p1 = perspX(y1);
+      // Brightness increases towards bottom (perspective)
+      const ps = perspScale((y0 + y1) / 2);
+      const alpha = (brightBase + brightPulse) * (0.3 + ps * 0.7);
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.beginPath();
+      ctx.moveTo(p0.l, y0); ctx.lineTo(p0.r, y0);
+      ctx.lineTo(p1.r, y1); ctx.lineTo(p1.l, y1);
+      ctx.closePath();
+      ctx.fill();
+    }
 
-    // ── Layer 2: White beat flash on playfield background ──
-    // Flash spikes on beat, decays fast
+    // ════════════════════════════════════════════════════════
+    //  Layer 2: White beat flash — perspective-expanding rings
+    // ════════════════════════════════════════════════════════
     if (this._kiaiBeatPulse > 0.5) {
       this._kiaiFlashAlpha = Math.min(1, this._kiaiFlashAlpha + this._kiaiBeatPulse * 0.5);
     }
     this._kiaiFlashAlpha *= Math.max(0, 1 - delta * 6);
 
     if (this._kiaiFlashAlpha > 0.02) {
-      const flashA = this._kiaiFlashAlpha * intensity * 0.15;
-      const flashGrad = ctx.createRadialGradient(
-        (leftJudge.x + rightJudge.x) / 2, judgeLineY, 0,
-        (leftJudge.x + rightJudge.x) / 2, judgeLineY, (bottomY - topY) * 0.8
-      );
-      flashGrad.addColorStop(0, `rgba(255,255,255,${flashA})`);
-      flashGrad.addColorStop(0.4, `rgba(255,240,220,${flashA * 0.5})`);
-      flashGrad.addColorStop(1, 'rgba(255,220,180,0)');
-      ctx.fillStyle = flashGrad;
-      ctx.fillRect(leftTop.x - 20, topY - 20, rightTop.x - leftTop.x + 40, bottomY - topY + 40);
+      const flashA = this._kiaiFlashAlpha * intensity;
+      // Draw expanding trapezoid rings from judge line
+      const rings = 8;
+      for (let i = 0; i < rings; i++) {
+        const t = i / rings; // 0 = at judge line, 1 = far away
+        const alpha = flashA * 0.12 * (1 - t * t);
+        if (alpha < 0.003) break;
+        // Distance in pixels, scales with perspective
+        const dist = t * (bottomY - topY) * 0.9;
+        // Up from judge line
+        const yUp = judgeLineY - dist * 0.6;
+        const yDown = judgeLineY + dist * 0.8;
+        if (yUp < topY - 10 || yDown > bottomY + 10) continue;
+        const pUp = perspX(Math.max(topY, yUp));
+        const pDown = perspX(Math.min(bottomY, yDown));
+        const pUpOuter = perspX(Math.max(topY, yUp - dist * 0.06));
+        const pDownOuter = perspX(Math.min(bottomY, yDown + dist * 0.06));
+        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(pUpOuter.l, Math.max(topY, yUp - dist * 0.06));
+        ctx.lineTo(pUpOuter.r, Math.max(topY, yUp - dist * 0.06));
+        ctx.lineTo(pDownOuter.r, Math.min(bottomY, yDown + dist * 0.06));
+        ctx.lineTo(pDownOuter.l, Math.min(bottomY, yDown + dist * 0.06));
+        ctx.lineTo(pDown.l, Math.min(bottomY, yDown));
+        ctx.lineTo(pDown.r, Math.min(bottomY, yDown));
+        ctx.lineTo(pUp.r, Math.max(topY, yUp));
+        ctx.lineTo(pUp.l, Math.max(topY, yUp));
+        ctx.closePath();
+        ctx.fill();
+      }
     }
 
     ctx.restore();
 
-    // ── Layer 3: 3D pulsing border glow on playfield edges ──
+    // ════════════════════════════════════════════════════════
+    //  Layer 3: 3D border glow with perspective walls
+    // ════════════════════════════════════════════════════════
     this._kiaiBorderGlow += (pulse - this._kiaiBorderGlow) * Math.min(1, delta * 16);
     const borderAlpha = intensity * 0.35 + this._kiaiBorderGlow * 0.55;
     if (borderAlpha > 0.02) {
       ctx.save();
 
-      const wallDepth = 14 + this._kiaiBorderGlow * 6; // extrusion depth in px
-      const lxT = leftTop.x, rxT = rightTop.x;
-      const lxJ = leftJudge.x, rxJ = rightJudge.x;
-      const lxB = leftBottom.x, rxB = rightBottom.x;
+      const baseWallDepth = 14 + this._kiaiBorderGlow * 6;
 
-      // Build inner contour (the playfield edge) and outer contour (shifted outward)
-      // Left wall: from top-left → judge-left → bottom-left, outer is shifted left
-      const oLxT = lxT - wallDepth, oRxT = rxT + wallDepth;
-      const oLxJ = lxJ - wallDepth, oRxJ = rxJ + wallDepth;
-      const oLxB = lxB - wallDepth, oRxB = rxB + wallDepth;
-      const oTopY = topY - wallDepth * 0.5;
-      const oBottomY = bottomY + wallDepth * 0.5;
+      // Perspective-scaled wall depth: smaller at top (far), bigger at bottom (near)
+      const wallD = (y) => baseWallDepth * (0.4 + perspScale(y) * 0.8);
 
-      // --- Draw each wall face as a filled quad with 3D shading ---
+      // Sample outer contour points at top, judge, bottom (perspective-aware)
+      const wdTop = wallD(topY);
+      const wdJudge = wallD(judgeLineY);
+      const wdBottom = wallD(bottomY);
+      const oLxT = lxT - wdTop, oRxT = rxT + wdTop;
+      const oLxJ = lxJ - wdJudge, oRxJ = rxJ + wdJudge;
+      const oLxB = lxB - wdBottom, oRxB = rxB + wdBottom;
+      const oTopY = topY - wdTop * 0.4;
+      const oBottomY = bottomY + wdBottom * 0.4;
 
-      // Helper: draw a 4-point quad with shading
+      // --- Draw wall faces with 3D shading ---
       const drawWall = (ax, ay, bx, by, cx, cy, dx, dy, bright, alpha) => {
         ctx.beginPath();
         ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(cx, cy); ctx.lineTo(dx, dy);
         ctx.closePath();
-        // Gradient across the wall for 3D look: lit side → dark side
         const midX1 = (ax + bx) / 2, midY1 = (ay + by) / 2;
         const midX2 = (cx + dx) / 2, midY2 = (cy + dy) / 2;
         const g = ctx.createLinearGradient(midX1, midY1, midX2, midY2);
         const baseA = alpha * bright;
-        g.addColorStop(0, `rgba(255,${200 + bright * 55},${100 + bright * 80},${baseA})`);
-        g.addColorStop(0.4, `rgba(255,${180 + bright * 40},${80 + bright * 40},${baseA * 0.8})`);
-        g.addColorStop(1, `rgba(200,${100 + bright * 30},${40 + bright * 20},${baseA * 0.3})`);
+        g.addColorStop(0, `rgba(255,${200 + bright * 55 | 0},${100 + bright * 80 | 0},${baseA})`);
+        g.addColorStop(0.4, `rgba(255,${180 + bright * 40 | 0},${80 + bright * 40 | 0},${baseA * 0.8})`);
+        g.addColorStop(1, `rgba(200,${100 + bright * 30 | 0},${40 + bright * 20 | 0},${baseA * 0.3})`);
         ctx.fillStyle = g;
         ctx.fill();
       };
 
-      // Top edge wall (inner=playfield top, outer=shifted up+out)
+      // Top edge
       drawWall(lxT, topY, rxT, topY, oRxT, oTopY, oLxT, oTopY, 1.0, borderAlpha * 0.6);
-
-      // Left wall: top → judge → bottom (inner), outer shifted left
+      // Left wall (2 segments through judge line)
       drawWall(lxT, topY, lxJ, judgeLineY, oLxJ, judgeLineY, oLxT, oTopY, 0.6, borderAlpha * 0.5);
       drawWall(lxJ, judgeLineY, lxB, bottomY, oLxB, oBottomY, oLxJ, judgeLineY, 0.6, borderAlpha * 0.5);
-
-      // Right wall: top → judge → bottom (inner), outer shifted right
+      // Right wall (2 segments)
       drawWall(rxT, topY, rxJ, judgeLineY, oRxJ, judgeLineY, oRxT, oTopY, 0.6, borderAlpha * 0.5);
       drawWall(rxJ, judgeLineY, rxB, bottomY, oRxB, oBottomY, oRxJ, judgeLineY, 0.6, borderAlpha * 0.5);
-
-      // Bottom edge wall
+      // Bottom edge
       drawWall(lxB, bottomY, rxB, bottomY, oRxB, oBottomY, oLxB, oBottomY, 0.4, borderAlpha * 0.3);
 
-      // --- Inner highlight line (bright edge where wall meets playfield) ---
-      ctx.beginPath();
-      ctx.moveTo(lxT, topY);
-      ctx.lineTo(lxJ, judgeLineY);
-      ctx.lineTo(lxB, bottomY);
-      ctx.lineTo(rxB, bottomY);
-      ctx.lineTo(rxJ, judgeLineY);
-      ctx.lineTo(rxT, topY);
-      ctx.closePath();
+      // --- Inner highlight edge ---
+      pfPath();
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = `rgba(255,240,180,${borderAlpha * 0.9})`;
       ctx.stroke();
 
-      // --- 3D bloom: glow emanates INWARD from walls ---
+      // --- Inward glow: perspective trapezoid strips ---
       ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(lxT, topY);
-      ctx.lineTo(rxT, topY);
-      ctx.lineTo(rxJ, judgeLineY);
-      ctx.lineTo(rxB, bottomY);
-      ctx.lineTo(lxB, bottomY);
-      ctx.lineTo(lxJ, judgeLineY);
-      ctx.closePath();
-      ctx.clip();
+      pfPath(); ctx.clip();
 
-      // Left side inward glow
-      const glowW = 40 + this._kiaiBorderGlow * 30;
-      const leftGlow = ctx.createLinearGradient(lxJ, 0, lxJ + glowW, 0);
-      leftGlow.addColorStop(0, `rgba(255,200,100,${borderAlpha * 0.25})`);
-      leftGlow.addColorStop(0.5, `rgba(255,180,80,${borderAlpha * 0.08})`);
-      leftGlow.addColorStop(1, 'rgba(255,160,60,0)');
-      ctx.fillStyle = leftGlow;
-      ctx.fillRect(lxJ - 5, topY - 5, glowW + 10, bottomY - topY + 10);
+      const glowStrips = 10;
+      const glowMaxW = 50 + this._kiaiBorderGlow * 35;
+      for (let i = 0; i < glowStrips; i++) {
+        const t = i / glowStrips;
+        const inset = glowMaxW * t; // how far inward from edge
+        const alpha = borderAlpha * 0.2 * (1 - t * t);
+        if (alpha < 0.003) break;
 
-      // Right side inward glow
-      const rightGlow = ctx.createLinearGradient(rxJ, 0, rxJ - glowW, 0);
-      rightGlow.addColorStop(0, `rgba(255,200,100,${borderAlpha * 0.25})`);
-      rightGlow.addColorStop(0.5, `rgba(255,180,80,${borderAlpha * 0.08})`);
-      rightGlow.addColorStop(1, 'rgba(255,160,60,0)');
-      ctx.fillStyle = rightGlow;
-      ctx.fillRect(rxJ - glowW - 5, topY - 5, glowW + 10, bottomY - topY + 10);
+        // Build inset trapezoid at 3 key Y positions
+        const yt = topY;
+        const yj = judgeLineY;
+        const yb = bottomY;
 
-      // Top edge inward glow
-      const topGlow = ctx.createLinearGradient(0, topY, 0, topY + glowW * 0.7);
-      topGlow.addColorStop(0, `rgba(255,220,140,${borderAlpha * 0.2})`);
-      topGlow.addColorStop(0.5, `rgba(255,180,80,${borderAlpha * 0.06})`);
-      topGlow.addColorStop(1, 'rgba(255,160,60,0)');
-      ctx.fillStyle = topGlow;
-      ctx.fillRect(lxT - 20, topY, rxT - lxT + 40, glowW * 0.7);
+        // Inset at top (narrow field → small inset proportion)
+        const topW = rxT - lxT;
+        const judgeW = rxJ - lxJ;
+        const bottomW = rxB - lxB;
+        const frac = inset; // pixels of inset
 
-      // Bottom edge inward glow
-      const bottomGlow = ctx.createLinearGradient(0, bottomY, 0, bottomY - glowW * 0.5);
-      bottomGlow.addColorStop(0, `rgba(255,200,100,${borderAlpha * 0.15})`);
-      bottomGlow.addColorStop(0.5, `rgba(255,180,80,${borderAlpha * 0.05})`);
-      bottomGlow.addColorStop(1, 'rgba(255,160,60,0)');
-      ctx.fillStyle = bottomGlow;
-      ctx.fillRect(lxB - 20, bottomY - glowW * 0.5, rxB - lxB + 40, glowW * 0.5);
+        const ilT = lxT + frac * (topW / bottomW); // perspective-scaled
+        const irT = rxT - frac * (topW / bottomW);
+        const ilJ = lxJ + frac;
+        const irJ = rxJ - frac;
+        const ilB = lxB + frac;
+        const irB = rxB - frac;
+
+        // Clamp so strips don't cross
+        if (ilT >= irT || ilJ >= irJ || ilB >= irB) break;
+
+        ctx.fillStyle = `rgba(255,200,100,${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(ilT, yt); ctx.lineTo(irT, yt);
+        ctx.lineTo(irJ, yj); ctx.lineTo(irB, yb);
+        ctx.lineTo(ilB, yb); ctx.lineTo(ilJ, yj);
+        ctx.closePath();
+        ctx.fill();
+      }
 
       ctx.restore();
 
-      // --- Outer soft glow (atmospheric bloom outside walls) ---
+      // --- Outer atmospheric bloom ---
       ctx.globalCompositeOperation = 'lighter';
-      ctx.beginPath();
-      ctx.moveTo(lxT, topY);
-      ctx.lineTo(lxJ, judgeLineY);
-      ctx.lineTo(lxB, bottomY);
-      ctx.lineTo(rxB, bottomY);
-      ctx.lineTo(rxJ, judgeLineY);
-      ctx.lineTo(rxT, topY);
-      ctx.closePath();
-      ctx.lineWidth = 16 + this._kiaiBorderGlow * 10;
-      ctx.globalAlpha = borderAlpha * 0.15;
+      pfPath();
+      ctx.lineWidth = 14 + this._kiaiBorderGlow * 8;
+      ctx.globalAlpha = borderAlpha * 0.12;
       ctx.strokeStyle = 'rgba(255,180,80,1)';
       ctx.stroke();
       ctx.globalCompositeOperation = 'source-over';
@@ -816,16 +849,16 @@ export default class NoteRenderer {
       ctx.restore();
     }
 
-    // ── Layer 4: Burning judge line ──
-    const judgeWidth = rightJudge.x - leftJudge.x;
-    const judgeCX = (leftJudge.x + rightJudge.x) / 2;
+    // ════════════════════════════════════════════════════════
+    //  Layer 4: Burning judge line (perspective flames)
+    // ════════════════════════════════════════════════════════
+    const judgeWidth = rxJ - lxJ;
+    const judgeCX = (lxJ + rxJ) / 2;
 
-    // Flame base height — flickers constantly, grows on beats
     const flameBase = 18 + noise * 14;
     const flamePulse = pulse * 20;
     const flameH = (flameBase + flamePulse) * intensity;
 
-    // Multiple flame layers for depth
     for (let layer = 0; layer < 3; layer++) {
       const layerPhase = this._kiaiFlamePhase * (4 + layer * 2.3) + layer * 2.1;
       const layerNoise = (Math.sin(layerPhase) * 0.35 + Math.sin(layerPhase * 2.7) * 0.2 + 0.5);
@@ -833,7 +866,6 @@ export default class NoteRenderer {
       const w = judgeWidth * (0.85 + layer * 0.1);
       const alpha = intensity * (0.4 - layer * 0.1);
 
-      // Flames go upward from judge line
       const flameGrad = ctx.createLinearGradient(judgeCX, judgeLineY - h, judgeCX, judgeLineY + 4);
       const coreAlpha = alpha * (0.7 + noise * 0.3);
       const midAlpha = alpha * (0.5 + layerNoise * 0.3);
@@ -847,14 +879,11 @@ export default class NoteRenderer {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = flameGrad;
-      // Wavy flame top using quadratic curves
       const segments = 8;
       const segW = w / segments;
       ctx.beginPath();
-      // Bottom edge (straight at judge line)
       ctx.moveTo(judgeCX - w / 2, judgeLineY + 2);
       ctx.lineTo(judgeCX + w / 2, judgeLineY + 2);
-      // Top edge (wavy)
       for (let i = segments; i >= 0; i--) {
         const segX = judgeCX - w / 2 + i * segW;
         const waveOffset = Math.sin(layerPhase + i * 0.8) * h * 0.2;
@@ -874,7 +903,7 @@ export default class NoteRenderer {
       ctx.restore();
     }
 
-    // Judge line hot glow (bright core at judge line position)
+    // Judge line hot glow
     const hotGlowH = 6 + pulse * 10;
     const hotGlowA = intensity * (0.6 + noise * 0.2) + pulse * 0.3;
     const hotGrad = ctx.createLinearGradient(judgeCX, judgeLineY - hotGlowH, judgeCX, judgeLineY + hotGlowH);
@@ -887,19 +916,30 @@ export default class NoteRenderer {
     hotGrad.addColorStop(1, 'rgba(255,180,60,0)');
     ctx.save();
     ctx.fillStyle = hotGrad;
-    ctx.fillRect(leftJudge.x - 8, judgeLineY - hotGlowH, judgeWidth + 16, hotGlowH * 2);
+    ctx.fillRect(lxJ - 8, judgeLineY - hotGlowH, judgeWidth + 16, hotGlowH * 2);
 
-    // Broad bloom around judge line
+    // Broad bloom — perspective: spreads wider at bottom
     const bloomH = 50 + pulse * 50 + noise * 15;
     const bloomA = intensity * 0.08 + pulse * 0.06;
-    const bloomGrad = ctx.createLinearGradient(judgeCX, judgeLineY - bloomH, judgeCX, judgeLineY + bloomH);
+    const bloomTopW = (rxT - lxT) * 0.15;
+    const bloomBotW = (rxB - lxB) * 0.15;
+    const bloomCX = judgeCX;
+    ctx.beginPath();
+    ctx.moveTo(bloomCX - judgeWidth / 2, judgeLineY);
+    ctx.lineTo(bloomCX + judgeWidth / 2, judgeLineY);
+    ctx.lineTo(bloomCX + judgeWidth / 2 + bloomBotW, judgeLineY + bloomH);
+    ctx.lineTo(bloomCX - judgeWidth / 2 - bloomBotW, judgeLineY + bloomH);
+    ctx.lineTo(bloomCX - judgeWidth / 2 - bloomTopW, judgeLineY - bloomH * 0.6);
+    ctx.lineTo(bloomCX + judgeWidth / 2 + bloomTopW, judgeLineY - bloomH * 0.6);
+    ctx.closePath();
+    const bloomGrad = ctx.createLinearGradient(bloomCX, judgeLineY - bloomH, bloomCX, judgeLineY + bloomH);
     bloomGrad.addColorStop(0, 'rgba(255,180,80,0)');
     bloomGrad.addColorStop(0.35, `rgba(255,180,80,${bloomA * 0.3})`);
     bloomGrad.addColorStop(0.5, `rgba(255,220,140,${bloomA})`);
     bloomGrad.addColorStop(0.65, `rgba(255,180,80,${bloomA * 0.3})`);
     bloomGrad.addColorStop(1, 'rgba(255,180,80,0)');
     ctx.fillStyle = bloomGrad;
-    ctx.fillRect(leftJudge.x - 10, judgeLineY - bloomH, judgeWidth + 20, bloomH * 2);
+    ctx.fill();
     ctx.restore();
   }
 
