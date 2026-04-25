@@ -8,11 +8,14 @@ const WINDOWS = {
   bad:     0.200,   // ±200ms, combo breaks
 };
 
-// Release timing windows for hold note tails (~1.2× normal, tightened from 1.5×)
+// Release Window Leniency — ScoreV2: release windows are 1.5× normal hit windows
+// This makes it more forgiving to release during complex patterns (ladders, chords)
+const RELEASE_WINDOW_LENIENCE = 1.5;
 const RELEASE_WINDOWS = {
-  perfect: 0.055,   // ±55ms
-  great:   0.110,   // ±110ms
-  good:    0.170,   // ±170ms
+  perfect: WINDOWS.perfect * RELEASE_WINDOW_LENIENCE,  // ±67.5ms
+  great:   WINDOWS.great   * RELEASE_WINDOW_LENIENCE,  // ±135ms
+  good:    WINDOWS.good    * RELEASE_WINDOW_LENIENCE,  // ±210ms
+  bad:     WINDOWS.bad     * RELEASE_WINDOW_LENIENCE,  // ±300ms
 };
 
 // Accuracy weight values — Score V2 style: MAX=305, GREAT=300, GOOD=200, BAD=50, MISS=0
@@ -26,8 +29,8 @@ const HP_JUDGEMENT = { perfect: 2.0, great: 1.2, good: 0.4, bad: -1.2, miss: -2.
 const HP_DRAIN_RATE = 1.0;
 
 // Hold note grace period: if player releases during hold but re-presses
-// within this time, no penalty. Tightened from 150ms to 80ms.
-const HOLD_GRACE_PERIOD = 0.08; // 80ms
+// within this time, no penalty. Increased to 150ms to match release window lenience.
+const HOLD_GRACE_PERIOD = 0.150; // 150ms
 
 export default class JudgementSystem {
   constructor(beatMap) {
@@ -129,12 +132,28 @@ export default class JudgementSystem {
     const holdEnd = note.time + note.duration;
 
     // ── Released BEFORE hold end: start grace period (lenient) ──
-    if (releaseTime < holdEnd - 0.01) {
+    // Grace period uses the release bad window to give more time for recovery
+    const releaseWindow = RELEASE_WINDOWS.bad; // ±300ms with 1.5x lenience
+    if (releaseTime < holdEnd - 0.01 && releaseTime >= holdEnd - releaseWindow) {
+      // Within lenient window of hold end — no grace period, just lenient release
+      const delta = releaseTime - holdEnd;
+      const absDelta = Math.abs(delta);
+      let judgement;
+      if (absDelta <= RELEASE_WINDOWS.good) judgement = 'good'; // lenient good
+      else judgement = 'good'; // anything in the window = good (no combo break)
+      note.releaseJudgement = judgement;
+      note.released = true;
+      this._applyReleaseJudgement(judgement);
+      EventBus.emit('note:hit', { note, judgement, delta: Math.round(delta * 1000), isRelease: true });
+      return { note, judgement, delta };
+    }
+    if (releaseTime < holdEnd - releaseWindow) {
+      // Released way too early — start grace period
       this._droppedHolds.set(lane, { note, dropTime: releaseTime });
       return { note, judgement: 'dropped', dropped: true };
     }
 
-    // ── Released at/after hold end: use lenient release windows ──
+    // ── Released at/after hold end: use lenient release windows (1.5×) ──
     const delta = releaseTime - holdEnd;
     const absDelta = Math.abs(delta);
 
@@ -142,7 +161,8 @@ export default class JudgementSystem {
     if (absDelta <= RELEASE_WINDOWS.perfect) judgement = 'perfect';
     else if (absDelta <= RELEASE_WINDOWS.great) judgement = 'great';
     else if (absDelta <= RELEASE_WINDOWS.good) judgement = 'good';
-    else judgement = 'good'; // Lenient: even very late release = good (no combo break)
+    else if (absDelta <= RELEASE_WINDOWS.bad) judgement = 'good'; // Within bad release window = good (lenient, no combo break)
+    else judgement = 'good'; // Beyond all windows = good (ultra-lenient for release timing)
 
     note.releaseJudgement = judgement;
     note.released = true;
@@ -265,7 +285,7 @@ export default class JudgementSystem {
         const isDropped = this._droppedHolds.has(note.lane);
         if (!isDropped) {
           const holdEnd = note.time + note.duration;
-          if (currentTime - holdEnd > WINDOWS.bad) {
+          if (currentTime - holdEnd > RELEASE_WINDOWS.bad) {
             // Held through but didn't release in time — lenient: auto-release as GOOD
             note.releaseJudgement = 'good';
             note.released = true;

@@ -8,6 +8,7 @@ export default class Settings {
     this.overlayMode = overlayMode;
     this._keyHandler = null;
     this._rebinding = null;
+    this._rebindingQR = false; // true when rebinding quick restart key
     this._resizeObserver = null;
     this._onClose = null; // Set by caller for pause-specific cleanup
   }
@@ -100,6 +101,13 @@ export default class Settings {
           <span id="settings-res-scale-val" class="zzz-value" style="min-width:50px;text-align:center;">${savedResScale}%</span>
         </div>
       </div>
+      <div style="margin-bottom:20px;">
+        <div class="zzz-label" style="margin-bottom:8px;">QUICK RESTART KEY</div>
+        <div id="qr-keybind" style="display:flex;gap:8px;align-items:center;">
+          <button class="zzz-btn zzz-btn--sm" id="qr-key-btn" style="flex:1;font-size:12px;padding:8px 12px;">${this._getQRKeyName()}</button>
+          <span style="font-size:9px;color:var(--zzz-muted);font-family:var(--zzz-mono);">HOLD TO RESTART</span>
+        </div>
+      </div>
       <div>
         <div class="zzz-label" style="margin-bottom:8px;">KEY BINDINGS (4-KEY)</div>
         <div id="keybinds" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
@@ -158,6 +166,15 @@ export default class Settings {
       });
     });
 
+    // Quick restart key binding
+    const qrBtn = document.getElementById('qr-key-btn');
+    if (qrBtn) qrBtn.addEventListener('click', () => {
+      this._rebindingQR = true;
+      qrBtn.textContent = 'PRESS A KEY...';
+      qrBtn.style.borderColor = 'var(--zzz-lime)';
+      qrBtn.style.color = 'var(--zzz-lime)';
+    });
+
     this._renderKeybinds();
 
     // Overlay mode close handlers
@@ -181,9 +198,11 @@ export default class Settings {
       if (e.code === 'Escape') {
         e.preventDefault();
         if (this._rebinding) { this._rebinding = null; this._renderKeybinds(); }
+        else if (this._rebindingQR) { this._rebindingQR = false; this._updateQRKeyBtn(); }
         else this._closeOverlay();
       }
       else if (this._rebinding) { e.preventDefault(); this._finishRebind(e.code); }
+      else if (this._rebindingQR) { e.preventDefault(); this._finishQRRebind(e.code); }
     };
     window.addEventListener('keydown', this._keyHandler);
   }
@@ -291,6 +310,37 @@ export default class Settings {
   _getSavedGameVolume() { return parseInt(localStorage.getItem('rhythm-os-game-volume') || '70'); }
   _getSavedBgDim() { return parseInt(localStorage.getItem('rhythm-os-bg-dim') || '0'); }
   _getSavedScrollSpeed() { return parseInt(localStorage.getItem('rhythm-os-scroll-speed') || '400'); }
+
+  // ── Quick Restart Key ──
+  _getQRKeyCode() { return localStorage.getItem('rhythm-os-quick-restart-key') || 'ShiftLeft'; }
+  _getQRKeyName() {
+    const code = this._getQRKeyCode();
+    const labels = {
+      'ShiftLeft': 'L-SHIFT', 'ShiftRight': 'R-SHIFT',
+      'ControlLeft': 'L-CTRL', 'ControlRight': 'R-CTRL',
+      'AltLeft': 'L-ALT', 'AltRight': 'R-ALT',
+      'Tab': 'TAB', 'Backspace': 'BACKSPACE',
+      'Space': 'SPACE',
+    };
+    return labels[code] || code.replace('Key', '').replace('Digit', '');
+  }
+  _updateQRKeyBtn() {
+    const btn = document.getElementById('qr-key-btn');
+    if (btn) {
+      btn.textContent = this._getQRKeyName();
+      btn.style.borderColor = '';
+      btn.style.color = '';
+    }
+  }
+  _finishQRRebind(code) {
+    if (!this._rebindingQR) return;
+    // Don't allow game lane keys
+    const blockedCodes = ['Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'];
+    if (blockedCodes.includes(code)) return;
+    localStorage.setItem('rhythm-os-quick-restart-key', code);
+    this._rebindingQR = false;
+    this._updateQRKeyBtn();
+  }
 
   destroy() {
     if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler);

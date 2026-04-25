@@ -120,6 +120,12 @@ async function boot() {
   let _dying = false;       // true during death animation (HP depleted)
   let _deathTimeout = null; // timeout ID for death sequence → endGame
   let _skipResult = false;  // when true, endGame() rAF won't show result screen (restart)
+  let _quitGame = false;    // when true, endGame() skips saving result to records
+  let _quickRestartKey = null; // key code for quick restart (e.g. 'ShiftLeft')
+  let _quickRestartHeld = false;
+  let _quickRestartStart = 0;
+  let _quickRestartOverlay = null;
+  const QUICK_RESTART_HOLD_MS = 500; // hold duration to trigger restart
   let currentMapData = null;
   let currentLaneCount = 4;
 
@@ -337,6 +343,7 @@ async function boot() {
         const ct = audio.currentTime; // Single source of truth: game time = audio time
         // During countdown (after resume), skip game logic
         if (_inCountdown) return;
+        _updateQuickRestart();
         currentJudgement.checkMisses(ct);
         // osu!mania HP drain: tick per frame
         currentJudgement.tickHP(delta);
@@ -410,6 +417,9 @@ async function boot() {
     _endingGame = true;
     _inCountdown = false;
     _dying = false;
+    _quickRestartHeld = false;
+    _quickRestartKey = null;
+    _removeQuickRestartOverlay();
     gameActive = false;
     input.disable();
     // Cancel pending death timeout (if endGame was called manually before timeout fired)
@@ -438,14 +448,15 @@ async function boot() {
     three.showBgMesh(); // Restore dark gradient bg mesh for menus
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
-    // Save full play history using RecordStore
-    if (currentMapData && stats) {
+    // Save result ONLY if the game was played to completion (song end / death), not on quit
+    if (!_quitGame && currentMapData && stats) {
       try {
         const setId = currentMapData.metadata?.setId || currentMapData.metadata?.title || '';
         const diffVersion = currentMapData.metadata?.version || '';
         RecordStore.add(setId, diffVersion, stats);
       } catch (_) {}
     }
+    _quitGame = false; // Reset flag
     EventBus.emit('game:over', stats);
     // Use a small delay to ensure ScreenManager transition completes
     // and avoid race conditions with the game loop's requestAnimationFrame
@@ -491,7 +502,7 @@ async function boot() {
     document.getElementById('resume-btn').addEventListener('click', () => { _closePause(); resumeGame(); });
     document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; endGame(); startGame(currentMapData); });
     document.getElementById('settings-btn').addEventListener('click', () => { _openPauseSettings(); });
-    document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); _skipResult = true; endGame(); screens.show('song-select'); });
+    document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); screens.show('song-select'); });
     EventBus.emit('game:pause');
   };
 
@@ -605,6 +616,101 @@ async function boot() {
     };
 
     showStep();
+  };
+
+  // ── Quick Restart System ──
+  // Hold a configurable key (default: LSHIFT) for 500ms to instantly restart
+  // Visual progress indicator appears on screen during hold
+
+  /** Get the quick restart key from settings */
+  const _getQuickRestartKey = () => {
+    return localStorage.getItem('rhythm-os-quick-restart-key') || 'ShiftLeft';
+  };
+
+  /** Show quick restart progress overlay */
+  const _showQuickRestartOverlay = (progress) => {
+    if (!_quickRestartOverlay) {
+      const sa = calcSafeArea();
+      const overlay = document.createElement('div');
+      overlay.id = 'quick-restart-overlay';
+      overlay.style.cssText = `position:fixed;left:${sa.x}px;top:${sa.y}px;width:${sa.w}px;height:${sa.h}px;display:flex;align-items:center;justify-content:center;z-index:45;pointer-events:none;`;
+      overlay.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+          <div style="font-family:var(--zzz-font);font-weight:900;font-size:18px;color:var(--zzz-lime);letter-spacing:0.2em;text-transform:uppercase;text-shadow:0 0 20px rgba(170,255,0,0.4);opacity:0.9;">QUICK RESTART</div>
+          <div style="width:200px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;">
+            <div id="qr-progress" style="width:0%;height:100%;background:var(--zzz-lime);border-radius:2px;transition:width 50ms linear;box-shadow:0 0 8px rgba(170,255,0,0.6);"></div>
+          </div>
+          <div style="font-family:var(--zzz-mono);font-size:10px;color:var(--zzz-muted);letter-spacing:0.1em;">HOLD TO RESTART</div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      _quickRestartOverlay = overlay;
+    }
+    const bar = document.getElementById('qr-progress');
+    if (bar) bar.style.width = (progress * 100) + '%';
+  };
+
+  /** Remove quick restart overlay */
+  const _removeQuickRestartOverlay = () => {
+    if (_quickRestartOverlay) {
+      _quickRestartOverlay.remove();
+      _quickRestartOverlay = null;
+    }
+  };
+
+  /** Trigger quick restart */
+  const _triggerQuickRestart = () => {
+    _removeQuickRestartOverlay();
+    _quickRestartHeld = false;
+    if (currentMapData && gameActive) {
+      _skipResult = true;
+      _quitGame = true; // Don't save result for quick restart
+      endGame();
+      startGame(currentMapData);
+    }
+  };
+
+  // Quick restart keydown/keyup handlers (capture phase, before InputManager)
+  window.addEventListener('keydown', (e) => {
+    if (!gameActive || _inCountdown || _dying) return;
+    const qrKey = _getQuickRestartKey();
+    if (e.code === qrKey && !_quickRestartHeld) {
+      e.preventDefault();
+      e.stopPropagation();
+      _quickRestartHeld = true;
+      _quickRestartStart = performance.now();
+      _showQuickRestartOverlay(0);
+    }
+  }, true);
+
+  window.addEventListener('keyup', (e) => {
+    if (!_quickRestartHeld) return;
+    const qrKey = _getQuickRestartKey();
+    if (e.code === qrKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      // If held long enough, trigger restart
+      const elapsed = performance.now() - _quickRestartStart;
+      _quickRestartHeld = false;
+      if (elapsed >= QUICK_RESTART_HOLD_MS) {
+        _triggerQuickRestart();
+      } else {
+        _removeQuickRestartOverlay();
+      }
+    }
+  }, true);
+
+  // Animate quick restart progress bar (runs via game loop)
+  const _updateQuickRestart = () => {
+    if (_quickRestartHeld && _quickRestartOverlay) {
+      const elapsed = performance.now() - _quickRestartStart;
+      const progress = Math.min(1, elapsed / QUICK_RESTART_HOLD_MS);
+      _showQuickRestartOverlay(progress);
+      if (progress >= 1) {
+        // Auto-trigger if still held (in case keyup missed)
+        _triggerQuickRestart();
+      }
+    }
   };
 
   // ── Prevent browser defaults on game keys when game is active ──

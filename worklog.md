@@ -1183,3 +1183,31 @@ Stage Summary:
 - Beat lines now properly synced to actual map timing points (BPM changes, offsets) instead of simple constant BPM from time 0
 - Files modified: JudgementSystem.js, main.js, InputManager.js, NoteRenderer.js
 - Lint passes clean
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Don't save on quit, quick restart key hold, lenient release windows
+
+Work Log:
+- main.js: Added _quitGame flag. When Quit button is pressed, sets _quitGame=true so endGame() skips RecordStore.add(). Song completion and death still save results normally.
+- main.js: Added Quick Restart System — hold a configurable key (default LSHIFT) for 500ms to instantly restart. Visual overlay with progress bar appears during hold. Auto-triggers when bar fills. Key handlers use capture phase to prevent interference with InputManager.
+- main.js: _triggerQuickRestart() sets _skipResult=true and _quitGame=true, calls endGame() then startGame(currentMapData).
+- main.js: _updateQuickRestart() called in game loop update to animate progress bar.
+- main.js: endGame() cleans up quick restart state (_quickRestartHeld, _quickRestartKey, overlay removal).
+- Settings.js: Added QUICK RESTART KEY setting section with a rebindable button. Shows current key (L-SHIFT default) and "HOLD TO RESTART" label.
+- Settings.js: Added _rebindingQR state, _getQRKeyCode(), _getQRKeyName() with friendly labels (L-SHIFT, R-CTRL, etc.), _updateQRKeyBtn(), _finishQRRebind() methods. Escape cancels rebind. Blocked F-keys from being assigned.
+- Settings.js: Updated keyHandler to handle QR rebinding alongside lane key rebinding.
+- JudgementSystem.js: Added RELEASE_WINDOW_LENIENCE = 1.5 constant. RELEASE_WINDOWS now computed as WINDOWS × 1.5 (perfect=67.5ms, great=135ms, good=210ms, bad=300ms). This matches osu!mania ScoreV2 spec.
+- JudgementSystem.js: Increased HOLD_GRACE_PERIOD from 80ms to 150ms to match the wider release windows.
+- JudgementSystem.js: Reworked judgeRelease() — if release is within RELEASE_WINDOWS.bad of hold end, it's treated as a lenient release (GOOD, no combo break) instead of starting a grace period/dropped state. Only releases significantly before the hold end trigger grace period.
+- JudgementSystem.js: Updated checkMisses() auto-release check to use RELEASE_WINDOWS.bad instead of WINDOWS.bad.
+
+Stage Summary:
+- Quitting mid-game no longer saves result to records
+- Quick restart: hold LSHIFT (or configurable key) for 500ms to instantly restart the map
+- Quick restart key is rebindable in Settings with friendly key labels
+- Release Window Leniency: all release windows are now 1.5× the normal hit windows (osu!mania ScoreV2 spec)
+- Hold grace period increased to 150ms to match the wider release windows
+- Releases within 300ms of hold end are lenient (no combo break)
+- Lint passes clean
