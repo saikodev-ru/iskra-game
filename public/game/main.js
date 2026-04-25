@@ -73,7 +73,8 @@ async function boot() {
 
   ZZZTheme.init({
     crtClick: () => { const s = initAudio(); if(s) s.crtClick(); },
-    crtSwitch: () => { const s = initAudio(); if(s) s.crtSwitch(); }
+    crtSwitch: () => { const s = initAudio(); if(s) s.crtSwitch(); },
+    gameStart: () => { const s = initAudio(); if(s) s.gameStart(); }
   });
 
   const threeCanvas = document.getElementById('three');
