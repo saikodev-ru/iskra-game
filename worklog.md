@@ -1566,3 +1566,41 @@ Stage Summary:
 - Kiai effects completely redesigned: no particles, now has burning judge line + white flashes + pulsing borders + brighter playfield
 - All effects beat-synced via _kiaiBeatPulse / _kiaiSmoothPulse
 - Lint clean (0 errors, 1 pre-existing warning)
+---
+Task ID: 4
+Agent: Main
+Task: TV static transition + custom animated cursor
+
+Work Log:
+- Created TransitionFX.js — full-screen TV static noise overlay with:
+  - Random grayscale noise at low resolution for authentic chunky look
+  - Horizontal glitch band offsets (12-20 random bands shifted per frame)
+  - RGB color channel split (red shifted left, blue shifted right)
+  - Scan line overlay (every other row darkened)
+  - VHS tracking distortion (bright horizontal bar sweeping vertically)
+  - Accent color tinting on some glitch lines (lime green)
+  - Opacity curve: fast fade-in, sustained full static, fast fade-out
+  - Canvas at z-index 4 (between HUD and screen UI), pointer-events: none
+- Created GameCursor.js — custom animated cursor:
+  - Neon lime crosshair with outer ring, center dot, crosshair lines
+  - Glow effects via box-shadow
+  - Smooth follow via lerp (slight lag for feel)
+  - 5-dot trail that follows with decreasing opacity
+  - Ring scales up + brightens on hover over clickable elements
+  - Click squeeze animation (scale down on mousedown)
+  - System cursor hidden globally via CSS cursor:none
+  - show()/hide() API for toggling during gameplay
+- Integrated TransitionFX in:
+  - SongSelect._playTransition (after card burst, before startGame)
+  - Pause quit button (after endGame, before song-select)
+  - ResultScreen all buttons (retry, menu, back)
+  - ResultScreen keyboard shortcuts (Enter, Escape)
+- Integrated GameCursor in:
+  - main.js: init() called at startup before loading screen
+  - Countdown start: GameCursor.hide()
+  - endGame: GameCursor.show()
+
+Stage Summary:
+- TV static plays ~600-700ms during all screen transitions involving the game
+- Custom cursor visible on all menus, hidden during gameplay
+- Lint clean (0 errors)

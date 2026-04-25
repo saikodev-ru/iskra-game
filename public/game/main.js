@@ -19,6 +19,8 @@ import MainMenu      from './ui/screens/MainMenu.js';
 import SongSelect    from './ui/screens/SongSelect.js';
 import Settings      from './ui/screens/Settings.js';
 import ResultScreen  from './ui/screens/ResultScreen.js';
+import TransitionFX  from './game/TransitionFX.js';
+import GameCursor     from './game/GameCursor.js';
 
 /**
  * Calculate the safe area based on aspect ratio.
@@ -500,6 +502,7 @@ async function boot() {
       } catch (_) {}
     }
     _quitGame = false; // Reset flag
+    GameCursor.show(); // Show custom cursor back on menus
     EventBus.emit('game:over', stats);
     // Use a small delay to ensure ScreenManager transition completes
     // and avoid race conditions with the game loop's requestAnimationFrame
@@ -550,7 +553,7 @@ async function boot() {
     }
     document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); startGame(currentMapData); });
     document.getElementById('settings-btn').addEventListener('click', () => { _openPauseSettings(); });
-    document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); screens.show('song-select'); });
+    document.getElementById('quit-btn').addEventListener('click', async () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); await TransitionFX.play({ duration: 600 }); screens.show('song-select'); });
     EventBus.emit('game:pause');
   };
 
@@ -631,6 +634,7 @@ async function boot() {
     // Start game loop in countdown mode (renders frozen frame, skips judgement)
     gameActive = true;
     _inCountdown = true;
+    GameCursor.hide(); // Hide custom cursor during gameplay
     hud.freeze(); // Keep frozen during countdown
     if (gameLoop) gameLoop.start();
 
@@ -931,6 +935,9 @@ async function boot() {
     return rs;
   });
   screens.register('game', (data) => { if (data && data.map) startGame(data.map); return { build: () => '', init: () => {}, destroy: () => {} }; });
+
+  // ── Custom Cursor ──
+  GameCursor.init();
 
   // ── Loading Screen ──
   // Show loading screen, preload resources, then transition to main menu

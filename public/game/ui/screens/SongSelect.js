@@ -3,6 +3,7 @@ import OszLoader from '../../game/OszLoader.js';
 import DifficultyAnalyzer from '../../game/DifficultyAnalyzer.js';
 import RecordStore from '../../game/RecordStore.js';
 import ZZZTheme from '../../theme/ZZZTheme.js';
+import TransitionFX from '../../game/TransitionFX.js';
 
 export default class SongSelect {
   constructor({ audio, three, screens }) {
@@ -1162,19 +1163,17 @@ export default class SongSelect {
       if (fill) fill.style.width = '100%';
     }, 600);
 
-    // Phase 3: glitch burst → start game
-    setTimeout(() => {
+    // Phase 3: glitch burst → TV static → start game
+    setTimeout(async () => {
       card.classList.add('burst');
       // Reset screen opacity
       if (screenContainer) screenContainer.style.opacity = '1';
 
       // Start the game after burst animation
-      setTimeout(() => {
+      setTimeout(async () => {
         // Clean up transition overlay
         overlay.remove();
         this._transitioning = false;
-        // NOTE: Keep _leavingToGame = true so destroy() knows NOT to call _stopPreview()
-        // which would schedule audio.stop() and kill the game's audio
         // Force-clear any screen transition animations that might block visibility
         const sc = document.getElementById('screen');
         if (sc) {
@@ -1182,8 +1181,10 @@ export default class SongSelect {
           sc.style.opacity = '';
           sc.style.animation = 'none';
         }
+        // TV static transition
+        await TransitionFX.play({ duration: 700 });
         this.screens.show('game', { map });
-      }, 600);
+      }, 400);
     }, 1200);
 
     // Backup: force-start game if transition fails
