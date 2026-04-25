@@ -1361,3 +1361,26 @@ Stage Summary:
 - Score: fast interpolation + 3D flip-down animation on text change
 - Combo: instant update + scale pop (bigger for milestones 50/100/200/500)
 - No more jumping, hanging, or stuck animations
+
+---
+Task ID: 1
+Agent: Sub-agent
+Task: Move ChorusDetector into OszLoader, remove from main.js, add import progress panel
+
+Work Log:
+- OszLoader.js: Added `import ChorusDetector from './ChorusDetector.js'` at top
+- OszLoader.js: Changed `_buildDifficulty(parsed)` signature to `_buildDifficulty(parsed, audioBuffer)`
+- OszLoader.js: Changed `this._buildDifficulty(parsed)` call in `load()` to `this._buildDifficulty(parsed, audioBuffer)`
+- OszLoader.js: Replaced entire kiai extraction block (timing-point-based kiai regions) with ChorusDetector.detect() call that auto-detects chorus sections via audio energy + note density analysis
+- main.js: Removed `import ChorusDetector from './game/ChorusDetector.js'`
+- main.js: Removed entire auto-detect chorus block from startGame() (the fallback that ran when no kiai sections existed)
+- SongSelect.js: Replaced `_handleOszFiles()` with new version that shows import progress overlay (unpacking → analyzing → done/error stages)
+- SongSelect.js: Added `_showImportOverlay(fileName)` — creates fixed overlay with progress bar, filename, status text
+- SongSelect.js: Added `_setImportStatus(stage, text)` — updates progress bar width and status text
+- SongSelect.js: Added `_hideImportOverlay()` — removes overlay from DOM
+
+Stage Summary:
+- ChorusDetector moved from runtime (main.js startGame) to build time (OszLoader._buildDifficulty) — chorus sections are computed once during import and stored in the beatmap
+- Import flow now shows a progress overlay with stages: Unpacking archive → Analyzing chorus → Import complete
+- Only first .osz file is imported (changed from multi-file loop to single file)
+- Lint passes clean

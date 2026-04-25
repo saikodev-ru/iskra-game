@@ -1,4 +1,5 @@
 import DifficultyAnalyzer from './DifficultyAnalyzer.js';
+import ChorusDetector from './ChorusDetector.js';
 
 // ── IndexedDB-backed storage for beatmap sets ──────────────────────────────
 
@@ -348,7 +349,7 @@ export default class OszLoader {
       const difficulties = [];
 
       for (const parsed of parsedMaps) {
-        const diff = this._buildDifficulty(parsed);
+        const diff = this._buildDifficulty(parsed, audioBuffer);
         if (diff) {
           difficulties.push(diff);
         }
@@ -426,7 +427,7 @@ export default class OszLoader {
    * Build a single difficulty object from a parsed .osu map.
    * Handles osu! standard → mania conversion when mode === 0.
    */
-  _buildDifficulty(parsed) {
+  _buildDifficulty(parsed, audioBuffer) {
     let laneCount;
     if (parsed.mode === 3) {
       laneCount = parsed.difficulty.CircleSize || 4;
@@ -450,29 +451,18 @@ export default class OszLoader {
         bpm: 60000 / tp.msPerBeat,
       }));
 
-    // ── Extract kiai time sections ──
-    // Kiai is a per-timing-point flag; collect contiguous kiai regions.
-    // Use ALL timing points (including inherited) since kiai toggles independently.
+    // ── Auto-detect chorus sections via audio energy + note density analysis ──
     const kiaiSections = [];
-    const allTimingPoints = parsed.timingPoints
-      .map(tp => ({ time: tp.offset / 1000, kiai: !!tp.kiai }))
-      .sort((a, b) => a.time - b.time);
-    // Build kiai on/off regions
-    let kiaiActive = false;
-    let kiaiStart = 0;
-    for (const tp of allTimingPoints) {
-      if (tp.kiai && !kiaiActive) {
-        kiaiActive = true;
-        kiaiStart = tp.time;
-      } else if (!tp.kiai && kiaiActive) {
-        kiaiActive = false;
-        kiaiSections.push({ startTime: kiaiStart, endTime: tp.time });
+    if (audioBuffer && notes.length > 0) {
+      try {
+        const detected = ChorusDetector.detect(audioBuffer, notes);
+        kiaiSections.push(...detected);
+        if (detected.length > 0) {
+          console.log(`[OszLoader] 🎵 Chorus: ${detected.map(s => s.startTime.toFixed(1) + 's–' + s.endTime.toFixed(1) + 's').join(', ')}`);
+        }
+      } catch (err) {
+        console.warn('[OszLoader] ChorusDetector failed:', err);
       }
-    }
-    // If kiai is still active at the end, extend to the last note
-    if (kiaiActive && notes.length > 0) {
-      const lastNote = notes[notes.length - 1];
-      kiaiSections.push({ startTime: kiaiStart, endTime: lastNote.time + lastNote.duration + 1 });
     }
 
     const primaryBpm = bpmChanges.length > 0 ? bpmChanges[0].bpm : 120;

@@ -1203,23 +1203,79 @@ export default class SongSelect {
 
   async _handleOszFiles(files) {
     if (!files || files.length === 0) return;
-    for (const file of files) {
-      try {
-        const newSet = await this.oszLoader.load(file);
-        this.beatmapSets.push(newSet);
-      } catch (err) {
-        console.error('Failed to load .osz:', err);
+    const file = files[0]; // only import first file
+
+    // Show import overlay
+    this._showImportOverlay(file.name);
+    this._setImportStatus('unpacking', 'Unpacking archive...');
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 50)); // yield to let overlay render
+
+      const result = await this.oszLoader.load(file);
+
+      this._setImportStatus('analyzing', 'Analyzing chorus...');
+
+      // Small delay to let the UI update before heavy post-load work
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      if (result && result.difficulties && result.difficulties.length > 0) {
+        this.beatmapSets.push(result);
+        this._buildFilteredIndices();
+        this._renderSongList();
+        this._selectSong(this.beatmapSets.length - 1);
+        ZZZTheme.playSwitchSound();
       }
+
+      this._setImportStatus('done', 'Import complete!');
+      await new Promise(resolve => setTimeout(resolve, 600));
+      this._hideImportOverlay();
+    } catch (err) {
+      console.error('[SongSelect] Import failed:', err);
+      this._setImportStatus('error', 'Import failed');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      this._hideImportOverlay();
     }
-    this._buildFilteredIndices();
-    this._renderSongList();
-    if (this.beatmapSets.length > 0) {
-      if (this.selectedIndex < 0) this._restoreSelection();
-      else this._selectSong(this.selectedIndex, true);
-    }
-    // Reset file input so the same file can be re-imported
+
+    // Reset file input so same file can be re-imported
     const input = document.getElementById('osz-input');
     if (input) input.value = '';
+  }
+
+  _showImportOverlay(fileName) {
+    this._hideImportOverlay();
+    const sa = document.getElementById('screen');
+    const overlay = document.createElement('div');
+    overlay.id = 'import-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);animation:pause-fade-in 0.2s ease-out forwards;';
+    overlay.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:20px;padding:40px 56px;border-radius:16px;background:rgba(17,17,17,0.95);border:1px solid rgba(170,255,0,0.15);box-shadow:0 0 40px rgba(0,0,0,0.5);">
+        <div style="font-family:var(--zzz-font);font-weight:900;font-size:14px;color:var(--zzz-lime);letter-spacing:0.25em;text-transform:uppercase;">IMPORTING</div>
+        <div id="import-filename" style="font-family:var(--zzz-mono);font-size:12px;color:rgba(255,255,255,0.5);max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fileName}</div>
+        <div style="width:240px;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;">
+          <div id="import-progress-bar" style="width:0%;height:100%;background:var(--zzz-lime);border-radius:2px;transition:width 0.4s ease-out;box-shadow:0 0 8px rgba(170,255,0,0.4);"></div>
+        </div>
+        <div id="import-status" style="font-family:var(--zzz-font);font-weight:500;font-size:11px;color:rgba(255,255,255,0.35);letter-spacing:0.15em;text-transform:uppercase;min-height:18px;">Unpacking archive...</div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => {
+      const bar = document.getElementById('import-progress-bar');
+      if (bar) bar.style.width = '15%';
+    });
+  }
+
+  _setImportStatus(stage, text) {
+    const bar = document.getElementById('import-progress-bar');
+    const status = document.getElementById('import-status');
+    if (status) status.textContent = text;
+    const pct = { unpacking: 40, analyzing: 75, done: 100, error: 0 };
+    if (bar) bar.style.width = (pct[stage] || 0) + '%';
+  }
+
+  _hideImportOverlay() {
+    const overlay = document.getElementById('import-overlay');
+    if (overlay) overlay.remove();
   }
 
   destroy() {
