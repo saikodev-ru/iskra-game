@@ -1,5 +1,10 @@
 import EventBus from '../core/EventBus.js';
 
+/** Format a number with commas (always en-US style: 1,234,567) */
+function fmtScore(n) {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 export default class HUD {
   constructor(container) {
     this.container = container;
@@ -16,8 +21,15 @@ export default class HUD {
     this._currentRank = 'X';
     this._rankScale = 1;
     this._comboPopScale = 1;
-    this._lastComboStr = '0';
-    this._lastScoreStr = '0';
+
+    // ── Per-digit spin system ──
+    this._scoreDigitH = 44;
+    this._comboDigitH = 64;
+    this._scoreLastStr = '0';
+    this._comboLastStr = '0';
+    this._scoreAnimating = new Set();   // set of slot indices currently mid-spin
+    this._comboAnimating = new Set();
+
     this._build();
   }
 
@@ -29,8 +41,8 @@ export default class HUD {
         <div style="position:absolute;left:5%;top:55%;transform:translateY(-50%);text-align:right;">
           <!-- Score label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:10px;color:rgba(170,255,0,0.45);letter-spacing:0.25em;text-transform:uppercase;margin-bottom:2px;text-shadow:0 0 8px rgba(0,0,0,0.9);">SCORE</div>
-          <!-- Score value with digit containers -->
-          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:44px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);display:flex;justify-content:flex-end;gap:0;">0</div>
+          <!-- Score digit row (filled dynamically) -->
+          <div id="hud-score" style="display:flex;justify-content:flex-end;align-items:center;gap:0;font-family:var(--zzz-font);font-weight:900;font-size:44px;color:var(--zzz-lime);line-height:1;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);"></div>
           <!-- Separator line -->
           <div style="width:60px;height:1px;background:linear-gradient(to right,transparent,rgba(170,255,0,0.3));margin:8px auto 8px 0;"></div>
           <!-- Accuracy label -->
@@ -43,7 +55,7 @@ export default class HUD {
         <div style="position:absolute;right:5%;top:55%;transform:translateY(-50%);text-align:left;">
           <!-- Combo value -->
           <div style="display:flex;align-items:baseline;gap:8px;">
-            <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:64px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0</div>
+            <div id="hud-combo" style="display:flex;align-items:center;gap:0;font-family:var(--zzz-font);font-weight:900;font-size:64px;color:#ffffff;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);"></div>
             <div style="font-family:var(--zzz-font);font-weight:700;font-size:16px;color:rgba(255,255,255,0.5);letter-spacing:0.05em;text-shadow:0 2px 8px rgba(0,0,0,0.9);">x</div>
             <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="X" style="font-family:var(--zzz-font);font-weight:900;font-size:36px;opacity:1;transform:scale(1) rotate(-25deg);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
           </div>
@@ -86,8 +98,151 @@ export default class HUD {
       this.els.rank.appendChild(fill);
     }
 
+    // Initialize digit rows with "0"
+    this._rebuildDigitRow(this.els.score, '0', this._scoreDigitH, this._scoreAnimating);
+    this._rebuildDigitRow(this.els.combo, '0', this._comboDigitH, this._comboAnimating);
+
     this._startAnimLoop();
   }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     PER-DIGIT SLOT MACHINE SPIN SYSTEM
+     Each digit has its own overflow:hidden container.
+     When a digit changes, a two-frame slide-up animation plays:
+       Frame 1: old digit visible (translateY: 0)
+       Frame 2: wrapper slides up → old exits top, new enters from below
+     Commas are thin non-animated separators.
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /**
+   * Rebuild an entire digit row from scratch (used when string length
+   * or comma positions change, e.g. 999 → 1,000).
+   */
+  _rebuildDigitRow(container, str, digitH, animatingSet) {
+    container.innerHTML = '';
+    for (const ch of str) {
+      const slot = document.createElement('div');
+      slot.style.cssText = `height:${digitH}px;display:flex;align-items:center;justify-content:center;overflow:hidden;`;
+      if (ch === ',') {
+        slot.style.width = (digitH * 0.32) + 'px';
+        slot.style.opacity = '0.45';
+        slot.textContent = ',';
+      } else {
+        slot.style.width = (digitH * 0.62) + 'px';
+        slot.textContent = ch;
+        slot.dataset.digit = ch;
+      }
+      container.appendChild(slot);
+    }
+    animatingSet.clear();
+  }
+
+  /**
+   * Render a formatted number string into per-digit slots.
+   * Compares with the previous string and spins only changed digits.
+   * If the string length changes (structural change), rebuilds entirely.
+   */
+  _renderDigitRow(container, newStr, digitH, lastStrRef, animatingSet) {
+    if (!container) return;
+    if (lastStrRef.str === newStr) return;
+    const oldStr = lastStrRef.str || '';
+
+    // Structural change: different character count → full rebuild with fade
+    if (oldStr.length !== newStr.length) {
+      container.style.transition = 'opacity 0.08s ease-out';
+      container.style.opacity = '0.4';
+      this._rebuildDigitRow(container, newStr, digitH, animatingSet);
+      lastStrRef.str = newStr;
+      requestAnimationFrame(() => {
+        container.style.opacity = '1';
+        setTimeout(() => { container.style.transition = ''; }, 120);
+      });
+      return;
+    }
+
+    lastStrRef.str = newStr;
+
+    // Same length: compare character by character, spin changed digits
+    for (let i = 0; i < newStr.length; i++) {
+      const oldCh = oldStr[i];
+      const newCh = newStr[i];
+      if (oldCh === newCh) continue;
+
+      const slot = container.children[i];
+      if (!slot) continue;
+
+      // Comma → just update text (no animation)
+      if (newCh === ',' || oldCh === ',') {
+        slot.textContent = newCh;
+        if (newCh === ',') {
+          slot.dataset.digit = '';
+          slot.style.width = (digitH * 0.32) + 'px';
+          slot.style.opacity = '0.45';
+        } else {
+          slot.dataset.digit = newCh;
+          slot.style.width = (digitH * 0.62) + 'px';
+          slot.style.opacity = '1';
+        }
+        continue;
+      }
+
+      // Digit changed → slot-machine spin
+      this._spinDigitSlot(slot, oldCh, newCh, digitH, animatingSet, i);
+    }
+  }
+
+  /**
+   * Animate a single digit slot: old digit slides up and out,
+   * new digit slides up from below into view.
+   */
+  _spinDigitSlot(slot, oldDigit, newDigit, digitH, animatingSet, index) {
+    // If this slot is already mid-spin, snap to new value
+    if (animatingSet.has(index)) {
+      animatingSet.delete(index);
+      slot.textContent = newDigit;
+      slot.dataset.digit = newDigit;
+      return;
+    }
+
+    animatingSet.add(index);
+    slot.dataset.digit = newDigit;
+
+    // Build two-frame wrapper
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:relative;width:100%;';
+
+    const topFace = document.createElement('div');
+    topFace.style.cssText = `height:${digitH}px;display:flex;align-items:center;justify-content:center;`;
+    topFace.textContent = oldDigit;
+
+    const botFace = document.createElement('div');
+    botFace.style.cssText = `height:${digitH}px;display:flex;align-items:center;justify-content:center;`;
+    botFace.textContent = newDigit;
+
+    wrapper.appendChild(topFace);
+    wrapper.appendChild(botFace);
+
+    // Replace slot content
+    slot.innerHTML = '';
+    slot.appendChild(wrapper);
+
+    // Trigger slide-up animation on next frame
+    requestAnimationFrame(() => {
+      wrapper.style.transition = 'transform 0.22s cubic-bezier(0.22,1,0.36,1)';
+      wrapper.style.transform = `translateY(-${digitH}px)`;
+    });
+
+    // Cleanup after animation completes
+    setTimeout(() => {
+      if (slot.contains(wrapper)) {
+        slot.innerHTML = '';
+        slot.textContent = newDigit;
+      }
+      animatingSet.delete(index);
+    }, 260);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════ */
 
   /** Freeze all number animations (called on pause) */
   freeze() {
@@ -97,56 +252,6 @@ export default class HUD {
   /** Unfreeze number animations (called on resume) */
   unfreeze() {
     this._frozen = false;
-  }
-
-  /** Trigger a vertical spin animation on changed digits */
-  _spinDigits(el, oldStr, newStr) {
-    if (!el || oldStr === newStr) return;
-
-    // Normalize to same length (right-aligned)
-    const maxLen = Math.max(oldStr.replace(/,/g, '').length, newStr.replace(/,/g, '').length);
-
-    // For score (has commas), we spin individual character groups
-    // For combo (no commas), we spin individual digits
-    const oldClean = oldStr.replace(/,/g, '');
-    const newClean = newStr.replace(/,/g, '');
-    const oldPadded = oldClean.padStart(maxLen, ' ');
-    const newPadded = newClean.padStart(maxLen, ' ');
-
-    // Build formatted new string with commas
-    const numVal = parseInt(newClean) || 0;
-    const formatted = numVal.toLocaleString();
-
-    // Find which digits actually changed
-    let changed = false;
-    for (let i = 0; i < Math.min(oldPadded.length, newPadded.length); i++) {
-      if (oldPadded[i] !== newPadded[i]) { changed = true; break; }
-    }
-    if (!changed && oldPadded.length === newPadded.length) {
-      el.textContent = formatted;
-      return;
-    }
-
-    // Apply vertical spin animation
-    el.style.transition = 'none';
-    el.style.transform = 'translateY(-40%) rotateX(45deg)';
-    el.style.opacity = '0.3';
-
-    // Force reflow
-    void el.offsetHeight;
-
-    el.textContent = formatted;
-    el.style.transition = 'transform 0.35s cubic-bezier(0.22,1,0.36,1), opacity 0.2s ease-out';
-    el.style.transform = 'translateY(0) rotateX(0deg)';
-    el.style.opacity = '1';
-
-    // Clean up transition after animation
-    setTimeout(() => {
-      if (el) {
-        el.style.transition = '';
-        el.style.transform = '';
-      }
-    }, 400);
   }
 
   _startAnimLoop() {
@@ -161,43 +266,33 @@ export default class HUD {
     // When frozen (paused), don't animate anything
     if (this._frozen) return;
 
-    // Score
+    // Score — interpolate towards target, format with commas
     const scoreDiff = this._targetScore - this._displayScore;
     if (Math.abs(scoreDiff) > 1) {
       this._displayScore += scoreDiff * 0.2;
-      const newStr = Math.round(this._displayScore).toLocaleString();
-      if (this.els.score && newStr !== this._lastScoreStr) {
-        this._spinDigits(this.els.score, this._lastScoreStr, newStr);
-        this._lastScoreStr = newStr;
-      }
     } else if (scoreDiff !== 0) {
       this._displayScore = this._targetScore;
-      const newStr = this._targetScore.toLocaleString();
-      if (this.els.score && newStr !== this._lastScoreStr) {
-        this._spinDigits(this.els.score, this._lastScoreStr, newStr);
-        this._lastScoreStr = newStr;
-      }
     }
+    const scoreStr = fmtScore(this._displayScore);
+    this._renderDigitRow(this.els.score, scoreStr, this._scoreDigitH,
+      { str: this._scoreLastStr, set: v => this._scoreLastStr = v },
+      this._scoreAnimating);
+    this._scoreLastStr = scoreStr;
 
-    // Combo
+    // Combo — interpolate towards target, no commas
     const comboDiff = this._targetCombo - this._displayCombo;
     if (Math.abs(comboDiff) > 1) {
       this._displayCombo += comboDiff * 0.35;
-      const newStr = `${Math.round(this._displayCombo)}`;
-      if (this.els.combo && newStr !== this._lastComboStr) {
-        this._spinDigits(this.els.combo, this._lastComboStr, newStr);
-        this._lastComboStr = newStr;
-      }
     } else if (comboDiff !== 0) {
       this._displayCombo = this._targetCombo;
-      const newStr = `${this._targetCombo}`;
-      if (this.els.combo && newStr !== this._lastComboStr) {
-        this._spinDigits(this.els.combo, this._lastComboStr, newStr);
-        this._lastComboStr = newStr;
-      }
     }
+    const comboStr = `${Math.round(this._displayCombo)}`;
+    this._renderDigitRow(this.els.combo, comboStr, this._comboDigitH,
+      { str: this._comboLastStr, set: v => this._comboLastStr = v },
+      this._comboAnimating);
+    this._comboLastStr = comboStr;
 
-    // Decay combo pop
+    // Decay combo pop scale
     if (this._comboPopScale > 1.001) {
       this._comboPopScale += (1 - this._comboPopScale) * 0.15;
       if (this.els.combo) this.els.combo.style.transform = `scale(${this._comboPopScale})`;
@@ -206,7 +301,7 @@ export default class HUD {
       if (this.els.combo) this.els.combo.style.transform = '';
     }
 
-    // Rank scale
+    // Rank scale decay
     if (this._rankScale > 1.01) {
       this._rankScale += (1 - this._rankScale) * 0.12;
       if (this.els.rank) this.els.rank.style.transform = `scale(${this._rankScale}) rotate(-25deg)`;
@@ -215,7 +310,7 @@ export default class HUD {
       if (this.els.rank) this.els.rank.style.transform = 'rotate(-25deg)';
     }
 
-    // Accuracy
+    // Accuracy — smooth interpolation
     const accDiff = this._targetAccuracy - this._displayAccuracy;
     if (Math.abs(accDiff) > 0.01) {
       this._displayAccuracy += accDiff * 0.15;

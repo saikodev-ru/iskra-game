@@ -1277,3 +1277,31 @@ Stage Summary:
 - 4-layer visual effect: ambient glow + beat flash + edge bloom + enhanced judge line glow
 - Performance-safe: no shadowBlur, uses radial/linear gradients only, respects graphics preset
 - Lint passes clean
+---
+Task ID: 1
+Agent: main
+Task: Fix score/combo counter animations — per-digit slot-machine spin
+
+Work Log:
+- Read HUD.js — identified the problem: `_spinDigits()` applies a block-level `translateY(-40%) rotateX(45deg)` to the entire score/combo text, with no CSS `perspective`, making it look "crooked"
+- Designed a per-digit slot-machine spin system:
+  - Each digit gets its own `overflow:hidden` container
+  - When a digit changes, a two-frame wrapper (old digit on top, new digit below) slides upward via `translateY(-digitH)` CSS transition
+  - Commas in the score are thin non-animated separators
+  - Structural changes (different string length, e.g. 999→1,000) trigger a full rebuild with a brief opacity fade
+  - Mid-spin interruption: if a slot is already animating when a new change arrives, it snaps to the new value immediately
+- Rewrote `HUD.js` with the new system:
+  - `_rebuildDigitRow()` — builds all digit slots from scratch
+  - `_renderDigitRow()` — compares old/new strings, animates only changed digits
+  - `_spinDigitSlot()` — per-digit vertical spin animation (220ms, cubic-bezier easing)
+  - Removed the old `_spinDigits()` block transform approach
+  - Score uses `fmtScore()` (en-US comma format), combo uses plain digits
+- Verified: lint clean, dev server no errors
+
+Stage Summary:
+- HUD.js fully rewritten with per-digit slot-machine spinning animation
+- Score: each digit spins independently when it changes, commas are static separators
+- Combo: each digit spins independently
+- Animation: 220ms slide-up with `cubic-bezier(0.22,1,0.36,1)` easing
+- Interruption-safe: rapid digit changes snap instead of queuing
+- Structural changes (digit count change) handled with brief opacity fade
