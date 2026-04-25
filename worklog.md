@@ -1604,3 +1604,26 @@ Stage Summary:
 - TV static plays ~600-700ms during all screen transitions involving the game
 - Custom cursor visible on all menus, hidden during gameplay
 - Lint clean (0 errors)
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Remove TV static transition, cache SongSelect, redesign cursor
+
+Work Log:
+- Removed all TransitionFX imports from main.js, SongSelect.js, ResultScreen.js
+- Replaced TV static with simple fade-to-black CSS transition in SongSelect._playTransition()
+- Added `.song-transition-overlay.fade-to-black` CSS class in ZZZTheme.js
+- Cached SongSelect instance in main.js with `_songSelectInstance` variable
+- Added `_initialized` flag to SongSelect to skip IndexedDB reload on subsequent init() calls
+- Added `_reenable()` method to SongSelect that re-attaches DOM listeners, CRT effects, parallax, EventBus without reloading data
+- Completely rewrote GameCursor.js: arrow cursor → pulsing neon ring cursor with comet trail
+- New cursor features: SVG ring with 5 layers (dark outline + accent glow + white core + hover fill + center dot), dual-contrast visibility, 14-segment tapered comet trail, BPM-synced pulsing via `setBPM()`, click snap animation, hover feedback
+- Added `song:select` EventBus listener in main.js to sync cursor BPM with selected song
+- Added BPM reset when leaving song select screen
+
+Stage Summary:
+- TV static transition removed, replaced with simple fade-to-black
+- Song list no longer reloads from IndexedDB when returning from game
+- Custom cursor is now a BPM-pulsing neon ring with comet trail, visible on any surface
+- All changes pass lint (0 errors, 1 pre-existing warning)

@@ -1790,6 +1790,10 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 .song-transition-overlay.fade-bg {
   background: rgba(0,0,0,0.85);
 }
+.song-transition-overlay.fade-to-black {
+  background: rgba(0,0,0,1);
+  transition: background 0.35s ease-in;
+}
 
 .song-transition-card {
   position: absolute;

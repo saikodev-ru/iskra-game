@@ -3,7 +3,7 @@ import OszLoader from '../../game/OszLoader.js';
 import DifficultyAnalyzer from '../../game/DifficultyAnalyzer.js';
 import RecordStore from '../../game/RecordStore.js';
 import ZZZTheme from '../../theme/ZZZTheme.js';
-import { TransitionFX } from '../../game/TransitionFX.js';
+
 
 export default class SongSelect {
   constructor({ audio, three, screens }) {
@@ -35,6 +35,7 @@ export default class SongSelect {
     // Transition state
     this._transitioning = false;
     this._leavingToGame = false;  // true when transitioning to game screen
+    this._initialized = false;  // true after first init() completes
   }
 
   /** Get local best record for a beatmap difficulty (legacy compat) */
@@ -109,8 +110,15 @@ export default class SongSelect {
   }
 
   async init() {
-    // Show loading overlay
     const loadingEl = document.getElementById('ss-loading');
+
+    if (this._initialized) {
+      // Already loaded data — just re-enable UI
+      if (loadingEl) loadingEl.style.display = 'none';
+      this._reenable();
+      return;
+    }
+    this._initialized = true;
 
     try {
       const stored = await this.oszLoader.loadFromStore();
@@ -223,6 +231,106 @@ export default class SongSelect {
       }
     };
     EventBus.on('records:changed', this._recordsChangedHandler);
+  }
+
+  /** Re-enable UI effects after returning from game (without reloading song data).
+   *  Called by ScreenManager via main.js cached factory. */
+  _reenable() {
+    // Refresh the song list display (in case records changed from gameplay)
+    this._buildFilteredIndices();
+    this._renderSongList();
+
+    // DOM event listeners (re-attach since DOM is rebuilt by build())
+    const backBtn = document.getElementById('back-btn');
+    if (backBtn) backBtn.addEventListener('click', () => this.screens.show('main-menu'));
+    const oszInput = document.getElementById('osz-input');
+    if (oszInput) oszInput.addEventListener('change', (e) => this._handleOszFiles(e.target.files));
+    const searchInput = document.getElementById('song-search');
+    if (searchInput) searchInput.addEventListener('input', (e) => this._filterSongs(e.target.value));
+
+    // Drag-to-scroll setup
+    const songList = document.getElementById('song-list');
+    if (songList) {
+      songList.addEventListener('scroll', () => this._updateFadeEdges());
+      requestAnimationFrame(() => this._updateFadeEdges());
+      songList.addEventListener('mousedown', (e) => {
+        if (e.button !== 0 && e.button !== 2) return;
+        if (e.target.closest('button, input, label, a')) return;
+        this._dragScrolling = true;
+        this._dragStartY = e.clientY;
+        this._dragStartScrollTop = songList.scrollTop;
+        this._dragMoved = false;
+        this._dragButton = e.button;
+        songList.style.cursor = 'grabbing';
+        songList.style.userSelect = 'none';
+        e.preventDefault();
+      });
+      songList.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
+    // Window event listeners (re-add since destroy() removes them)
+    this._dragHandler = (e) => {
+      if (!this._dragScrolling) return;
+      const list = document.getElementById('song-list');
+      if (!list) return;
+      const dy = e.clientY - this._dragStartY;
+      if (Math.abs(dy) > 3) this._dragMoved = true;
+      list.scrollTop = this._dragStartScrollTop - dy;
+    };
+    this._dragUpHandler = (e) => {
+      if (!this._dragScrolling) return;
+      this._dragScrolling = false;
+      const list = document.getElementById('song-list');
+      if (list) { list.style.cursor = ''; list.style.userSelect = ''; }
+      setTimeout(() => { this._dragMoved = false; }, 50);
+    };
+    window.addEventListener('mousemove', this._dragHandler);
+    window.addEventListener('mouseup', this._dragUpHandler);
+
+    this._keyHandler = (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.code === 'ArrowUp') { e.preventDefault(); this._navigateUp(); }
+      else if (e.code === 'ArrowDown') { e.preventDefault(); this._navigateDown(); }
+      else if (e.code === 'ArrowLeft') { e.preventDefault(); this._navigateDiffLeft(); }
+      else if (e.code === 'ArrowRight') { e.preventDefault(); this._navigateDiffRight(); }
+      else if (e.code === 'Enter') { e.preventDefault(); this._confirmSong(); }
+      else if (e.code === 'Escape') { e.preventDefault(); this.screens.show('main-menu'); }
+      else if (e.code === 'Delete') { e.preventDefault(); this._deleteSelected(); }
+    };
+    window.addEventListener('keydown', this._keyHandler);
+
+    // CRT effects
+    if (this.three) {
+      this.three.setCrtIntensity(0.7);
+      this.three.setChromaticAberration(0);
+      ZZZTheme.createCrtOverlay();
+    }
+
+    // Parallax
+    const info = document.getElementById('ss-song-info');
+    const playArea = document.getElementById('ss-play-area');
+    const right = document.getElementById('ss-right-column');
+    this._parallaxEls = [];
+    if (info) { ZZZTheme.addParallax(info, 5); this._parallaxEls.push(info); }
+    if (playArea) { ZZZTheme.addParallax(playArea, 5); this._parallaxEls.push(playArea); }
+    if (right) { ZZZTheme.addParallax(right, 2); this._parallaxEls.push(right); }
+
+    // EventBus listener for record changes
+    this._recordsChangedHandler = () => {
+      if (this.selectedIndex >= 0) {
+        this._renderSongInfo(this.beatmapSets[this.selectedIndex]);
+        this._renderSongList();
+      }
+    };
+    EventBus.on('records:changed', this._recordsChangedHandler);
+
+    // Render current selection info
+    if (this.selectedIndex >= 0 && this.selectedIndex < this.beatmapSets.length) {
+      const set = this.beatmapSets[this.selectedIndex];
+      this._renderSongInfo(set);
+      this._renderPlayButton(set);
+    }
+    EventBus.emit('song:select', { map: this.beatmapSets[this.selectedIndex] || null });
   }
 
   /** Update fade mask based on scroll position */
@@ -1163,15 +1271,12 @@ export default class SongSelect {
       if (fill) fill.style.width = '100%';
     }, 600);
 
-    // Phase 3: glitch burst → TV static → start game
-    setTimeout(async () => {
+    // Phase 3: fade overlay to solid black, then start game
+    setTimeout(() => {
       card.classList.add('burst');
-      // Reset screen opacity
-      if (screenContainer) screenContainer.style.opacity = '1';
-
-      // Start the game after burst animation
-      setTimeout(async () => {
-        // Clean up transition overlay
+      overlay.classList.add('fade-to-black');
+      // Start the game after fade-to-black completes
+      setTimeout(() => {
         overlay.remove();
         this._transitioning = false;
         // Force-clear any screen transition animations that might block visibility
@@ -1181,8 +1286,6 @@ export default class SongSelect {
           sc.style.opacity = '';
           sc.style.animation = 'none';
         }
-        // TV static transition
-        await TransitionFX.play({ duration: 700 });
         this.screens.show('game', { map });
       }, 400);
     }, 1200);

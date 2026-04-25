@@ -19,7 +19,6 @@ import MainMenu      from './ui/screens/MainMenu.js';
 import SongSelect    from './ui/screens/SongSelect.js';
 import Settings      from './ui/screens/Settings.js';
 import ResultScreen  from './ui/screens/ResultScreen.js';
-import { TransitionFX }  from './game/TransitionFX.js';
 import { GameCursor }     from './game/GameCursor.js';
 
 /**
@@ -553,7 +552,7 @@ async function boot() {
     }
     document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); startGame(currentMapData); });
     document.getElementById('settings-btn').addEventListener('click', () => { _openPauseSettings(); });
-    document.getElementById('quit-btn').addEventListener('click', async () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); await TransitionFX.play({ duration: 600 }); screens.show('song-select'); });
+    document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); screens.show('song-select'); });
     EventBus.emit('game:pause');
   };
 
@@ -919,10 +918,28 @@ async function boot() {
   three.setParticlesVisible(true);
   EventBus.on('screen:change', ({ to }) => {
     three.setParticlesVisible(to === 'main-menu');
+    // Reset cursor BPM when leaving song select (no song playing)
+    if (to !== 'song-select') GameCursor.setBPM(0);
+  });
+
+  // Sync cursor BPM with selected song
+  EventBus.on('song:select', ({ map }) => {
+    if (map && map.difficulties) {
+      const diff = map.difficulties[0];
+      if (diff?.metadata?.bpm) GameCursor.setBPM(diff.metadata.bpm);
+    }
   });
 
   screens.register('main-menu', () => new MainMenu({ audio, screens }));
-  screens.register('song-select', () => new SongSelect({ audio, three, screens }));
+  let _songSelectInstance = null;
+  screens.register('song-select', () => {
+    if (_songSelectInstance) {
+      _songSelectInstance.reenable();
+      return _songSelectInstance;
+    }
+    _songSelectInstance = new SongSelect({ audio, three, screens });
+    return _songSelectInstance;
+  });
   screens.register('settings', () => new Settings({ audio, input, screens, overlayMode: true }));
   screens.register('result', (data) => {
     const rs = new ResultScreen({ screens });

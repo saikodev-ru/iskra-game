@@ -1,6 +1,5 @@
 import EventBus from '../../core/EventBus.js';
 import RecordStore from '../../game/RecordStore.js';
-import { TransitionFX } from '../../game/TransitionFX.js';
 
 const GRADE_GRADIENTS = {
   X:  { bg: 'linear-gradient(180deg, #FFD700 0%, #FFA500 100%)', glow: 'rgba(255,215,0,0.5)', stroke: 'rgba(0,0,0,0.8)', bgSolid: '#FFA500' },
@@ -215,26 +214,25 @@ export default class ResultScreen {
 
     // Buttons
     document.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+      btn.addEventListener('click', (e) => {
         const action = e.currentTarget.dataset.action;
         if (action === 'retry' && this._lastMap) {
-          await TransitionFX.play({ duration: 600 });
           this.screens.show('game', { map: this._lastMap });
         }
-        else if (action === 'menu') { await TransitionFX.play({ duration: 600 }); this.screens.show('song-select'); }
-        else if (action === 'back') { await TransitionFX.play({ duration: 600 }); this.screens.show('song-select'); }
+        else if (action === 'menu') { this.screens.show('song-select'); }
+        else if (action === 'back') { this.screens.show('song-select'); }
         else if (action === 'delete-record') this._deleteCurrentRecord();
       });
     });
 
     this._keyHandler = (e) => {
       if (this._viewingHistory) {
-        if (e.code === 'Escape' || e.code === 'Enter') { TransitionFX.play({ duration: 600 }); this.screens.show('song-select'); }
+        if (e.code === 'Escape' || e.code === 'Enter') { this.screens.show('song-select'); }
         else if (e.code === 'ArrowLeft') this._navigateCard(-1);
         else if (e.code === 'ArrowRight') this._navigateCard(1);
       } else {
-        if (e.code === 'Enter') { TransitionFX.play({ duration: 600 }); this.screens.show('song-select'); }
-        else if (e.code === 'Escape') { TransitionFX.play({ duration: 600 }); this.screens.show('main-menu'); }
+        if (e.code === 'Enter') { this.screens.show('song-select'); }
+        else if (e.code === 'Escape') { this.screens.show('main-menu'); }
         else if (e.code === 'ArrowLeft') this._navigateCard(-1);
         else if (e.code === 'ArrowRight') this._navigateCard(1);
       }
