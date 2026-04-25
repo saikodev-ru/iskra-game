@@ -664,7 +664,8 @@ export default class NoteRenderer {
     const noise = (Math.sin(this._kiaiFlamePhase * 3.7) * 0.3 + Math.sin(this._kiaiFlamePhase * 7.1) * 0.2 + Math.sin(this._kiaiFlamePhase * 13.3) * 0.15) * 0.65 + 0.5;
 
     // ── Get accent color from lane colors ──
-    const lc = NoteRenderer.LANE_COLORS[0] || { r: 170, g: 255, b: 0 };
+    const lcHex = NoteRenderer.LANE_COLORS[0] || '#AAFF00';
+    const lc = this._hexToRgb(lcHex);
     const acR = lc.r, acG = lc.g, acB = lc.b;
 
     // ════════════════════════════════════════════════════════
