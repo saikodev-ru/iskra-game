@@ -1651,3 +1651,23 @@ Stage Summary:
 - Notes now render as perspective-correct trapezoids matching the playfield
 - Death animation: game time freezes, notes stop moving, audio slows down independently
 - No more visual "breaking" of notes during death (removed CSS skew transforms)
+---
+Task ID: 1
+Agent: Main Agent
+Task: Redesign playfield as matte glass with 30% transparency + fix transitions
+
+Work Log:
+- Changed lane fill opacity from `rgba(12,12,14,1)` to `rgba(12,12,14,0.30)` and similar for alternating lanes
+- Increased depth fog at top from 0.45 to 0.55 alpha to compensate for transparent background
+- Increased judge line glow from 0.05/0.10 to 0.08/0.16 alpha for better visibility through transparent field
+- Reduced bottom fade-to-black from 0.6 to 0.4 alpha
+
+- Fixed ScreenManager to skip 3D perspective animations when entering/leaving game screen
+- Added `_skipAnimations` flag and `_instantEnter()` method for instant screen swaps
+- Removed ScreenManager transition fighting from SongSelect._playTransition() (removed forced `_transitioning=false` hacks)
+- Added transition overlay cleanup in SongSelect.destroy()
+
+Stage Summary:
+- Playfield is now 30% transparent matte glass — background image/video shows through lanes
+- Song select → game transition: flying card + burst + fade-to-black works cleanly without ScreenManager interference
+- Game → result → song-select: instant swap (no jarring 3D animations when coming from game canvas)

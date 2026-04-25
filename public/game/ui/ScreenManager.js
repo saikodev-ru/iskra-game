@@ -8,6 +8,7 @@ export default class ScreenManager {
     this._currentName = '';
     this._transitioning = false;
     this._transitionOverlay = null; // reusable overlay element
+    this._skipAnimations = false; // true when game screen manages its own transitions
   }
   register(name, factory) { this._screens[name] = factory; }
 
@@ -15,6 +16,11 @@ export default class ScreenManager {
     if (this._transitioning || name === this._currentName) return;
     const from = this._currentName;
     this._transitioning = true;
+
+    // Skip ScreenManager animations when entering/leaving the game screen
+    // (game has its own transition: flying card → fade-to-black → game loop)
+    this._skipAnimations = (name === 'game' || from === 'game');
+
     const factory = this._screens[name];
     if (!factory) { console.error(`Screen "${name}" not registered`); this._transitioning = false; return; }
 
@@ -29,15 +35,45 @@ export default class ScreenManager {
     };
 
     if (this._current) {
-      // Exit transition: 3D perspective fly-out
-      this._3DExit(() => {
+      if (this._skipAnimations) {
+        // Instant swap — no exit/enter animations
         destroyCurrent();
-        this._3DEnter(name, factory, data, from);
-      });
+        this._instantEnter(name, factory, data, from);
+      } else {
+        // Exit transition: 3D perspective fly-out
+        this._3DExit(() => {
+          destroyCurrent();
+          this._3DEnter(name, factory, data, from);
+        });
+      }
     } else {
       destroyCurrent();
-      this._3DEnter(name, factory, data, from);
+      this._instantEnter(name, factory, data, from);
     }
+  }
+
+  /** Instant enter — no animation, for game screen transitions */
+  _instantEnter(name, factory, data, from) {
+    const screen = factory(data);
+    this._current = screen;
+    this._currentName = name;
+
+    if (screen.build) {
+      const el = screen.build();
+      if (typeof el === 'string') this.container.innerHTML = el;
+      else { this.container.innerHTML = ''; this.container.appendChild(el); }
+    }
+    if (screen.init) screen.init(data);
+
+    this.container.style.opacity = '';
+    this.container.style.animation = '';
+    this.container.style.transform = '';
+    this._transitioning = false;
+
+    this.container.style.pointerEvents = name === 'game' ? 'none' : 'auto';
+
+    EventBus.emit('screen:change', { from, to: name });
+    this._skipAnimations = false;
   }
 
   /** 3D exit: current screen flies back and fades with perspective */
@@ -77,6 +113,7 @@ export default class ScreenManager {
       this.container.style.perspective = '';
       this.container.style.transformStyle = '';
       this._transitioning = false;
+      this._skipAnimations = false;
     }, 380);
 
     // Enable pointer events for interactive screens (menus, settings)

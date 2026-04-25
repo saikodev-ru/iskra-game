@@ -1177,7 +1177,7 @@ export default class SongSelect {
     this._playTransition(set, diff, map);
   }
 
-  /** Beautiful song → game transition */
+  /** Song → game transition: fade to black then start */
   _playTransition(set, diff, map) {
     // Immediately hide the song select UI (screen container + CRT overlay)
     const screenContainer = document.getElementById('screen');
@@ -1190,16 +1190,15 @@ export default class SongSelect {
     const judgementContainer = document.getElementById('judgement-overlay');
     if (judgementContainer) judgementContainer.style.opacity = '0';
 
-    // Find the active song card element to get its position
-    const activeCard = document.querySelector(`.song-card-wrapper[data-index="${this.selectedIndex}"] .song-card`);
-    const cardRect = activeCard ? activeCard.getBoundingClientRect() : null;
-
     // Create the transition overlay
     const overlay = document.createElement('div');
     overlay.className = 'song-transition-overlay';
     overlay.id = 'song-transition-overlay';
 
     // Create the flying card clone
+    const activeCard = document.querySelector(`.song-card-wrapper[data-index="${this.selectedIndex}"] .song-card`);
+    const cardRect = activeCard ? activeCard.getBoundingClientRect() : null;
+
     const card = document.createElement('div');
     card.className = 'song-transition-card';
 
@@ -1279,30 +1278,18 @@ export default class SongSelect {
       setTimeout(() => {
         overlay.remove();
         this._transitioning = false;
-        // Force-clear any screen transition animations that might block visibility
-        const sc = document.getElementById('screen');
-        if (sc) {
-          sc.classList.remove('screen-exit', 'screen-enter');
-          sc.style.opacity = '';
-          sc.style.animation = 'none';
-        }
+        // startGame handles the game screen setup; ScreenManager.show('game') is instant now
         this.screens.show('game', { map });
       }, 400);
     }, 1200);
 
     // Backup: force-start game if transition fails
     setTimeout(() => {
-      // Fallback: if screens are still transitioning, force cleanup
-      const sc = document.getElementById('screen');
-      if (sc) {
-        sc.classList.remove('screen-exit', 'screen-enter');
-        sc.style.opacity = '';
-        sc.style.animation = 'none';
-      }
+      const overlayEl = document.getElementById('song-transition-overlay');
+      if (overlayEl) overlayEl.remove();
+      this._transitioning = false;
       if (this.screens._transitioning) {
         this.screens._transitioning = false;
-        this.screens._currentName = '';
-        this.screens.show('game', { map });
       }
     }, 3000);
   }
@@ -1422,6 +1409,10 @@ export default class SongSelect {
       this.three.setCrtIntensity(0);
       ZZZTheme.removeCrtOverlay();
     }
+
+    // Clean up transition overlay if still present
+    const transOverlay = document.getElementById('song-transition-overlay');
+    if (transOverlay) transOverlay.remove();
 
     // Reset transitioning state
     this._transitioning = false;

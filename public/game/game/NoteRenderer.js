@@ -404,20 +404,20 @@ export default class NoteRenderer {
     const leftBottom = this._getLaneGeometry(0, bottomY, laneCount);
     const rightBottom = this._getLaneGeometry(laneCount, bottomY, laneCount);
 
-    // ── Lane fills — solid dark ──
+    // ── Lane fills — matte glass, 30% transparent ──
     for (let i = 0; i < laneCount; i++) {
       const topGeom = this._getLaneGeometry(i, topY, laneCount);
       const judgeGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
       const bottomGeom = this._getLaneGeometry(i, bottomY, laneCount);
 
-      // Above judge line: dark trapezoid
+      // Above judge line: translucent matte trapezoid
       cctx.beginPath();
       cctx.moveTo(topGeom.x, topY);
       cctx.lineTo(topGeom.x + topGeom.width, topY);
       cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
       cctx.lineTo(judgeGeom.x, judgeLineY);
       cctx.closePath();
-      cctx.fillStyle = i % 2 === 0 ? 'rgba(12,12,14,1)' : 'rgba(16,16,18,1)';
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(12,12,14,0.30)' : 'rgba(16,16,18,0.30)';
       cctx.fill();
 
       // Subtle glass highlight at 30% height
@@ -432,20 +432,20 @@ export default class NoteRenderer {
       const highlightY = topY + (judgeLineY - topY) * 0.3;
       const hlGrad = cctx.createLinearGradient(0, highlightY - 6, 0, highlightY + 6);
       hlGrad.addColorStop(0, 'rgba(255,255,255,0)');
-      hlGrad.addColorStop(0.5, 'rgba(255,255,255,0.025)');
+      hlGrad.addColorStop(0.5, 'rgba(255,255,255,0.03)');
       hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
       cctx.fillStyle = hlGrad;
       cctx.fillRect(topGeom.x - 2, highlightY - 6, topGeom.width + 4, 12);
       cctx.restore();
 
-      // Below judge line: same solid dark as above (unified style)
+      // Below judge line: same translucent matte as above
       cctx.beginPath();
       cctx.moveTo(judgeGeom.x, judgeLineY);
       cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
       cctx.lineTo(bottomGeom.x + bottomGeom.width, bottomY);
       cctx.lineTo(bottomGeom.x, bottomY);
       cctx.closePath();
-      cctx.fillStyle = i % 2 === 0 ? 'rgba(10,10,12,1)' : 'rgba(14,14,16,1)';
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(10,10,12,0.30)' : 'rgba(14,14,16,0.30)';
       cctx.fill();
 
       // Subtle fade-to-black at the very bottom edge for smooth edge blending
@@ -460,7 +460,7 @@ export default class NoteRenderer {
       const fadeH = (bottomY - judgeLineY) * 0.35;
       const bottomFadeGrad = cctx.createLinearGradient(0, bottomY - fadeH, 0, bottomY);
       bottomFadeGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      bottomFadeGrad.addColorStop(1, 'rgba(0,0,0,0.6)');
+      bottomFadeGrad.addColorStop(1, 'rgba(0,0,0,0.4)');
       cctx.fillStyle = bottomFadeGrad;
       cctx.fillRect(bottomGeom.x - 2, bottomY - fadeH, bottomGeom.width + 4, fadeH);
       cctx.restore();
@@ -551,9 +551,9 @@ export default class NoteRenderer {
       cctx.restore();
     }
 
-    // ── Depth fog at top ──
+    // ── Depth fog at top (stronger to compensate for transparent lanes) ──
     const fogGrad = cctx.createLinearGradient(0, topY, 0, topY + (judgeLineY - topY) * 0.25);
-    fogGrad.addColorStop(0, 'rgba(0,0,0,0.45)');
+    fogGrad.addColorStop(0, 'rgba(0,0,0,0.55)');
     fogGrad.addColorStop(1, 'rgba(0,0,0,0)');
     cctx.fillStyle = fogGrad;
     cctx.fillRect(leftTop.x - 8, topY, rightTop.x - leftTop.x + 16, (judgeLineY - topY) * 0.25);
@@ -563,9 +563,9 @@ export default class NoteRenderer {
     cctx.save();
     const jlGlow = cctx.createLinearGradient(0, judgeLineY - glowH / 2, 0, judgeLineY + glowH / 2);
     jlGlow.addColorStop(0, 'rgba(255,255,255,0)');
-    jlGlow.addColorStop(0.35, 'rgba(255,255,255,0.05)');
-    jlGlow.addColorStop(0.5, 'rgba(255,255,255,0.10)');
-    jlGlow.addColorStop(0.65, 'rgba(255,255,255,0.05)');
+    jlGlow.addColorStop(0.35, 'rgba(255,255,255,0.08)');
+    jlGlow.addColorStop(0.5, 'rgba(255,255,255,0.16)');
+    jlGlow.addColorStop(0.65, 'rgba(255,255,255,0.08)');
     jlGlow.addColorStop(1, 'rgba(255,255,255,0)');
     cctx.fillStyle = jlGlow;
     cctx.fillRect(leftJudge.x - 4, judgeLineY - glowH / 2, rightJudge.x - leftJudge.x + 8, glowH);
