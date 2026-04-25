@@ -395,10 +395,10 @@ export default class NoteRenderer {
     };
 
     if (this._bgImage) {
-      // Draw semi-transparent dark base under playfield (soft block of Three.js background)
+      // Draw semi-transparent dark base under playfield (frosted glass — let bg show through)
       cctx.save();
       pfFullPath();
-      cctx.fillStyle = 'rgba(6,6,8,0.88)';
+      cctx.fillStyle = 'rgba(6,6,8,0.50)';
       cctx.fill();
       cctx.restore();
 
@@ -406,8 +406,8 @@ export default class NoteRenderer {
       cctx.save();
       pfFullPath();
       cctx.clip();
-      cctx.globalAlpha = 0.35;
-      cctx.filter = 'blur(20px) brightness(0.65) saturate(1.3)';
+      cctx.globalAlpha = 0.55;
+      cctx.filter = 'blur(18px) brightness(0.7) saturate(1.2)';
       const ia = this._bgImage.width / this._bgImage.height;
       const ca = this.w / this.h;
       let dw, dh, dx, dy;
@@ -418,10 +418,10 @@ export default class NoteRenderer {
       cctx.filter = 'none';
       cctx.restore();
     } else {
-      // No background image — draw opaque dark base under playfield
+      // No background image — draw dark base under playfield
       cctx.save();
       pfFullPath();
-      cctx.fillStyle = 'rgba(6,6,8,0.88)';
+      cctx.fillStyle = 'rgba(6,6,8,0.50)';
       cctx.fill();
       cctx.restore();
     }
@@ -448,7 +448,7 @@ export default class NoteRenderer {
       cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
       cctx.lineTo(judgeGeom.x, judgeLineY);
       cctx.closePath();
-      cctx.fillStyle = i % 2 === 0 ? 'rgba(10,10,12,0.38)' : 'rgba(14,14,16,0.38)';
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(10,10,12,0.15)' : 'rgba(14,14,16,0.15)';
       cctx.fill();
 
       // Subtle glass highlight at 30% height
@@ -476,7 +476,7 @@ export default class NoteRenderer {
       cctx.lineTo(bottomGeom.x + bottomGeom.width, bottomY);
       cctx.lineTo(bottomGeom.x, bottomY);
       cctx.closePath();
-      cctx.fillStyle = i % 2 === 0 ? 'rgba(8,8,10,0.38)' : 'rgba(12,12,14,0.38)';
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(8,8,10,0.15)' : 'rgba(12,12,14,0.15)';
       cctx.fill();
 
       // Subtle fade-to-black at the very bottom edge for smooth edge blending
@@ -583,8 +583,8 @@ export default class NoteRenderer {
     }
 
     // ── Depth fog at top (subtle perspective depth) ──
-    const fogGrad = cctx.createLinearGradient(0, topY, 0, topY + (judgeLineY - topY) * 0.18);
-    fogGrad.addColorStop(0, 'rgba(0,0,0,0.30)');
+    const fogGrad = cctx.createLinearGradient(0, topY, 0, topY + (judgeLineY - topY) * 0.12);
+    fogGrad.addColorStop(0, 'rgba(0,0,0,0.18)');
     fogGrad.addColorStop(1, 'rgba(0,0,0,0)');
     cctx.fillStyle = fogGrad;
     cctx.fillRect(leftTop.x - 8, topY, rightTop.x - leftTop.x + 16, (judgeLineY - topY) * 0.18);
@@ -850,9 +850,8 @@ export default class NoteRenderer {
       ctx.save();
 
       if (isWholeBeat) {
-        // Whole beat — subtle white line
-        const fadeIn = this._fadeIn(y, judgeLineY);
-        const alpha = fadeIn * 0.14;
+        // Whole beat — white line, no fade-in (visible from top)
+        const alpha = 0.14;
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
@@ -861,9 +860,8 @@ export default class NoteRenderer {
         ctx.lineTo(rightG.x - 2, y);
         ctx.stroke();
       } else {
-        // Half beat — very faint
-        const fadeIn = this._fadeIn(y, judgeLineY);
-        const alpha = fadeIn * 0.05;
+        // Half beat — very faint, no fade-in
+        const alpha = 0.05;
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 0.5;
