@@ -777,35 +777,35 @@ export default class NoteRenderer {
       ctx.globalCompositeOperation = 'lighter';
       const wallGlowW = 20 + this._kiaiBorderGlow * 14;
 
-      // Left wall glow — vertical gradient bar bleeding left
+      // Left wall glow — narrow strip bleeding left from judge-line left edge
       const lGrad = ctx.createLinearGradient(lxJ - wallGlowW, 0, lxJ, 0);
       lGrad.addColorStop(0, `rgba(${acR},${acG},${acB},0)`);
       lGrad.addColorStop(0.5, `rgba(${acR},${acG},${acB},${borderAlpha * 0.06})`);
       lGrad.addColorStop(1, `rgba(255,255,255,${borderAlpha * 0.12})`);
       ctx.fillStyle = lGrad;
-      ctx.fillRect(lxT - wallGlowW, topY, (lxJ - lxT) + wallGlowW, judgeLineY - topY);
+      ctx.fillRect(lxJ - wallGlowW, topY, wallGlowW, judgeLineY - topY);
 
-      // Right wall glow — vertical gradient bar bleeding right
+      // Right wall glow — narrow strip bleeding right from judge-line right edge
       const rGrad = ctx.createLinearGradient(rxJ, 0, rxJ + wallGlowW, 0);
       rGrad.addColorStop(0, `rgba(255,255,255,${borderAlpha * 0.12})`);
       rGrad.addColorStop(0.5, `rgba(${acR},${acG},${acB},${borderAlpha * 0.06})`);
       rGrad.addColorStop(1, `rgba(${acR},${acG},${acB},0)`);
       ctx.fillStyle = rGrad;
-      ctx.fillRect(rxJ, topY, (rxJ - rxT) + wallGlowW, judgeLineY - topY);
+      ctx.fillRect(rxJ, topY, wallGlowW, judgeLineY - topY);
 
-      // Below-judge mirror (fainter, tapering down)
+      // Below-judge mirror (fainter)
       const bWallW = 12 + this._kiaiBorderGlow * 6;
       const lGradB = ctx.createLinearGradient(lxJ - bWallW, 0, lxJ, 0);
       lGradB.addColorStop(0, `rgba(${acR},${acG},${acB},0)`);
       lGradB.addColorStop(1, `rgba(${acR},${acG},${acB},${borderAlpha * 0.04})`);
       ctx.fillStyle = lGradB;
-      ctx.fillRect(lxJ - bWallW, judgeLineY, (lxB - lxJ) + bWallW, bottomY - judgeLineY);
+      ctx.fillRect(lxJ - bWallW, judgeLineY, bWallW, bottomY - judgeLineY);
 
       const rGradB = ctx.createLinearGradient(rxJ, 0, rxJ + bWallW, 0);
       rGradB.addColorStop(0, `rgba(${acR},${acG},${acB},${borderAlpha * 0.04})`);
       rGradB.addColorStop(1, `rgba(${acR},${acG},${acB},0)`);
       ctx.fillStyle = rGradB;
-      ctx.fillRect(rxJ, judgeLineY, (rxB - rxJ) + bWallW, bottomY - judgeLineY);
+      ctx.fillRect(rxJ, judgeLineY, bWallW, bottomY - judgeLineY);
 
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
