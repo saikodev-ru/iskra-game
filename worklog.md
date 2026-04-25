@@ -1335,3 +1335,29 @@ Stage Summary:
 - `public/game/main.js` — added import + auto-detection call in startGame()
 - Songs without kiai time will now automatically have kiai-like visual effects during detected chorus sections
 - Performance: < 80ms for a 5-minute song (one-time analysis before gameplay)
+
+---
+Task ID: 3
+Agent: main
+Task: Fix jumping/hanging score/combo counter animations
+
+Work Log:
+- Identified root causes of the buggy per-digit spin system:
+  1. Structural DOM rebuilds on comma boundary transitions (999→1,000) caused jarring fades
+  2. `_comboPopScale` transform on parent container conflicted with child digit animations
+  3. Slow lerp (0.2) caused visible lag — score always behind actual value ("hanging")
+  4. setTimeout cleanup (260ms) could overlap with new animations, causing stuck slots
+- Completely rewrote HUD.js with CSS `@keyframes` approach:
+  - Injected `<style>` with three keyframe animations: `hud-score-flip`, `hud-combo-pop`, `hud-combo-milestone`
+  - Score: text node updated directly, `perspective: 400px` on parent for proper 3D `rotateX` flip
+  - Combo: instant snap (no interpolation), pop animation on change
+  - Animation management via re-trigger pattern (animation = 'none' → reflow → animation = '...')
+  - Cooldown timers (160ms score, 120ms combo) prevent re-triggering mid-animation
+  - Faster score lerp (0.35 + snap at diff<5) — catches up in ~170ms instead of ~300ms
+- Verified: lint clean, dev server no errors
+
+Stage Summary:
+- HUD.js simplified from ~400 lines (per-digit DOM system) to ~230 lines (CSS keyframes)
+- Score: fast interpolation + 3D flip-down animation on text change
+- Combo: instant update + scale pop (bigger for milestones 50/100/200/500)
+- No more jumping, hanging, or stuck animations

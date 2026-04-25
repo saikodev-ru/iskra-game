@@ -1,6 +1,6 @@
 import EventBus from '../core/EventBus.js';
 
-/** Format a number with commas (always en-US style: 1,234,567) */
+/** Format a number with commas (en-US: 1,234,567) */
 function fmtScore(n) {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
@@ -10,7 +10,7 @@ export default class HUD {
     this.container = container;
     this.els = {};
     this._hidden = true;
-    this._frozen = false;       // true when game is paused — stops all animation
+    this._frozen = false;
     this._displayScore = 0;
     this._displayCombo = 0;
     this._displayAccuracy = 100;
@@ -20,17 +20,47 @@ export default class HUD {
     this._targetAccuracy = 100;
     this._currentRank = 'X';
     this._rankScale = 1;
-    this._comboPopScale = 1;
 
-    // ── Per-digit spin system ──
-    this._scoreDigitH = 44;
-    this._comboDigitH = 64;
+    // ── Text-based animation state ──
     this._scoreLastStr = '0';
     this._comboLastStr = '0';
-    this._scoreAnimating = new Set();   // set of slot indices currently mid-spin
-    this._comboAnimating = new Set();
+    this._scoreAnimT = 0;   // timestamp of last score animation trigger
+    this._comboAnimT = 0;
 
+    this._injectCSS();
     this._build();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     CSS KEYFRAME ANIMATIONS
+     Score: vertical slide-up with perspective rotation (like a flip counter)
+     Combo: quick scale pop on change
+     ═══════════════════════════════════════════════════════════════════ */
+  _injectCSS() {
+    if (document.getElementById('hud-anim-css')) return;
+    const style = document.createElement('style');
+    style.id = 'hud-anim-css';
+    style.textContent = `
+      /* Score: 3D flip-down slide into view */
+      @keyframes hud-score-flip {
+        0%   { transform: translateY(-60%) rotateX(-70deg); opacity: 0.15; filter: blur(2px); }
+        60%  { opacity: 0.85; filter: blur(0.5px); }
+        100% { transform: translateY(0) rotateX(0deg); opacity: 1; filter: blur(0); }
+      }
+      /* Combo: sharp pop with slight overshoot */
+      @keyframes hud-combo-pop {
+        0%   { transform: scale(1.18) translateY(-3px); opacity: 0.7; }
+        50%  { transform: scale(1.04) translateY(0); }
+        100% { transform: scale(1) translateY(0); opacity: 1; }
+      }
+      /* Combo milestone: bigger pop */
+      @keyframes hud-combo-milestone {
+        0%   { transform: scale(1.4) translateY(-6px); opacity: 0.6; }
+        40%  { transform: scale(0.96) translateY(1px); }
+        100% { transform: scale(1) translateY(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   _build() {
@@ -39,27 +69,20 @@ export default class HUD {
 
         <!-- ── LEFT: Score + Accuracy ── -->
         <div style="position:absolute;left:5%;top:55%;transform:translateY(-50%);text-align:right;">
-          <!-- Score label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:10px;color:rgba(170,255,0,0.45);letter-spacing:0.25em;text-transform:uppercase;margin-bottom:2px;text-shadow:0 0 8px rgba(0,0,0,0.9);">SCORE</div>
-          <!-- Score digit row (filled dynamically) -->
-          <div id="hud-score" style="display:flex;justify-content:flex-end;align-items:center;gap:0;font-family:var(--zzz-font);font-weight:900;font-size:44px;color:var(--zzz-lime);line-height:1;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);"></div>
-          <!-- Separator line -->
+          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:44px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);perspective:400px;transform-style:preserve-3d;">0</div>
           <div style="width:60px;height:1px;background:linear-gradient(to right,transparent,rgba(170,255,0,0.3));margin:8px auto 8px 0;"></div>
-          <!-- Accuracy label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.35);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:1px;text-shadow:0 0 8px rgba(0,0,0,0.9);">ACCURACY</div>
-          <!-- Accuracy value -->
           <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-weight:600;font-size:18px;color:rgba(255,255,255,0.7);font-variant-numeric:tabular-nums;letter-spacing:0.04em;text-shadow:0 0 8px rgba(0,0,0,0.9),-1px -1px 0 rgba(0,0,0,0.7),1px -1px 0 rgba(0,0,0,0.7),-1px 1px 0 rgba(0,0,0,0.7),1px 1px 0 rgba(0,0,0,0.7);">100.00%</div>
         </div>
 
         <!-- ── RIGHT: Combo + Rank ── -->
         <div style="position:absolute;right:5%;top:55%;transform:translateY(-50%);text-align:left;">
-          <!-- Combo value -->
           <div style="display:flex;align-items:baseline;gap:8px;">
-            <div id="hud-combo" style="display:flex;align-items:center;gap:0;font-family:var(--zzz-font);font-weight:900;font-size:64px;color:#ffffff;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);"></div>
+            <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:64px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);perspective:400px;transform-style:preserve-3d;">0</div>
             <div style="font-family:var(--zzz-font);font-weight:700;font-size:16px;color:rgba(255,255,255,0.5);letter-spacing:0.05em;text-shadow:0 2px 8px rgba(0,0,0,0.9);">x</div>
             <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="X" style="font-family:var(--zzz-font);font-weight:900;font-size:36px;opacity:1;transform:scale(1) rotate(-25deg);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
           </div>
-          <!-- Combo label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px;text-shadow:0 0 8px rgba(0,0,0,0.9);">COMBO</div>
         </div>
 
@@ -98,161 +121,52 @@ export default class HUD {
       this.els.rank.appendChild(fill);
     }
 
-    // Initialize digit rows with "0"
-    this._rebuildDigitRow(this.els.score, '0', this._scoreDigitH, this._scoreAnimating);
-    this._rebuildDigitRow(this.els.combo, '0', this._comboDigitH, this._comboAnimating);
-
     this._startAnimLoop();
   }
 
   /* ═══════════════════════════════════════════════════════════════════
-     PER-DIGIT SLOT MACHINE SPIN SYSTEM
-     Each digit has its own overflow:hidden container.
-     When a digit changes, a two-frame slide-up animation plays:
-       Frame 1: old digit visible (translateY: 0)
-       Frame 2: wrapper slides up → old exits top, new enters from below
-     Commas are thin non-animated separators.
+     ANIMATION HELPERS
+     Trigger CSS keyframe animations by re-assigning the class.
+     A short cooldown prevents re-triggering while animation is running.
      ═══════════════════════════════════════════════════════════════════ */
 
-  /**
-   * Rebuild an entire digit row from scratch (used when string length
-   * or comma positions change, e.g. 999 → 1,000).
-   */
-  _rebuildDigitRow(container, str, digitH, animatingSet) {
-    container.innerHTML = '';
-    for (const ch of str) {
-      const slot = document.createElement('div');
-      slot.style.cssText = `height:${digitH}px;display:flex;align-items:center;justify-content:center;overflow:hidden;`;
-      if (ch === ',') {
-        slot.style.width = (digitH * 0.32) + 'px';
-        slot.style.opacity = '0.45';
-        slot.textContent = ',';
-      } else {
-        slot.style.width = (digitH * 0.62) + 'px';
-        slot.textContent = ch;
-        slot.dataset.digit = ch;
-      }
-      container.appendChild(slot);
-    }
-    animatingSet.clear();
+  /** Trigger a score flip animation on the score element */
+  _triggerScoreFlip() {
+    const el = this.els.score;
+    if (!el) return;
+    const now = performance.now();
+    if (now - this._scoreAnimT < 160) return; // cooldown: don't re-trigger mid-animation
+    this._scoreAnimT = now;
+    // Re-trigger by removing + re-adding the animation
+    el.style.animation = 'none';
+    void el.offsetHeight; // force reflow
+    el.style.animation = 'hud-score-flip 0.2s cubic-bezier(0.22,1,0.36,1) forwards';
   }
 
-  /**
-   * Render a formatted number string into per-digit slots.
-   * Compares with the previous string and spins only changed digits.
-   * If the string length changes (structural change), rebuilds entirely.
-   */
-  _renderDigitRow(container, newStr, digitH, lastStrRef, animatingSet) {
-    if (!container) return;
-    if (lastStrRef.str === newStr) return;
-    const oldStr = lastStrRef.str || '';
-
-    // Structural change: different character count → full rebuild with fade
-    if (oldStr.length !== newStr.length) {
-      container.style.transition = 'opacity 0.08s ease-out';
-      container.style.opacity = '0.4';
-      this._rebuildDigitRow(container, newStr, digitH, animatingSet);
-      lastStrRef.str = newStr;
-      requestAnimationFrame(() => {
-        container.style.opacity = '1';
-        setTimeout(() => { container.style.transition = ''; }, 120);
-      });
-      return;
-    }
-
-    lastStrRef.str = newStr;
-
-    // Same length: compare character by character, spin changed digits
-    for (let i = 0; i < newStr.length; i++) {
-      const oldCh = oldStr[i];
-      const newCh = newStr[i];
-      if (oldCh === newCh) continue;
-
-      const slot = container.children[i];
-      if (!slot) continue;
-
-      // Comma → just update text (no animation)
-      if (newCh === ',' || oldCh === ',') {
-        slot.textContent = newCh;
-        if (newCh === ',') {
-          slot.dataset.digit = '';
-          slot.style.width = (digitH * 0.32) + 'px';
-          slot.style.opacity = '0.45';
-        } else {
-          slot.dataset.digit = newCh;
-          slot.style.width = (digitH * 0.62) + 'px';
-          slot.style.opacity = '1';
-        }
-        continue;
-      }
-
-      // Digit changed → slot-machine spin
-      this._spinDigitSlot(slot, oldCh, newCh, digitH, animatingSet, i);
-    }
+  /** Trigger a combo pop animation. `milestone` = bigger pop for 50/100/200/500 */
+  _triggerComboPop(milestone = false) {
+    const el = this.els.combo;
+    if (!el) return;
+    const now = performance.now();
+    if (now - this._comboAnimT < 120) return;
+    this._comboAnimT = now;
+    el.style.animation = 'none';
+    void el.offsetHeight;
+    el.style.animation = milestone
+      ? 'hud-combo-milestone 0.3s cubic-bezier(0.22,1,0.36,1) forwards'
+      : 'hud-combo-pop 0.18s cubic-bezier(0.22,1,0.36,1) forwards';
   }
 
-  /**
-   * Animate a single digit slot: old digit slides up and out,
-   * new digit slides up from below into view.
-   */
-  _spinDigitSlot(slot, oldDigit, newDigit, digitH, animatingSet, index) {
-    // If this slot is already mid-spin, snap to new value
-    if (animatingSet.has(index)) {
-      animatingSet.delete(index);
-      slot.textContent = newDigit;
-      slot.dataset.digit = newDigit;
-      return;
-    }
-
-    animatingSet.add(index);
-    slot.dataset.digit = newDigit;
-
-    // Build two-frame wrapper
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:relative;width:100%;';
-
-    const topFace = document.createElement('div');
-    topFace.style.cssText = `height:${digitH}px;display:flex;align-items:center;justify-content:center;`;
-    topFace.textContent = oldDigit;
-
-    const botFace = document.createElement('div');
-    botFace.style.cssText = `height:${digitH}px;display:flex;align-items:center;justify-content:center;`;
-    botFace.textContent = newDigit;
-
-    wrapper.appendChild(topFace);
-    wrapper.appendChild(botFace);
-
-    // Replace slot content
-    slot.innerHTML = '';
-    slot.appendChild(wrapper);
-
-    // Trigger slide-up animation on next frame
-    requestAnimationFrame(() => {
-      wrapper.style.transition = 'transform 0.22s cubic-bezier(0.22,1,0.36,1)';
-      wrapper.style.transform = `translateY(-${digitH}px)`;
-    });
-
-    // Cleanup after animation completes
-    setTimeout(() => {
-      if (slot.contains(wrapper)) {
-        slot.innerHTML = '';
-        slot.textContent = newDigit;
-      }
-      animatingSet.delete(index);
-    }, 260);
+  /** Clean up all running CSS animations */
+  _clearAnimations() {
+    if (this.els.score) this.els.score.style.animation = '';
+    if (this.els.combo) this.els.combo.style.animation = '';
   }
 
   /* ═══════════════════════════════════════════════════════════════════ */
 
-  /** Freeze all number animations (called on pause) */
-  freeze() {
-    this._frozen = true;
-  }
-
-  /** Unfreeze number animations (called on resume) */
-  unfreeze() {
-    this._frozen = false;
-  }
+  freeze() { this._frozen = true; }
+  unfreeze() { this._frozen = false; }
 
   _startAnimLoop() {
     const tick = () => {
@@ -263,45 +177,40 @@ export default class HUD {
   }
 
   _animateNumbers() {
-    // When frozen (paused), don't animate anything
     if (this._frozen) return;
 
-    // Score — interpolate towards target, format with commas
+    const now = performance.now();
+
+    /* ── Score ──
+     * Fast interpolation (lerp 0.35) so the displayed number catches up
+     * in ~10 frames (~170ms).  Snap when the diff is small. */
     const scoreDiff = this._targetScore - this._displayScore;
-    if (Math.abs(scoreDiff) > 1) {
-      this._displayScore += scoreDiff * 0.2;
+    if (Math.abs(scoreDiff) > 5) {
+      this._displayScore += scoreDiff * 0.35;
+    } else if (Math.abs(scoreDiff) > 0.5) {
+      this._displayScore += scoreDiff * 0.5;
     } else if (scoreDiff !== 0) {
       this._displayScore = this._targetScore;
     }
     const scoreStr = fmtScore(this._displayScore);
-    this._renderDigitRow(this.els.score, scoreStr, this._scoreDigitH,
-      { str: this._scoreLastStr, set: v => this._scoreLastStr = v },
-      this._scoreAnimating);
-    this._scoreLastStr = scoreStr;
+    if (scoreStr !== this._scoreLastStr) {
+      this._scoreLastStr = scoreStr;
+      this.els.score.textContent = scoreStr;
+      this._triggerScoreFlip();
+    }
 
-    // Combo — interpolate towards target, no commas
-    const comboDiff = this._targetCombo - this._displayCombo;
-    if (Math.abs(comboDiff) > 1) {
-      this._displayCombo += comboDiff * 0.35;
-    } else if (comboDiff !== 0) {
+    /* ── Combo ──
+     * Instant snap — no interpolation. Pop animation on change. */
+    const comboStr = `${this._targetCombo}`;
+    if (comboStr !== this._comboLastStr) {
+      this._comboLastStr = comboStr;
       this._displayCombo = this._targetCombo;
-    }
-    const comboStr = `${Math.round(this._displayCombo)}`;
-    this._renderDigitRow(this.els.combo, comboStr, this._comboDigitH,
-      { str: this._comboLastStr, set: v => this._comboLastStr = v },
-      this._comboAnimating);
-    this._comboLastStr = comboStr;
-
-    // Decay combo pop scale
-    if (this._comboPopScale > 1.001) {
-      this._comboPopScale += (1 - this._comboPopScale) * 0.15;
-      if (this.els.combo) this.els.combo.style.transform = `scale(${this._comboPopScale})`;
-    } else if (this._comboPopScale !== 1) {
-      this._comboPopScale = 1;
-      if (this.els.combo) this.els.combo.style.transform = '';
+      this.els.combo.textContent = comboStr;
+      const milestone = [50, 100, 200, 500].includes(this._targetCombo);
+      this._triggerComboPop(milestone);
     }
 
-    // Rank scale decay
+    /* ── Rank scale decay ── */
     if (this._rankScale > 1.01) {
       this._rankScale += (1 - this._rankScale) * 0.12;
       if (this.els.rank) this.els.rank.style.transform = `scale(${this._rankScale}) rotate(-25deg)`;
@@ -310,7 +219,7 @@ export default class HUD {
       if (this.els.rank) this.els.rank.style.transform = 'rotate(-25deg)';
     }
 
-    // Accuracy — smooth interpolation
+    /* ── Accuracy ── */
     const accDiff = this._targetAccuracy - this._displayAccuracy;
     if (Math.abs(accDiff) > 0.01) {
       this._displayAccuracy += accDiff * 0.15;
@@ -330,19 +239,13 @@ export default class HUD {
   }
 
   setScore(n) {
-    if (this._frozen) return; // Don't accept score changes while frozen
+    if (this._frozen) return;
     this._targetScore = n;
   }
 
   setCombo(n) {
-    if (this._frozen) return; // Don't accept combo changes while frozen
+    if (this._frozen) return;
     this._targetCombo = n;
-    if (n > 0) {
-      this._comboPopScale = 1.15;
-    }
-    if ([50, 100, 200, 500].includes(n)) {
-      this._comboPopScale = 1.35;
-    }
   }
 
   setRank(rank) {
@@ -380,10 +283,7 @@ export default class HUD {
     this._targetAccuracy = n;
   }
 
-  setHealth(n) {
-    // HP bar rendered on canvas
-  }
-
+  setHealth(n) { /* HP bar rendered on canvas */ }
   setProgress(ratio) { this.els.progress.style.width = (ratio * 100) + '%'; }
 
   update(stats) {
@@ -397,5 +297,6 @@ export default class HUD {
 
   destroy() {
     if (this._animFrame) cancelAnimationFrame(this._animFrame);
+    this._clearAnimations();
   }
 }
