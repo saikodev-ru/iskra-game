@@ -15,8 +15,8 @@ const RELEASE_WINDOWS = {
   good:    0.170,   // ±170ms
 };
 
-// Accuracy weight values — Score V2 style: PERFECT=305, GREAT=300, GOOD=200, BAD=50, MISS=0
-// Denominator is always totalNotes × 305. This means GREAT ≠ PERFECT (98.36% vs 100%)
+// Accuracy weight values — Score V2 style: MAX=305, GREAT=300, GOOD=200, BAD=50, MISS=0
+// Denominator is always totalNotes × 305. This means GREAT ≠ MAX (98.36% vs 100%)
 const ACC_WEIGHT = { perfect: 305, great: 300, good: 200, bad: 50, miss: 0 };
 
 // HP recovery/loss per judgement (osu!mania drain system)
@@ -42,7 +42,7 @@ export default class JudgementSystem {
     this._missCheckIndex = 0; // pointer for O(n) miss check optimization
     this.hp = 100; // osu!mania-style HP (0–100, drain-based)
     this._totalNotes = 0; // total note objects (per-note, not per-judgement-slot)
-    this._baseScore = 0; // 1,000,000 / totalNotes — score per note at PERFECT
+    this._baseScore = 0; // 1,000,000 / totalNotes — score per note at MAX
     this._died = false; // true when HP reached 0 (forces D rank)
   }
 
@@ -196,7 +196,7 @@ export default class JudgementSystem {
     this.hitCounts[judgement]++;
 
     // Score: per-note, aligned with accuracy weight
-    // PERFECT = 305/305 = 1.0, GREAT = 300/305 ≈ 0.984, etc.
+    // MAX = 305/305 = 1.0, GREAT = 300/305 ≈ 0.984, etc.
     const weight = ACC_WEIGHT[judgement] || 0;
     this.score += Math.round(this._baseScore * (weight / 305));
 
@@ -283,12 +283,12 @@ export default class JudgementSystem {
 
   /**
    * Score V2 accuracy: per-note, not per-judgement-slot.
-   * PERFECT=305, GREAT=300, GOOD=200, BAD=50, MISS=0
+   * MAX=305, GREAT=300, GOOD=200, BAD=50, MISS=0
    * Slider breaks degrade the note to BAD (50).
-   * Unprocessed (future) notes are assumed to be PERFECT (305).
+   * Unprocessed (future) notes are assumed to be MAX (305).
    * accuracy = (sum of per-note weights) / (totalNotes × 305) × 100
    *
-   * Key insight: GREAT (300) ≠ PERFECT (305), so having any GREAT
+   * Key insight: GREAT (300) ≠ MAX (305), so having any GREAT
    * makes SS impossible at exactly 100%.
    */
   getAccuracy() {
@@ -308,7 +308,7 @@ export default class JudgementSystem {
         // Slider break: degrade to BAD (50) regardless of head judgement
         totalWeight += 50;
       } else {
-        // Use head judgement weight (PERFECT=305, GREAT=300, GOOD=200, BAD=50)
+        // Use head judgement weight (MAX=305, GREAT=300, GOOD=200, BAD=50)
         totalWeight += ACC_WEIGHT[note.judgement] || 0;
       }
     }
@@ -320,7 +320,7 @@ export default class JudgementSystem {
     // Death always forces D rank regardless of accuracy
     if (this._died) return 'D';
     const acc = this.getAccuracy();
-    if (acc >= 100) return 'X';   // Only all PERFECT (305 each)
+    if (acc >= 100) return 'X';   // Only all MAX (305 each)
     if (acc >= 90)  return 'S';
     if (acc >= 80)  return 'A';
     if (acc >= 70)  return 'B';
