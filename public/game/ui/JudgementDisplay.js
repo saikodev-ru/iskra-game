@@ -22,7 +22,7 @@ export default class JudgementDisplay {
     if (this._timingEl) this._timingEl.remove();
     const el = document.createElement('div');
     el.className = `judgement-text judgement--${judgement} judgement--in`;
-    el.textContent = judgement.toUpperCase();
+    el.textContent = judgement === 'perfect' ? 'MAX' : judgement.toUpperCase();
     this.container.appendChild(el);
     this._currentEl = el;
 

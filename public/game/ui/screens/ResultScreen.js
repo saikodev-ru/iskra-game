@@ -11,7 +11,7 @@ const GRADE_GRADIENTS = {
 };
 
 const JUDGE_ITEMS = [
-  { key: 'perfect', label: 'PERFECT', color: '#AAFF00' },
+  { key: 'perfect', label: 'MAX', color: '#FDA4AF' },
   { key: 'great',   label: 'GREAT',   color: '#00E5FF' },
   { key: 'good',    label: 'GOOD',    color: '#F5C518' },
   { key: 'bad',     label: 'BAD',     color: '#FF8C00' },

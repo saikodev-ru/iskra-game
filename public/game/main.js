@@ -254,11 +254,12 @@ async function boot() {
           noteRenderer.addLaneGlow(lane, currentLaneCount, '#AAFF00');
           return;
         }
-        // Note was hit — show judgment-colored effect + lane glow
-        const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };
-        noteRenderer.addEffect(pos.x, pos.y, effectColors[result.judgement] || '#AAFF00', result.judgement);
+        // Note was hit — show lane-colored effect + lane glow
+        const laneColors = NoteRenderer.LANE_COLORS;
+        const hitColor = laneColors[lane % laneColors.length] || '#AAFF00';
+        noteRenderer.addEffect(pos.x, pos.y, hitColor, result.judgement);
         // Project Sekai-style lane glow on hit
-        noteRenderer.addLaneGlow(lane, currentLaneCount, effectColors[result.judgement] || '#AAFF00');
+        noteRenderer.addLaneGlow(lane, currentLaneCount, hitColor);
 
         if (hitSounds) {
           if (result.judgement === 'perfect') hitSounds.perfect();
@@ -285,8 +286,9 @@ async function boot() {
       if (result.dropped) return;
 
       const pos = noteRenderer.getLaneHitPosition(lane, currentLaneCount);
-      const effectColors = { perfect: '#AAFF00', great: '#00E5FF', good: '#F5C518', bad: '#FF8C00' };
-      noteRenderer.addEffect(pos.x, pos.y, effectColors[result.judgement] || '#AAFF00', result.judgement);
+      const laneColors = NoteRenderer.LANE_COLORS;
+      const hitColor = laneColors[lane % laneColors.length] || '#AAFF00';
+      noteRenderer.addEffect(pos.x, pos.y, hitColor, result.judgement);
 
       if (hitSounds && result.judgement !== 'bad' && result.judgement !== 'miss') hitSounds.hit();
       judgementDisplay.checkMilestone(currentJudgement.combo);

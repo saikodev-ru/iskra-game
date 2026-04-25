@@ -162,11 +162,11 @@ body.zzz-active::before {
 .judgement--perfect {
   color: transparent;
   -webkit-text-fill-color: transparent;
-  background: var(--gg-grad, linear-gradient(180deg, #67E8F9, #FDA4AF));
+  background: var(--gg-grad, linear-gradient(180deg, #FDA4AF, #67E8F9));
   -webkit-background-clip: text;
   background-clip: text;
   text-shadow: none;
-  filter: drop-shadow(0 0 8px rgba(103,232,249,0.6)) drop-shadow(0 2px 0 rgba(0,0,0,0.8)) drop-shadow(0 4px 0 rgba(0,0,0,0.4));
+  filter: drop-shadow(0 0 8px rgba(253,164,175,0.6)) drop-shadow(0 2px 0 rgba(0,0,0,0.8)) drop-shadow(0 4px 0 rgba(0,0,0,0.4));
 }
 .judgement--great   { color: #00E5FF; }
 .judgement--good    { color: #F5C518; }
