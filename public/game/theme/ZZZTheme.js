@@ -1882,6 +1882,13 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   box-shadow: 0 0 20px rgba(170,255,0,0.2);
   transform: translateY(-1px);
 }
+
+/* VOLUME KNOBS */
+.vol-knob-wrap { display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;user-select:none;transition:transform 0.2s ease; }
+.vol-knob-wrap:hover { transform:scale(1.06); }
+.vol-knob-wrap:active { transform:scale(0.97); }
+.vk-label { font-family:var(--zzz-font);font-weight:700;font-size:8.5px;letter-spacing:0.16em;text-transform:uppercase;transition:color 0.2s ease; }
+.vk-val { font-family:var(--zzz-font);font-weight:900;font-size:13px;color:rgba(255,255,255,0.7);letter-spacing:0.04em;min-width:32px;text-align:center; }
 `;
 
 let _crtSounds = null;

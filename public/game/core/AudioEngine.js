@@ -4,6 +4,7 @@ export default class AudioEngine {
   constructor() {
     this._ctx = null;
     this._gain = null;
+    this._musicGain = null;
     this._source = null;
     this._startedAt = 0;
     this._playOffset = 0;
@@ -27,6 +28,11 @@ export default class AudioEngine {
       this._ctx = new (window.AudioContext || window.webkitAudioContext)();
       this._gain = this._ctx.createGain();
       this._gain.connect(this._ctx.destination);
+
+      // Music volume gain node (separate from master)
+      this._musicGain = this._ctx.createGain();
+      this._musicGain.gain.value = 1.0;
+      this._musicGain.connect(this._gain);
 
       // Create analyser for reactive effects
       this._analyser = this._ctx.createAnalyser();
@@ -77,7 +83,7 @@ export default class AudioEngine {
     this._currentBuffer = buffer;
     this._source = this._ctx.createBufferSource();
     this._source.buffer = buffer;
-    this._source.connect(this._gain);
+    this._source.connect(this._musicGain);
     this._startedAt = this._ctx.currentTime;
     this._playOffset = startOffset;
     this._playing = true;
@@ -122,6 +128,10 @@ export default class AudioEngine {
   setVolume(volume) {
     if (!this._gain) return;
     this._gain.gain.value = volume;
+  }
+
+  setMusicVolume(vol) {
+    if (this._musicGain) this._musicGain.gain.value = Math.max(0, Math.min(1, vol));
   }
 
   get currentTime() {

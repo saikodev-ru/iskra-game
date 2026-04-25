@@ -134,8 +134,10 @@ async function boot() {
 
   const savedVolume = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
   const savedGameVolume = parseInt(localStorage.getItem('rhythm-os-game-volume') || '70') / 100;
+  const savedMusicVolume = parseInt(localStorage.getItem('rhythm-os-music-volume') || '100') / 100;
   audio._ensureCtx();
   audio.setVolume(savedVolume);
+  audio.setMusicVolume(savedMusicVolume);
   initAudio();
   if (hitSounds) hitSounds.setVolume(savedGameVolume);
 
@@ -807,67 +809,145 @@ async function boot() {
     }
   });
 
-  // ── osu!-style Volume Control (LAlt + Mouse Wheel) ──
+  // ── Rotary Knob Volume Control (LAlt + Mouse Wheel) ──
   let _volumeOverlay = null;
   let _volumeHideTimer = null;
+  let _hoveredKnob = null;
 
-  const _showVolumeOverlay = () => {
-    const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70');
+  const KNOB_R = 40;
+  const KNOB_CIRC = 2 * Math.PI * KNOB_R;
+  const KNOB_ARC = KNOB_CIRC * 0.75;
+  const KNOB_GAP = KNOB_CIRC - KNOB_ARC;
+
+  const KNOBS = [
+    { id: 'master', label: 'MASTER', color: '#AAFF00', rgb: '170,255,0', key: 'rhythm-os-volume', def: 70 },
+    { id: 'system', label: 'SYSTEM', color: '#00E5FF', rgb: '0,229,255', key: 'rhythm-os-game-volume', def: 70 },
+    { id: 'music',  label: 'MUSIC',  color: '#FF6B9D', rgb: '255,107,157', key: 'rhythm-os-music-volume', def: 100 },
+  ];
+
+  const _playVolTick = () => {
+    try {
+      const actx = audio.ctx;
+      if (!actx || actx.state === 'suspended') return;
+      const len = Math.max(1, Math.floor(actx.sampleRate * 0.012));
+      const buf = actx.createBuffer(1, len, actx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.1));
+      const src = actx.createBufferSource();
+      src.buffer = buf;
+      const g = actx.createGain();
+      g.gain.setValueAtTime(0.09, actx.currentTime);
+      src.connect(g); g.connect(actx.destination);
+      src.start();
+    } catch (_) {}
+  };
+
+  const _readKnob = (k) => parseInt(localStorage.getItem(k.key) || k.def.toString());
+  const _applyKnob = (k, v) => {
+    v = Math.max(0, Math.min(100, v));
+    localStorage.setItem(k.key, v.toString());
+    if (k.id === 'master') audio.setVolume(v / 100);
+    else if (k.id === 'system') { if (hitSounds) hitSounds.setVolume(v / 100); EventBus.emit('settings:changed', { key: 'gameVolume', value: v }); }
+    else if (k.id === 'music') audio.setMusicVolume(v / 100);
+  };
+
+  const _knobSVG = (k, vol, active, size) => {
+    const arcOff = KNOB_ARC * (1 - vol / 100);
+    const indAngle = -135 + (vol / 100) * 270;
+    const glowA = active ? 0.18 : 0.06;
+    return `
+    <div class="vol-knob-wrap ${active ? 'vol-knob--active' : ''}" data-knob="${k.id}">
+      <svg viewBox="0 0 100 100" width="${size}" height="${size}" style="filter:drop-shadow(0 0 ${active ? 14 : 6}px rgba(${k.rgb},${glowA}));">
+        <circle cx="50" cy="50" r="${KNOB_R}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"
+          stroke-dasharray="${KNOB_ARC} ${KNOB_GAP}" stroke-linecap="round" transform="rotate(135 50 50)" />
+        <circle cx="50" cy="50" r="${KNOB_R}" fill="none" stroke="${k.color}" stroke-width="5"
+          stroke-dasharray="${KNOB_ARC} ${KNOB_GAP}" stroke-dashoffset="${arcOff}" stroke-linecap="round"
+          transform="rotate(135 50 50)" class="vk-prog" data-knob="${k.id}"
+          style="transition:stroke-dashoffset 0.12s ease-out;" />
+        <circle cx="50" cy="50" r="28" fill="rgba(14,14,16,0.95)" stroke="rgba(255,255,255,${active ? 0.12 : 0.06})" stroke-width="1.2" />
+        <circle cx="50" cy="50" r="25" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="0.5" />
+        <line x1="50" y1="50" x2="50" y2="24" stroke="${k.color}" stroke-width="2.5" stroke-linecap="round"
+          transform="rotate(${indAngle} 50 50)" class="vk-ind" data-knob="${k.id}"
+          style="transition:transform 0.12s ease-out;" />
+        <circle cx="50" cy="50" r="2.5" fill="rgba(255,255,255,0.1)" />
+      </svg>
+      <span class="vk-label" data-knob="${k.id}" style="color:${active ? k.color : 'rgba(255,255,255,0.4)'};">${k.label}</span>
+      <span class="vk-val" data-knob="${k.id}">${vol}%</span>
+    </div>`;
+  };
+
+  const _showVol = (activeId = 'music') => {
     if (_volumeOverlay) _volumeOverlay.remove();
     _volumeHideTimer && clearTimeout(_volumeHideTimer);
     const sa = calcSafeArea();
-    const overlay = document.createElement('div');
-    overlay.id = 'volume-overlay';
-    overlay.style.cssText = `position:fixed;bottom:${sa.y + 60}px;left:50%;transform:translateX(-50%);z-index:200;pointer-events:none;animation:pause-fade-in 0.15s ease-out forwards;`;
-    overlay.innerHTML = `
-      <div style="display:flex;align-items:center;gap:14px;padding:12px 24px;border-radius:14px;background:rgba(0,0,0,0.88);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.06);">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 15 20 9"/><line x1="4" y1="9" x2="20" y2="9"/></svg>
-        <div style="width:180px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
-          <div id="vol-bar" style="width:${vol}%;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--zzz-lime),rgba(200,255,100,0.9));box-shadow:0 0 10px rgba(170,255,0,0.4);transition:width 0.06s linear;"></div>
-        </div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 18 15 22 9 4 9 20"/><line x1="4" y1="15" x2="20" y2="15"/></svg>
-        <div id="vol-pct" style="font-family:var(--zzz-font);font-weight:900;font-size:13px;color:rgba(255,255,255,0.55);min-width:32px;text-align:center;letter-spacing:0.05em;">${vol}%</div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    _volumeOverlay = overlay;
-    _volumeHideTimer = setTimeout(_hideVolumeOverlay, 1200);
+    const sz = Math.min(88, Math.floor(sa.w * 0.11));
+    const gap = Math.max(16, sz * 0.4);
+    const pad = Math.max(14, sz * 0.35);
+    const wrap = document.createElement('div');
+    wrap.id = 'volume-overlay';
+    wrap.style.cssText = `position:fixed;bottom:${sa.y + sa.h * 0.05}px;left:50%;transform:translateX(-50%);z-index:200;pointer-events:auto;animation:pause-fade-in 0.15s ease-out forwards;`;
+    let knobs = '';
+    for (const k of KNOBS) knobs += _knobSVG(k, _readKnob(k), k.id === activeId, sz);
+    wrap.innerHTML = `<div style="display:flex;align-items:center;gap:${gap}px;padding:${pad}px ${pad * 1.6}px;border-radius:20px;background:rgba(0,0,0,0.88);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.06);box-shadow:0 8px 32px rgba(0,0,0,0.5);">${knobs}</div>`;
+    wrap.querySelectorAll('.vol-knob-wrap').forEach(el => {
+      el.addEventListener('mouseenter', () => { _hoveredKnob = el.dataset.knob; _hlKnob(_hoveredKnob); });
+      el.addEventListener('mouseleave', () => { _hoveredKnob = null; _hlKnob(null); });
+    });
+    document.body.appendChild(wrap);
+    _volumeOverlay = wrap;
+    _volumeHideTimer = setTimeout(_hideVol, 1800);
   };
 
-  const _updateVolumeOverlay = (vol) => {
-    const bar = document.getElementById('vol-bar');
-    const pct = document.getElementById('vol-pct');
-    if (bar) bar.style.width = vol + '%';
-    if (pct) pct.textContent = vol + '%';
+  const _hlKnob = (id) => {
+    if (!_volumeOverlay) return;
+    _volumeOverlay.querySelectorAll('.vol-knob-wrap').forEach(el => {
+      const on = el.dataset.knob === id;
+      el.classList.toggle('vol-knob--active', on);
+      const k = KNOBS.find(x => x.id === el.dataset.knob);
+      const lbl = el.querySelector('.vk-label');
+      if (lbl && k) lbl.style.color = on ? k.color : 'rgba(255,255,255,0.4)';
+    });
   };
 
-  const _hideVolumeOverlay = () => {
+  const _updKnob = (id, v) => {
+    const arcOff = KNOB_ARC * (1 - v / 100);
+    const ang = -135 + (v / 100) * 270;
+    const prog = _volumeOverlay?.querySelector(`.vk-prog[data-knob="${id}"]`);
+    if (prog) prog.setAttribute('stroke-dashoffset', arcOff);
+    const ind = _volumeOverlay?.querySelector(`.vk-ind[data-knob="${id}"]`);
+    if (ind) ind.setAttribute('transform', `rotate(${ang} 50 50)`);
+    const val = _volumeOverlay?.querySelector(`.vk-val[data-knob="${id}"]`);
+    if (val) val.textContent = v + '%';
+  };
+
+  const _hideVol = () => {
     if (_volumeOverlay) {
-      _volumeOverlay.style.transition = 'opacity 0.25s ease-out';
+      _volumeOverlay.style.transition = 'opacity 0.3s ease-out';
       _volumeOverlay.style.opacity = '0';
-      const ref = _volumeOverlay;
-      _volumeOverlay = null;
-      setTimeout(() => { if (ref.parentNode) ref.remove(); }, 300);
+      const ref = _volumeOverlay; _volumeOverlay = null; _hoveredKnob = null;
+      setTimeout(() => { if (ref.parentNode) ref.remove(); }, 350);
     }
   };
 
-  const _adjustVolume = (delta) => {
-    let vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70');
-    vol = Math.max(0, Math.min(100, vol + delta));
-    localStorage.setItem('rhythm-os-volume', vol.toString());
-    audio.setVolume(vol / 100);
-    if (hitSounds) hitSounds.setVolume(vol / 100);
-    _showVolumeOverlay();
-    _updateVolumeOverlay(vol);
+  const _adjKnob = (id, delta) => {
+    const k = KNOBS.find(x => x.id === id);
+    if (!k) return;
+    const cur = _readKnob(k);
+    const nv = Math.max(0, Math.min(100, cur + delta));
+    if (nv === cur) return;
+    _applyKnob(k, nv);
+    _playVolTick();
+    if (!_volumeOverlay) _showVol(id);
+    _updKnob(id, nv);
+    _volumeHideTimer && clearTimeout(_volumeHideTimer);
+    _volumeHideTimer = setTimeout(_hideVol, 1800);
   };
 
-  // LAlt + wheel: osu!-style volume control
   window.addEventListener('wheel', (e) => {
     if (!e.altKey) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const delta = e.deltaY > 0 ? -5 : 5; // scroll down = volume up
-    _adjustVolume(delta);
+    e.preventDefault(); e.stopPropagation();
+    const d = e.deltaY > 0 ? -3 : 3;
+    _adjKnob(_hoveredKnob || 'music', d);
   }, { passive: false });
 
   // Block Ctrl+key and Meta+key combinations (but allow plain Alt for volume)
