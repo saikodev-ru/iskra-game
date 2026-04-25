@@ -684,47 +684,135 @@ export default class NoteRenderer {
 
     ctx.restore();
 
-    // ── Layer 3: Pulsing border glow on playfield edges ──
+    // ── Layer 3: 3D pulsing border glow on playfield edges ──
     this._kiaiBorderGlow += (pulse - this._kiaiBorderGlow) * Math.min(1, delta * 16);
-    const borderAlpha = intensity * 0.3 + this._kiaiBorderGlow * 0.5;
+    const borderAlpha = intensity * 0.35 + this._kiaiBorderGlow * 0.55;
     if (borderAlpha > 0.02) {
       ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
 
-      // Main border lines
-      const borderGrad = ctx.createLinearGradient(0, topY, 0, bottomY);
-      borderGrad.addColorStop(0, `rgba(255,220,140,${borderAlpha * 0.4})`);
-      borderGrad.addColorStop(0.4, `rgba(255,200,100,${borderAlpha})`);
-      borderGrad.addColorStop(0.7, `rgba(255,200,100,${borderAlpha * 0.8})`);
-      borderGrad.addColorStop(1, `rgba(255,160,60,${borderAlpha * 0.3})`);
-      ctx.strokeStyle = borderGrad;
-      ctx.lineWidth = 2;
+      const wallDepth = 14 + this._kiaiBorderGlow * 6; // extrusion depth in px
+      const lxT = leftTop.x, rxT = rightTop.x;
+      const lxJ = leftJudge.x, rxJ = rightJudge.x;
+      const lxB = leftBottom.x, rxB = rightBottom.x;
+
+      // Build inner contour (the playfield edge) and outer contour (shifted outward)
+      // Left wall: from top-left → judge-left → bottom-left, outer is shifted left
+      const oLxT = lxT - wallDepth, oRxT = rxT + wallDepth;
+      const oLxJ = lxJ - wallDepth, oRxJ = rxJ + wallDepth;
+      const oLxB = lxB - wallDepth, oRxB = rxB + wallDepth;
+      const oTopY = topY - wallDepth * 0.5;
+      const oBottomY = bottomY + wallDepth * 0.5;
+
+      // --- Draw each wall face as a filled quad with 3D shading ---
+
+      // Helper: draw a 4-point quad with shading
+      const drawWall = (ax, ay, bx, by, cx, cy, dx, dy, bright, alpha) => {
+        ctx.beginPath();
+        ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(cx, cy); ctx.lineTo(dx, dy);
+        ctx.closePath();
+        // Gradient across the wall for 3D look: lit side → dark side
+        const midX1 = (ax + bx) / 2, midY1 = (ay + by) / 2;
+        const midX2 = (cx + dx) / 2, midY2 = (cy + dy) / 2;
+        const g = ctx.createLinearGradient(midX1, midY1, midX2, midY2);
+        const baseA = alpha * bright;
+        g.addColorStop(0, `rgba(255,${200 + bright * 55},${100 + bright * 80},${baseA})`);
+        g.addColorStop(0.4, `rgba(255,${180 + bright * 40},${80 + bright * 40},${baseA * 0.8})`);
+        g.addColorStop(1, `rgba(200,${100 + bright * 30},${40 + bright * 20},${baseA * 0.3})`);
+        ctx.fillStyle = g;
+        ctx.fill();
+      };
+
+      // Top edge wall (inner=playfield top, outer=shifted up+out)
+      drawWall(lxT, topY, rxT, topY, oRxT, oTopY, oLxT, oTopY, 1.0, borderAlpha * 0.6);
+
+      // Left wall: top → judge → bottom (inner), outer shifted left
+      drawWall(lxT, topY, lxJ, judgeLineY, oLxJ, judgeLineY, oLxT, oTopY, 0.6, borderAlpha * 0.5);
+      drawWall(lxJ, judgeLineY, lxB, bottomY, oLxB, oBottomY, oLxJ, judgeLineY, 0.6, borderAlpha * 0.5);
+
+      // Right wall: top → judge → bottom (inner), outer shifted right
+      drawWall(rxT, topY, rxJ, judgeLineY, oRxJ, judgeLineY, oRxT, oTopY, 0.6, borderAlpha * 0.5);
+      drawWall(rxJ, judgeLineY, rxB, bottomY, oRxB, oBottomY, oRxJ, judgeLineY, 0.6, borderAlpha * 0.5);
+
+      // Bottom edge wall
+      drawWall(lxB, bottomY, rxB, bottomY, oRxB, oBottomY, oLxB, oBottomY, 0.4, borderAlpha * 0.3);
+
+      // --- Inner highlight line (bright edge where wall meets playfield) ---
       ctx.beginPath();
-      ctx.moveTo(leftTop.x, topY);
-      ctx.lineTo(leftJudge.x, judgeLineY);
-      ctx.lineTo(leftBottom.x, bottomY);
-      ctx.lineTo(rightBottom.x, bottomY);
-      ctx.lineTo(rightJudge.x, judgeLineY);
-      ctx.lineTo(rightTop.x, topY);
+      ctx.moveTo(lxT, topY);
+      ctx.lineTo(lxJ, judgeLineY);
+      ctx.lineTo(lxB, bottomY);
+      ctx.lineTo(rxB, bottomY);
+      ctx.lineTo(rxJ, judgeLineY);
+      ctx.lineTo(rxT, topY);
       ctx.closePath();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = `rgba(255,240,180,${borderAlpha * 0.9})`;
       ctx.stroke();
 
-      // Outer glow (thicker, softer)
-      ctx.lineWidth = 10;
-      ctx.globalAlpha = 0.25 + this._kiaiBorderGlow * 0.15;
-      ctx.strokeStyle = `rgba(255,200,100,${borderAlpha})`;
+      // --- 3D bloom: glow emanates INWARD from walls ---
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(lxT, topY);
+      ctx.lineTo(rxT, topY);
+      ctx.lineTo(rxJ, judgeLineY);
+      ctx.lineTo(rxB, bottomY);
+      ctx.lineTo(lxB, bottomY);
+      ctx.lineTo(lxJ, judgeLineY);
+      ctx.closePath();
+      ctx.clip();
+
+      // Left side inward glow
+      const glowW = 40 + this._kiaiBorderGlow * 30;
+      const leftGlow = ctx.createLinearGradient(lxJ, 0, lxJ + glowW, 0);
+      leftGlow.addColorStop(0, `rgba(255,200,100,${borderAlpha * 0.25})`);
+      leftGlow.addColorStop(0.5, `rgba(255,180,80,${borderAlpha * 0.08})`);
+      leftGlow.addColorStop(1, 'rgba(255,160,60,0)');
+      ctx.fillStyle = leftGlow;
+      ctx.fillRect(lxJ - 5, topY - 5, glowW + 10, bottomY - topY + 10);
+
+      // Right side inward glow
+      const rightGlow = ctx.createLinearGradient(rxJ, 0, rxJ - glowW, 0);
+      rightGlow.addColorStop(0, `rgba(255,200,100,${borderAlpha * 0.25})`);
+      rightGlow.addColorStop(0.5, `rgba(255,180,80,${borderAlpha * 0.08})`);
+      rightGlow.addColorStop(1, 'rgba(255,160,60,0)');
+      ctx.fillStyle = rightGlow;
+      ctx.fillRect(rxJ - glowW - 5, topY - 5, glowW + 10, bottomY - topY + 10);
+
+      // Top edge inward glow
+      const topGlow = ctx.createLinearGradient(0, topY, 0, topY + glowW * 0.7);
+      topGlow.addColorStop(0, `rgba(255,220,140,${borderAlpha * 0.2})`);
+      topGlow.addColorStop(0.5, `rgba(255,180,80,${borderAlpha * 0.06})`);
+      topGlow.addColorStop(1, 'rgba(255,160,60,0)');
+      ctx.fillStyle = topGlow;
+      ctx.fillRect(lxT - 20, topY, rxT - lxT + 40, glowW * 0.7);
+
+      // Bottom edge inward glow
+      const bottomGlow = ctx.createLinearGradient(0, bottomY, 0, bottomY - glowW * 0.5);
+      bottomGlow.addColorStop(0, `rgba(255,200,100,${borderAlpha * 0.15})`);
+      bottomGlow.addColorStop(0.5, `rgba(255,180,80,${borderAlpha * 0.05})`);
+      bottomGlow.addColorStop(1, 'rgba(255,160,60,0)');
+      ctx.fillStyle = bottomGlow;
+      ctx.fillRect(lxB - 20, bottomY - glowW * 0.5, rxB - lxB + 40, glowW * 0.5);
+
+      ctx.restore();
+
+      // --- Outer soft glow (atmospheric bloom outside walls) ---
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.beginPath();
+      ctx.moveTo(lxT, topY);
+      ctx.lineTo(lxJ, judgeLineY);
+      ctx.lineTo(lxB, bottomY);
+      ctx.lineTo(rxB, bottomY);
+      ctx.lineTo(rxJ, judgeLineY);
+      ctx.lineTo(rxT, topY);
+      ctx.closePath();
+      ctx.lineWidth = 16 + this._kiaiBorderGlow * 10;
+      ctx.globalAlpha = borderAlpha * 0.15;
+      ctx.strokeStyle = 'rgba(255,180,80,1)';
       ctx.stroke();
-
-      // Extra bloom on beat
-      if (this._kiaiBorderGlow > 0.2) {
-        ctx.lineWidth = 20;
-        ctx.globalAlpha = this._kiaiBorderGlow * 0.12;
-        ctx.strokeStyle = `rgba(255,180,80,${borderAlpha})`;
-        ctx.stroke();
-      }
-
+      ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
+
       ctx.restore();
     }
 
