@@ -41,16 +41,14 @@ export default class ThreeScene {
     this._graphicsPreset = 'disco'; // 'low' | 'standard' | 'disco'
     this._missFlash = 0; // red overlay flash intensity on miss (0-1, decays)
 
-    // Video background state
-    this._videoElement = null;   // hidden HTML5 <video> element
-    this._videoTexture = null;   // THREE.VideoTexture from the video
-    this._videoMesh = null;      // mesh for the video plane
-    this._videoMaterial = null;  // shader material for the video plane
+    // Video background state — CSS-based (no Three.js VideoTexture for performance)
+    this._videoElement = null;   // HTML5 <video> element positioned via CSS
+    this._videoOverlay = null;   // CSS vignette/darkening overlay div
     this._videoActive = false;   // whether video is currently playing as bg
     this._audioEngineRef = null; // for syncing video to audio time
     this._videoLoadId = 0;      // generation counter to prevent stale video loads
     this._leadInOffset = 0;     // seconds to subtract from audio time for video sync (0 for preview, 1.0 in-game)
-    this._skipVideoFrame = false; // frame-skip toggle for video texture updates (performance)
+    this._videoBrightness = 1.0; // CSS brightness for audio-reactive glow
 
     // CRT / Glitch state
     this._crtIntensity = 0;     // 0-1, CRT overlay intensity (scanlines, barrel distortion)
@@ -118,7 +116,7 @@ export default class ThreeScene {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
-    this.renderer.setClearColor(0x000000, 1);
+    this.renderer.setClearColor(0x000000, 0); // transparent — CSS video shows through
 
     this.canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
@@ -555,18 +553,16 @@ export default class ThreeScene {
     if (this._bgMesh) this._bgMesh.visible = true;
   }
 
-  /** Set a video as the background — synced to audio playback time */
+  /** Set a video as the background — CSS-based for maximum performance (no GPU texture upload) */
   setBackgroundVideo(url, audioEngine) {
-    // Increment generation counter to invalidate any pending loads
     const loadId = ++this._videoLoadId;
 
-    // Don't clear old video yet — keep it visible until new one is ready
-    this._clearBackgroundImage(); // remove any image bg
+    this._clearBackgroundImage();
     if (!url) { this._clearBackgroundVideo(); return; }
 
     this._audioEngineRef = audioEngine || this._audioEngine;
 
-    // Create hidden <video> element
+    // Create <video> element with CSS positioning behind the canvas
     const video = document.createElement('video');
     video.src = url;
     video.crossOrigin = 'anonymous';
@@ -574,196 +570,77 @@ export default class ThreeScene {
     video.playsInline = true;
     video.preload = 'auto';
     video.loop = false;
-    video.style.display = 'none';
+    // Style: fill viewport, cover-fit, behind canvas (canvas has alpha)
+    Object.assign(video.style, {
+      position: 'fixed',
+      top: '0', left: '0',
+      width: '100vw', height: '100vh',
+      objectFit: 'cover',
+      zIndex: '-2',
+      opacity: '0',
+      transition: 'opacity 0.4s ease',
+      filter: 'brightness(0.6)',
+      pointerEvents: 'none',
+    });
     document.body.appendChild(video);
 
-    // Store as pending video (don't set _videoElement yet — old one stays visible)
     const pendingVideo = video;
 
+    // Create vignette overlay div
+    const overlay = document.createElement('div');
+    Object.assign(overlay.style, {
+      position: 'fixed',
+      top: '0', left: '0',
+      width: '100vw', height: '100vh',
+      zIndex: '-1',
+      pointerEvents: 'none',
+      background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%)',
+      opacity: '0',
+      transition: 'opacity 0.4s ease',
+    });
+    document.body.appendChild(overlay);
+
     video.addEventListener('loadeddata', () => {
-      // Stale load — discard
       if (this._disposed || loadId !== this._videoLoadId) {
         pendingVideo.pause();
         pendingVideo.src = '';
         if (pendingVideo.parentNode) pendingVideo.parentNode.removeChild(pendingVideo);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         return;
       }
 
-      // Optimize video playback for stability
       video.muted = true;
       video.playbackRate = 1.0;
-
-      // Now clear the old video (after new one is ready)
       this._clearBackgroundVideo();
 
       this._videoElement = pendingVideo;
+      this._videoOverlay = overlay;
+      this._videoBrightness = 0.6;
 
-      // Create VideoTexture
-      const texture = new THREE.VideoTexture(video);
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.format = THREE.RGBAFormat;
-      texture.colorSpace = THREE.SRGBColorSpace;
-      this._videoTexture = texture;
+      // Hide the dark animated bg mesh so video shows through canvas transparency
+      this.hideBgMesh();
 
-      // Calculate video aspect
-      const videoAspect = video.videoWidth / video.videoHeight || 16 / 9;
-
-      // Shader material for video — with CRT + glitch support (no chromatic aberration)
-      const fragmentShader = `
-        uniform sampler2D uTexture;
-        uniform float uBass;
-        uniform float uAudioIntensity;
-        uniform float uCoverScale;
-        uniform float uPlaneAspect;
-        uniform float uBrightness;
-        uniform float uOpacity;
-        uniform float uMissFlash;
-        uniform float uCrtIntensity;
-        uniform float uGlitchIntensity;
-        uniform float uGlitchSeed;
-        uniform float uTime;
-        varying vec2 vUv;
-
-        float hash(float n) { return fract(sin(n) * 43758.5453); }
-
-        void main() {
-          vec2 uv = vUv;
-          float planeAspect = uPlaneAspect;
-          float imgAspect = uCoverScale;
-          if (planeAspect > imgAspect) {
-            float scale = planeAspect / imgAspect;
-            uv.y = (uv.y - 0.5) / scale + 0.5;
-          } else {
-            float scale = imgAspect / planeAspect;
-            uv.x = (uv.x - 0.5) / scale + 0.5;
-          }
-          float zoom = 1.0 + uBass * 0.06;
-          uv = (uv - 0.5) / zoom + 0.5;
-
-          // CRT: barrel distortion (TV edge warp)
-          if (uCrtIntensity > 0.01) {
-            vec2 d = uv - 0.5;
-            float r2 = dot(d, d);
-            float barrel = 1.0 - uCrtIntensity * 0.35 * r2;
-            uv = 0.5 + d * barrel;
-          }
-
-          // Glitch: horizontal offset per scanline
-          if (uGlitchIntensity > 0.01) {
-            float lineHash = hash(floor(uv.y * 80.0) + uGlitchSeed);
-            float blockHash = hash(floor(uv.y * 8.0) + uGlitchSeed * 3.7);
-            float offset = (lineHash - 0.5) * uGlitchIntensity * 0.08;
-            offset += (blockHash - 0.5) * uGlitchIntensity * 0.15 * step(0.7, blockHash);
-            uv.x += offset;
-          }
-
-          // Clamp UVs to prevent wrapping
-          uv = clamp(uv, 0.0, 1.0);
-
-          vec3 texRgb = texture2D(uTexture, uv).rgb;
-
-          vec3 color = texRgb * 0.6;
-          float glow = uBass * 0.2 + uAudioIntensity * 0.08;
-          color += texRgb * glow;
-          color += vec3(uBrightness * 0.15);
-
-          // ── Vignette (pure black, subtle) ──
-          float vig = distance(vUv, vec2(0.5));
-          float vigDark = smoothstep(0.55, 1.0, vig);
-          color *= 1.0 - vigDark * 0.55;
-
-          // Rounded corners — soft darkening
-          vec2 cornerDist = max(abs(vUv - 0.5) - 0.38, vec2(0.0));
-          float cornerLen = length(cornerDist);
-          float cornerDark = smoothstep(0.0, 0.12, cornerLen);
-          color *= 1.0 - cornerDark * 0.5;
-
-          // CRT: scanlines + phosphor flicker (wider scanlines: 500 instead of 800)
-          if (uCrtIntensity > 0.01) {
-            float scanline = sin(vUv.y * 500.0 + uTime * 2.0) * 0.5 + 0.5;
-            float scanDark = 1.0 - scanline * 0.12 * uCrtIntensity;
-            color *= scanDark;
-            float flicker = 1.0 - 0.02 * uCrtIntensity * hash(uTime * 60.0);
-            color *= flicker;
-          }
-
-          // Miss flash — red overlay
-          float missVig = smoothstep(0.2, 0.9, vig);
-          color += vec3(1.0, 0.1, 0.05) * uMissFlash * (0.6 + 0.4 * missVig);
-
-          gl_FragColor = vec4(color, uOpacity);
-        }
-      `;
-
-      this._videoMaterial = new THREE.ShaderMaterial({
-        uniforms: {
-          uTexture: { value: texture },
-          uBass: { value: 0 },
-          uAudioIntensity: { value: 0 },
-          uCoverScale: { value: videoAspect },
-          uPlaneAspect: { value: 1.0 },
-          uBrightness: { value: 0 },
-          uOpacity: { value: 0 },
-          uMissFlash: { value: 0 },
-          uCrtIntensity: { value: this._crtIntensity },
-          uGlitchIntensity: { value: 0 },
-          uGlitchSeed: { value: 0 },
-          uTime: { value: 0 },
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
-        `,
-        fragmentShader,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-        transparent: true,
+      // Fade in video + overlay via CSS transition
+      requestAnimationFrame(() => {
+        video.style.opacity = '1';
+        overlay.style.opacity = '1';
       });
 
-      // Create mesh
-      const planeGeom = this._calcBgPlaneGeometry();
-      this._videoMaterial.uniforms.uPlaneAspect.value = planeGeom.safeAreaAspect;
-
-      this._videoMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(planeGeom.width, planeGeom.height),
-        this._videoMaterial
-      );
-      this._videoMesh.position.set(planeGeom.cx, planeGeom.cy, -4);
-      this.scene.add(this._videoMesh);
-
-      // Fade in
-      const fadeDuration = 350;
-      const startTime = performance.now();
-      const animateFadeIn = () => {
-        if (this._disposed) return;
-        const elapsed = performance.now() - startTime;
-        const t = Math.min(1, elapsed / fadeDuration);
-        if (this._videoMaterial?.uniforms) {
-          this._videoMaterial.uniforms.uOpacity.value = 1 - Math.pow(1 - t, 3);
-        }
-        if (t < 1) requestAnimationFrame(animateFadeIn);
-      };
-      requestAnimationFrame(animateFadeIn);
-
-      // Start playing at offset 0 (will be synced in update loop)
       video.currentTime = 0;
       video.play().catch(() => {});
       this._videoActive = true;
     });
 
     video.addEventListener('error', () => {
-      if (loadId !== this._videoLoadId) return; // stale
-      console.warn('[ThreeScene] Failed to load video background (format may not be supported by browser)');
+      if (loadId !== this._videoLoadId) return;
+      console.warn('[ThreeScene] Failed to load video background');
       this._clearBackgroundVideo();
     });
 
-    // Also handle codec issues: if the video loads metadata but can't decode frames
     video.addEventListener('loadedmetadata', () => {
-      if (loadId !== this._videoLoadId) return; // stale
-      // Check if the video has valid dimensions
+      if (loadId !== this._videoLoadId) return;
       if (video.videoWidth === 0 || video.videoHeight === 0) {
-        console.warn('[ThreeScene] Video has invalid dimensions — likely unsupported codec');
+        console.warn('[ThreeScene] Video has invalid dimensions — unsupported codec');
         this._clearBackgroundVideo();
       }
     });
@@ -774,20 +651,7 @@ export default class ThreeScene {
   /** Clear the video background and release resources */
   _clearBackgroundVideo() {
     this._videoActive = false;
-    this._skipVideoFrame = false;
-    if (this._videoMesh) {
-      this.scene.remove(this._videoMesh);
-      this._videoMesh.geometry.dispose();
-      this._videoMesh = null;
-    }
-    if (this._videoMaterial) {
-      this._videoMaterial.dispose();
-      this._videoMaterial = null;
-    }
-    if (this._videoTexture) {
-      this._videoTexture.dispose();
-      this._videoTexture = null;
-    }
+    this._videoBrightness = 1.0;
     if (this._videoElement) {
       this._videoElement.pause();
       this._videoElement.src = '';
@@ -797,6 +661,14 @@ export default class ThreeScene {
       }
       this._videoElement = null;
     }
+    if (this._videoOverlay) {
+      if (this._videoOverlay.parentNode) {
+        this._videoOverlay.parentNode.removeChild(this._videoOverlay);
+      }
+      this._videoOverlay = null;
+    }
+    // Note: caller should call showBgMesh() if needed — not done here
+    // because gameplay explicitly hides the bg mesh via hideBgMesh()
   }
 
   /** Pause the video background (when game is paused) */
@@ -858,6 +730,7 @@ export default class ThreeScene {
   setTVStatic() {
     this._clearBackgroundImage();
     this._clearBackgroundVideo();
+    this.showBgMesh(); // Restore dark gradient bg for song select
   }
 
   /** Set CRT overlay intensity (0-1) — used in song select for that retro TV feel */
@@ -886,12 +759,12 @@ export default class ThreeScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
-    this.renderer.setClearColor(0x000000, 1);
+    this.renderer.setClearColor(0x000000, 0);
     this._invalidateBgGeom();
     this._resizeBackgroundImage();
   }
 
-  /** Resize the background image/video plane to match safe area */
+  /** Resize the background image plane to match safe area (video is CSS-based, no resize needed) */
   _resizeBackgroundImage() {
     if (this._bgImageMesh) {
       const pg = this._calcBgPlaneGeometry();
@@ -900,16 +773,6 @@ export default class ThreeScene {
       this._bgImageMesh.position.set(pg.cx, pg.cy, this._bgImageMesh.position.z);
       if (this._bgImageMaterial?.uniforms) {
         this._bgImageMaterial.uniforms.uPlaneAspect.value = pg.safeAreaAspect;
-      }
-    }
-    // Also resize video mesh if present
-    if (this._videoMesh) {
-      const pg = this._calcBgPlaneGeometry();
-      this._videoMesh.geometry.dispose();
-      this._videoMesh.geometry = new THREE.PlaneGeometry(pg.width, pg.height);
-      this._videoMesh.position.set(pg.cx, pg.cy, this._videoMesh.position.z);
-      if (this._videoMaterial?.uniforms) {
-        this._videoMaterial.uniforms.uPlaneAspect.value = pg.safeAreaAspect;
       }
     }
   }
@@ -998,50 +861,47 @@ export default class ThreeScene {
       this._bgImageMaterial.uniforms.uMissFlash.value = this._missFlash * gfx;
     }
 
-    // ── Video background — sync to audio time + audio-reactive effects ──
-    if (this._videoActive && this._videoElement && this._videoMaterial) {
+    // ── Video background — sync to audio time + audio-reactive CSS filter ──
+    if (this._videoActive && this._videoElement) {
       // Sync video position to audio time
       if (this._audioEngineRef && this._audioEngineRef.isPlaying) {
-        // The audio buffer has 1s of silence prepended (lead-in), so
-        // audio.currentTime includes this offset. Video starts at its own t=0,
-        // so we subtract the lead-in to get the correct video position.
         const audioContentTime = Math.max(0, this._audioEngineRef.currentTime - this._leadInOffset);
         const videoTime = this._videoElement.currentTime;
         const drift = audioContentTime - videoTime;
         const absDrift = Math.abs(drift);
 
         if (absDrift > 0.5) {
-          // Large drift: hard seek to correct position
           this._videoElement.currentTime = audioContentTime;
           this._videoElement.playbackRate = 1.0;
         } else if (absDrift > 0.05) {
-          // Moderate drift: gradual correction via playback rate adjustment
-          // Speed up or slow down slightly to re-sync over ~0.5s
           const rate = drift > 0 ? 1.05 : 0.95;
           this._videoElement.playbackRate = rate;
         } else {
-          // In sync: normal playback
           this._videoElement.playbackRate = 1.0;
         }
-        // Ensure playing
         if (this._videoElement.paused) {
           this._videoElement.play().catch(() => {});
         }
       }
-      // Update video texture every 2nd frame for performance
-      if (this._videoTexture && !this._skipVideoFrame) {
-        this._videoTexture.needsUpdate = true;
+      // Audio-reactive CSS brightness (cheap — only changes CSS property)
+      const targetBrightness = 0.55 + bassPulse * 0.25 + audioPulse * 0.12;
+      this._videoBrightness += (targetBrightness - this._videoBrightness) * 0.12;
+      this._videoElement.style.filter = `brightness(${this._videoBrightness.toFixed(3)})`;
+      // Miss flash: red overlay via CSS
+      if (this._missFlash > 0.01 && this._videoOverlay) {
+        const mf = this._missFlash * gfx;
+        this._videoOverlay.style.background =
+          `radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%), rgba(180,20,10,${(mf * 0.35).toFixed(3)})`;
+      } else if (this._videoOverlay) {
+        this._videoOverlay.style.background =
+          'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%)';
       }
-      this._skipVideoFrame = !this._skipVideoFrame;
-      // Audio-reactive uniforms
-      this._videoMaterial.uniforms.uBass.value = bassPulse;
-      this._videoMaterial.uniforms.uAudioIntensity.value = audioPulse;
-      this._videoMaterial.uniforms.uMissFlash.value = this._missFlash * gfx;
-      // CRT + Glitch uniforms
-      this._videoMaterial.uniforms.uCrtIntensity.value = this._crtIntensity;
-      this._videoMaterial.uniforms.uGlitchIntensity.value = this._glitchIntensity;
-      this._videoMaterial.uniforms.uGlitchSeed.value = this._glitchSeed;
-      this._videoMaterial.uniforms.uTime.value = time * 0.001;
+      // Reduce bloom when video is active (video rendered by browser, not WebGL)
+      this._bloomBase = 0.05;
+    } else {
+      // No video — restore normal bloom base
+      if (this._graphicsPreset === 'disco') this._bloomBase = 0.18;
+      else if (this._graphicsPreset === 'standard') this._bloomBase = 0.08;
     }
 
     // ── Background image — CRT + glitch uniforms ──
@@ -1072,11 +932,7 @@ export default class ThreeScene {
       this._bgImageMesh.position.x = pg.cx + this._bgOffsetX;
       this._bgImageMesh.position.y = pg.cy + this._bgOffsetY;
     }
-    if (this._videoMesh) {
-      const pg = this._calcBgPlaneGeometry();
-      this._videoMesh.position.x = pg.cx + this._bgOffsetX;
-      this._videoMesh.position.y = pg.cy + this._bgOffsetY;
-    }
+    // Video is CSS-based — no Three.js mesh parallax needed
 
     // Camera position: always smoothly return to center (no shake)
     this.camera.position.x *= 0.85;

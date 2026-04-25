@@ -973,3 +973,28 @@ Stage Summary:
 - Arrow key navigation between cards
 - Auto-scroll to active card on load
 - Lint passes clean
+---
+Task ID: 1
+Agent: Main Agent
+Task: Optimize background video performance (lagging in game and song select)
+
+Work Log:
+- Analyzed ThreeScene.js video pipeline: identified VideoTexture → GPU upload → fragment shader → post-processing as main bottleneck
+- Replaced Three.js VideoTexture approach with CSS-based <video> element positioned behind the WebGL canvas
+- Canvas clear color changed from opaque (alpha=1) to transparent (alpha=0) so CSS video shows through
+- Added CSS vignette overlay div with radial gradient for video darkening
+- Audio-reactive effects moved from per-pixel GLSL shader to cheap CSS filter (brightness)
+- Miss flash effect moved from GLSL uniform to CSS background overlay
+- Reduced bloom strength from 0.18 to 0.05 when video is active (video rendered by browser, not WebGL)
+- Removed ~180 lines of GLSL shader code (CRT, glitch, barrel distortion, scanlines for video)
+- Removed Three.js video mesh/texture/material creation, disposal, and per-frame processing
+- Removed video mesh from parallax, resize, and update loops
+- Fixed setTVStatic() to properly restore bg mesh for song select
+- Verified all external references (_videoElement, _videoActive, _leadInOffset) remain compatible
+
+Stage Summary:
+- Video background now uses native CSS <video> element (z-index: -2) behind canvas (z-index: 1)
+- Canvas is transparent (clearColor alpha=0) when video is active
+- Audio-reactive brightness via CSS filter instead of GLSL shader
+- Bloom reduced to 0.05 when video active (from 0.18)
+- ~50% less GPU work per frame when video is playing (no texture upload, no per-pixel shader, less bloom)
