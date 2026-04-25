@@ -640,7 +640,7 @@ export default class NoteRenderer {
     const lxB = this._getLaneGeometry(0, bottomY, laneCount).x;
     const rxB = this._getLaneGeometry(laneCount, bottomY, laneCount).x;
 
-    // Perspective helper: get left/right X at any Y along the playfield edges
+    // Perspective helpers
     const perspX = (y) => {
       if (y <= judgeLineY) {
         const t = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
@@ -649,11 +649,8 @@ export default class NoteRenderer {
       const t = Math.max(0, Math.min(1, (y - judgeLineY) / (bottomY - judgeLineY)));
       return { l: lxJ + (lxB - lxJ) * t, r: rxJ + (rxB - rxJ) * t };
     };
-
-    // Perspective scale factor: 0 at top (far), 1 at bottom (near)
     const perspScale = (y) => (y - topY) / (bottomY - topY);
 
-    // Draw the playfield trapezoid path (reused)
     const pfPath = () => {
       ctx.beginPath();
       ctx.moveTo(lxT, topY); ctx.lineTo(rxT, topY);
@@ -666,23 +663,24 @@ export default class NoteRenderer {
     this._kiaiFlamePhase += delta * 15;
     const noise = (Math.sin(this._kiaiFlamePhase * 3.7) * 0.3 + Math.sin(this._kiaiFlamePhase * 7.1) * 0.2 + Math.sin(this._kiaiFlamePhase * 13.3) * 0.15) * 0.65 + 0.5;
 
+    // ── Get accent color from lane colors ──
+    const lc = NoteRenderer.LANE_COLORS[0] || { r: 170, g: 255, b: 0 };
+    const acR = lc.r, acG = lc.g, acB = lc.b;
+
     // ════════════════════════════════════════════════════════
-    //  Layer 1: Brighter playfield — perspective gradient
-    //  (brighter at bottom = closer to viewer = more lit)
+    //  Layer 1: Subtle playfield brightness (very reduced)
     // ════════════════════════════════════════════════════════
     ctx.save();
     pfPath(); ctx.clip();
 
-    // Draw as horizontal bands following perspective width at each Y
-    const brightBase = intensity * 0.06;
-    const brightPulse = pulse * 0.08;
-    const bands = 16;
+    const brightBase = intensity * 0.025;
+    const brightPulse = pulse * 0.03;
+    const bands = 12;
     for (let i = 0; i < bands; i++) {
       const y0 = topY + (bottomY - topY) * (i / bands);
       const y1 = topY + (bottomY - topY) * ((i + 1) / bands);
       const p0 = perspX(y0);
       const p1 = perspX(y1);
-      // Brightness increases towards bottom (perspective)
       const ps = perspScale((y0 + y1) / 2);
       const alpha = (brightBase + brightPulse) * (0.3 + ps * 0.7);
       ctx.fillStyle = `rgba(255,255,255,${alpha})`;
@@ -694,7 +692,7 @@ export default class NoteRenderer {
     }
 
     // ════════════════════════════════════════════════════════
-    //  Layer 2: White beat flash — perspective-expanding rings
+    //  Layer 2: White + accent beat flash — perspective rings
     // ════════════════════════════════════════════════════════
     if (this._kiaiBeatPulse > 0.5) {
       this._kiaiFlashAlpha = Math.min(1, this._kiaiFlashAlpha + this._kiaiBeatPulse * 0.5);
@@ -703,28 +701,30 @@ export default class NoteRenderer {
 
     if (this._kiaiFlashAlpha > 0.02) {
       const flashA = this._kiaiFlashAlpha * intensity;
-      // Draw expanding trapezoid rings from judge line
-      const rings = 8;
+      const rings = 6;
       for (let i = 0; i < rings; i++) {
-        const t = i / rings; // 0 = at judge line, 1 = far away
-        const alpha = flashA * 0.12 * (1 - t * t);
+        const t = i / rings;
+        const alpha = flashA * 0.1 * (1 - t * t);
         if (alpha < 0.003) break;
-        // Distance in pixels, scales with perspective
         const dist = t * (bottomY - topY) * 0.9;
-        // Up from judge line
         const yUp = judgeLineY - dist * 0.6;
         const yDown = judgeLineY + dist * 0.8;
         if (yUp < topY - 10 || yDown > bottomY + 10) continue;
         const pUp = perspX(Math.max(topY, yUp));
         const pDown = perspX(Math.min(bottomY, yDown));
-        const pUpOuter = perspX(Math.max(topY, yUp - dist * 0.06));
-        const pDownOuter = perspX(Math.min(bottomY, yDown + dist * 0.06));
-        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+        const pUpO = perspX(Math.max(topY, yUp - dist * 0.06));
+        const pDownO = perspX(Math.min(bottomY, yDown + dist * 0.06));
+        // Alternate: first ring white, then accent tinted
+        if (i % 2 === 0) {
+          ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+        } else {
+          ctx.fillStyle = `rgba(${acR},${acG},${acB},${alpha * 0.6})`;
+        }
         ctx.beginPath();
-        ctx.moveTo(pUpOuter.l, Math.max(topY, yUp - dist * 0.06));
-        ctx.lineTo(pUpOuter.r, Math.max(topY, yUp - dist * 0.06));
-        ctx.lineTo(pDownOuter.r, Math.min(bottomY, yDown + dist * 0.06));
-        ctx.lineTo(pDownOuter.l, Math.min(bottomY, yDown + dist * 0.06));
+        ctx.moveTo(pUpO.l, Math.max(topY, yUp - dist * 0.06));
+        ctx.lineTo(pUpO.r, Math.max(topY, yUp - dist * 0.06));
+        ctx.lineTo(pDownO.r, Math.min(bottomY, yDown + dist * 0.06));
+        ctx.lineTo(pDownO.l, Math.min(bottomY, yDown + dist * 0.06));
         ctx.lineTo(pDown.l, Math.min(bottomY, yDown));
         ctx.lineTo(pDown.r, Math.min(bottomY, yDown));
         ctx.lineTo(pUp.r, Math.max(topY, yUp));
@@ -737,7 +737,7 @@ export default class NoteRenderer {
     ctx.restore();
 
     // ════════════════════════════════════════════════════════
-    //  Layer 3: 3D border glow with perspective walls
+    //  Layer 3: 3D border glow — white + accent
     // ════════════════════════════════════════════════════════
     this._kiaiBorderGlow += (pulse - this._kiaiBorderGlow) * Math.min(1, delta * 16);
     const borderAlpha = intensity * 0.35 + this._kiaiBorderGlow * 0.55;
@@ -745,21 +745,16 @@ export default class NoteRenderer {
       ctx.save();
 
       const baseWallDepth = 14 + this._kiaiBorderGlow * 6;
-
-      // Perspective-scaled wall depth: smaller at top (far), bigger at bottom (near)
       const wallD = (y) => baseWallDepth * (0.4 + perspScale(y) * 0.8);
 
-      // Sample outer contour points at top, judge, bottom (perspective-aware)
-      const wdTop = wallD(topY);
-      const wdJudge = wallD(judgeLineY);
-      const wdBottom = wallD(bottomY);
+      const wdTop = wallD(topY), wdJudge = wallD(judgeLineY), wdBottom = wallD(bottomY);
       const oLxT = lxT - wdTop, oRxT = rxT + wdTop;
       const oLxJ = lxJ - wdJudge, oRxJ = rxJ + wdJudge;
       const oLxB = lxB - wdBottom, oRxB = rxB + wdBottom;
       const oTopY = topY - wdTop * 0.4;
       const oBottomY = bottomY + wdBottom * 0.4;
 
-      // --- Draw wall faces with 3D shading ---
+      // Wall faces: white core + accent tinted edges
       const drawWall = (ax, ay, bx, by, cx, cy, dx, dy, bright, alpha) => {
         ctx.beginPath();
         ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(cx, cy); ctx.lineTo(dx, dy);
@@ -768,80 +763,79 @@ export default class NoteRenderer {
         const midX2 = (cx + dx) / 2, midY2 = (cy + dy) / 2;
         const g = ctx.createLinearGradient(midX1, midY1, midX2, midY2);
         const baseA = alpha * bright;
-        g.addColorStop(0, `rgba(255,${200 + bright * 55 | 0},${100 + bright * 80 | 0},${baseA})`);
-        g.addColorStop(0.4, `rgba(255,${180 + bright * 40 | 0},${80 + bright * 40 | 0},${baseA * 0.8})`);
-        g.addColorStop(1, `rgba(200,${100 + bright * 30 | 0},${40 + bright * 20 | 0},${baseA * 0.3})`);
+        g.addColorStop(0, `rgba(255,255,255,${baseA * 0.7})`);
+        g.addColorStop(0.3, `rgba(${acR},${acG},${acB},${baseA * 0.5})`);
+        g.addColorStop(1, `rgba(${acR},${acG},${acB},${baseA * 0.15})`);
         ctx.fillStyle = g;
         ctx.fill();
       };
 
-      // Top edge
       drawWall(lxT, topY, rxT, topY, oRxT, oTopY, oLxT, oTopY, 1.0, borderAlpha * 0.6);
-      // Left wall (2 segments through judge line)
       drawWall(lxT, topY, lxJ, judgeLineY, oLxJ, judgeLineY, oLxT, oTopY, 0.6, borderAlpha * 0.5);
       drawWall(lxJ, judgeLineY, lxB, bottomY, oLxB, oBottomY, oLxJ, judgeLineY, 0.6, borderAlpha * 0.5);
-      // Right wall (2 segments)
       drawWall(rxT, topY, rxJ, judgeLineY, oRxJ, judgeLineY, oRxT, oTopY, 0.6, borderAlpha * 0.5);
       drawWall(rxJ, judgeLineY, rxB, bottomY, oRxB, oBottomY, oRxJ, judgeLineY, 0.6, borderAlpha * 0.5);
-      // Bottom edge
       drawWall(lxB, bottomY, rxB, bottomY, oRxB, oBottomY, oLxB, oBottomY, 0.4, borderAlpha * 0.3);
 
-      // --- Inner highlight edge ---
+      // Inner highlight edge — white + accent
       pfPath();
       ctx.lineWidth = 1.5;
-      ctx.strokeStyle = `rgba(255,240,180,${borderAlpha * 0.9})`;
+      const edgeGrad = ctx.createLinearGradient(0, topY, 0, bottomY);
+      edgeGrad.addColorStop(0, `rgba(255,255,255,${borderAlpha * 0.6})`);
+      edgeGrad.addColorStop(0.4, `rgba(${acR},${acG},${acB},${borderAlpha * 0.8})`);
+      edgeGrad.addColorStop(0.7, `rgba(255,255,255,${borderAlpha * 0.9})`);
+      edgeGrad.addColorStop(1, `rgba(${acR},${acG},${acB},${borderAlpha * 0.5})`);
+      ctx.strokeStyle = edgeGrad;
       ctx.stroke();
 
-      // --- Inward glow: perspective trapezoid strips ---
+      // Inward glow: alternating white + accent strips
       ctx.save();
       pfPath(); ctx.clip();
 
-      const glowStrips = 10;
-      const glowMaxW = 50 + this._kiaiBorderGlow * 35;
+      const glowStrips = 8;
+      const glowMaxW = 45 + this._kiaiBorderGlow * 30;
+      const topW = rxT - lxT;
+      const bottomW = rxB - lxB;
       for (let i = 0; i < glowStrips; i++) {
         const t = i / glowStrips;
-        const inset = glowMaxW * t; // how far inward from edge
-        const alpha = borderAlpha * 0.2 * (1 - t * t);
+        const inset = glowMaxW * t;
+        const alpha = borderAlpha * 0.15 * (1 - t * t);
         if (alpha < 0.003) break;
 
-        // Build inset trapezoid at 3 key Y positions
-        const yt = topY;
-        const yj = judgeLineY;
-        const yb = bottomY;
+        const ilT = lxT + inset * (topW / bottomW);
+        const irT = rxT - inset * (topW / bottomW);
+        const ilJ = lxJ + inset;
+        const irJ = rxJ - inset;
+        const ilB = lxB + inset;
+        const irB = rxB - inset;
 
-        // Inset at top (narrow field → small inset proportion)
-        const topW = rxT - lxT;
-        const judgeW = rxJ - lxJ;
-        const bottomW = rxB - lxB;
-        const frac = inset; // pixels of inset
-
-        const ilT = lxT + frac * (topW / bottomW); // perspective-scaled
-        const irT = rxT - frac * (topW / bottomW);
-        const ilJ = lxJ + frac;
-        const irJ = rxJ - frac;
-        const ilB = lxB + frac;
-        const irB = rxB - frac;
-
-        // Clamp so strips don't cross
         if (ilT >= irT || ilJ >= irJ || ilB >= irB) break;
 
-        ctx.fillStyle = `rgba(255,200,100,${alpha})`;
+        if (i % 2 === 0) {
+          ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+        } else {
+          ctx.fillStyle = `rgba(${acR},${acG},${acB},${alpha * 0.7})`;
+        }
         ctx.beginPath();
-        ctx.moveTo(ilT, yt); ctx.lineTo(irT, yt);
-        ctx.lineTo(irJ, yj); ctx.lineTo(irB, yb);
-        ctx.lineTo(ilB, yb); ctx.lineTo(ilJ, yj);
+        ctx.moveTo(ilT, topY); ctx.lineTo(irT, topY);
+        ctx.lineTo(irJ, judgeLineY); ctx.lineTo(irB, bottomY);
+        ctx.lineTo(ilB, bottomY); ctx.lineTo(ilJ, judgeLineY);
         ctx.closePath();
         ctx.fill();
       }
 
       ctx.restore();
 
-      // --- Outer atmospheric bloom ---
+      // Outer bloom — white + accent
       ctx.globalCompositeOperation = 'lighter';
       pfPath();
       ctx.lineWidth = 14 + this._kiaiBorderGlow * 8;
-      ctx.globalAlpha = borderAlpha * 0.12;
-      ctx.strokeStyle = 'rgba(255,180,80,1)';
+      ctx.globalAlpha = borderAlpha * 0.08;
+      ctx.strokeStyle = `rgba(255,255,255,1)`;
+      ctx.stroke();
+      ctx.lineWidth = 8 + this._kiaiBorderGlow * 5;
+      ctx.globalAlpha = borderAlpha * 0.06;
+      ctx.strokeStyle = `rgba(${acR},${acG},${acB},1)`;
       ctx.stroke();
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
@@ -850,7 +844,7 @@ export default class NoteRenderer {
     }
 
     // ════════════════════════════════════════════════════════
-    //  Layer 4: Burning judge line (perspective flames)
+    //  Layer 4: Burning judge line — white + accent flames
     // ════════════════════════════════════════════════════════
     const judgeWidth = rxJ - lxJ;
     const judgeCX = (lxJ + rxJ) / 2;
@@ -869,12 +863,13 @@ export default class NoteRenderer {
       const flameGrad = ctx.createLinearGradient(judgeCX, judgeLineY - h, judgeCX, judgeLineY + 4);
       const coreAlpha = alpha * (0.7 + noise * 0.3);
       const midAlpha = alpha * (0.5 + layerNoise * 0.3);
-      flameGrad.addColorStop(0, `rgba(255,${80 + layer * 40},${20 + layer * 20},0)`);
-      flameGrad.addColorStop(0.15, `rgba(255,${120 + layer * 30},${30 + layer * 15},${midAlpha * 0.5})`);
-      flameGrad.addColorStop(0.4, `rgba(255,${180 + layer * 20},${60 + layer * 20},${coreAlpha})`);
-      flameGrad.addColorStop(0.7, `rgba(255,${220 + layer * 15},${120 + layer * 30},${coreAlpha * 1.2})`);
-      flameGrad.addColorStop(0.9, `rgba(255,240,180,${coreAlpha * 0.8})`);
-      flameGrad.addColorStop(1, 'rgba(255,255,220,0)');
+      // White core at bottom → accent tinted at top
+      flameGrad.addColorStop(0, `rgba(${acR},${acG},${acB},0)`);
+      flameGrad.addColorStop(0.15, `rgba(${acR},${acG},${acB},${midAlpha * 0.3})`);
+      flameGrad.addColorStop(0.4, `rgba(255,255,255,${coreAlpha * 0.8})`);
+      flameGrad.addColorStop(0.7, `rgba(255,255,255,${coreAlpha})`);
+      flameGrad.addColorStop(0.9, `rgba(255,255,255,${coreAlpha * 0.7})`);
+      flameGrad.addColorStop(1, 'rgba(255,255,255,0)');
 
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -903,41 +898,40 @@ export default class NoteRenderer {
       ctx.restore();
     }
 
-    // Judge line hot glow
+    // Judge line hot glow — white + accent
     const hotGlowH = 6 + pulse * 10;
     const hotGlowA = intensity * (0.6 + noise * 0.2) + pulse * 0.3;
     const hotGrad = ctx.createLinearGradient(judgeCX, judgeLineY - hotGlowH, judgeCX, judgeLineY + hotGlowH);
-    hotGrad.addColorStop(0, 'rgba(255,180,60,0)');
-    hotGrad.addColorStop(0.25, `rgba(255,200,80,${hotGlowA * 0.4})`);
-    hotGrad.addColorStop(0.45, `rgba(255,240,160,${hotGlowA})`);
-    hotGrad.addColorStop(0.5, `rgba(255,255,230,${hotGlowA * 1.1})`);
-    hotGrad.addColorStop(0.55, `rgba(255,240,160,${hotGlowA})`);
-    hotGrad.addColorStop(0.75, `rgba(255,200,80,${hotGlowA * 0.4})`);
-    hotGrad.addColorStop(1, 'rgba(255,180,60,0)');
+    hotGrad.addColorStop(0, `rgba(${acR},${acG},${acB},0)`);
+    hotGrad.addColorStop(0.25, `rgba(${acR},${acG},${acB},${hotGlowA * 0.25})`);
+    hotGrad.addColorStop(0.45, `rgba(255,255,255,${hotGlowA * 0.8})`);
+    hotGrad.addColorStop(0.5, `rgba(255,255,255,${hotGlowA})`);
+    hotGrad.addColorStop(0.55, `rgba(255,255,255,${hotGlowA * 0.8})`);
+    hotGrad.addColorStop(0.75, `rgba(${acR},${acG},${acB},${hotGlowA * 0.25})`);
+    hotGrad.addColorStop(1, `rgba(${acR},${acG},${acB},0)`);
     ctx.save();
     ctx.fillStyle = hotGrad;
     ctx.fillRect(lxJ - 8, judgeLineY - hotGlowH, judgeWidth + 16, hotGlowH * 2);
 
-    // Broad bloom — perspective: spreads wider at bottom
+    // Broad bloom — white + accent, perspective trapezoid
     const bloomH = 50 + pulse * 50 + noise * 15;
-    const bloomA = intensity * 0.08 + pulse * 0.06;
+    const bloomA = intensity * 0.07 + pulse * 0.05;
     const bloomTopW = (rxT - lxT) * 0.15;
     const bloomBotW = (rxB - lxB) * 0.15;
-    const bloomCX = judgeCX;
     ctx.beginPath();
-    ctx.moveTo(bloomCX - judgeWidth / 2, judgeLineY);
-    ctx.lineTo(bloomCX + judgeWidth / 2, judgeLineY);
-    ctx.lineTo(bloomCX + judgeWidth / 2 + bloomBotW, judgeLineY + bloomH);
-    ctx.lineTo(bloomCX - judgeWidth / 2 - bloomBotW, judgeLineY + bloomH);
-    ctx.lineTo(bloomCX - judgeWidth / 2 - bloomTopW, judgeLineY - bloomH * 0.6);
-    ctx.lineTo(bloomCX + judgeWidth / 2 + bloomTopW, judgeLineY - bloomH * 0.6);
+    ctx.moveTo(judgeCX - judgeWidth / 2, judgeLineY);
+    ctx.lineTo(judgeCX + judgeWidth / 2, judgeLineY);
+    ctx.lineTo(judgeCX + judgeWidth / 2 + bloomBotW, judgeLineY + bloomH);
+    ctx.lineTo(judgeCX - judgeWidth / 2 - bloomBotW, judgeLineY + bloomH);
+    ctx.lineTo(judgeCX - judgeWidth / 2 - bloomTopW, judgeLineY - bloomH * 0.6);
+    ctx.lineTo(judgeCX + judgeWidth / 2 + bloomTopW, judgeLineY - bloomH * 0.6);
     ctx.closePath();
-    const bloomGrad = ctx.createLinearGradient(bloomCX, judgeLineY - bloomH, bloomCX, judgeLineY + bloomH);
-    bloomGrad.addColorStop(0, 'rgba(255,180,80,0)');
-    bloomGrad.addColorStop(0.35, `rgba(255,180,80,${bloomA * 0.3})`);
-    bloomGrad.addColorStop(0.5, `rgba(255,220,140,${bloomA})`);
-    bloomGrad.addColorStop(0.65, `rgba(255,180,80,${bloomA * 0.3})`);
-    bloomGrad.addColorStop(1, 'rgba(255,180,80,0)');
+    const bloomGrad = ctx.createLinearGradient(judgeCX, judgeLineY - bloomH, judgeCX, judgeLineY + bloomH);
+    bloomGrad.addColorStop(0, `rgba(${acR},${acG},${acB},0)`);
+    bloomGrad.addColorStop(0.3, `rgba(${acR},${acG},${acB},${bloomA * 0.2})`);
+    bloomGrad.addColorStop(0.5, `rgba(255,255,255,${bloomA})`);
+    bloomGrad.addColorStop(0.7, `rgba(${acR},${acG},${acB},${bloomA * 0.2})`);
+    bloomGrad.addColorStop(1, `rgba(${acR},${acG},${acB},0)`);
     ctx.fillStyle = bloomGrad;
     ctx.fill();
     ctx.restore();

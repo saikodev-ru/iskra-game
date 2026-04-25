@@ -3,7 +3,7 @@ import OszLoader from '../../game/OszLoader.js';
 import DifficultyAnalyzer from '../../game/DifficultyAnalyzer.js';
 import RecordStore from '../../game/RecordStore.js';
 import ZZZTheme from '../../theme/ZZZTheme.js';
-import TransitionFX from '../../game/TransitionFX.js';
+import { TransitionFX } from '../../game/TransitionFX.js';
 
 export default class SongSelect {
   constructor({ audio, three, screens }) {

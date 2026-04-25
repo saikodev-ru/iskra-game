@@ -1,6 +1,6 @@
 import EventBus from '../../core/EventBus.js';
 import RecordStore from '../../game/RecordStore.js';
-import TransitionFX from '../../game/TransitionFX.js';
+import { TransitionFX } from '../../game/TransitionFX.js';
 
 const GRADE_GRADIENTS = {
   X:  { bg: 'linear-gradient(180deg, #FFD700 0%, #FFA500 100%)', glow: 'rgba(255,215,0,0.5)', stroke: 'rgba(0,0,0,0.8)', bgSolid: '#FFA500' },

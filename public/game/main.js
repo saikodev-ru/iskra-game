@@ -19,8 +19,8 @@ import MainMenu      from './ui/screens/MainMenu.js';
 import SongSelect    from './ui/screens/SongSelect.js';
 import Settings      from './ui/screens/Settings.js';
 import ResultScreen  from './ui/screens/ResultScreen.js';
-import TransitionFX  from './game/TransitionFX.js';
-import GameCursor     from './game/GameCursor.js';
+import { TransitionFX }  from './game/TransitionFX.js';
+import { GameCursor }     from './game/GameCursor.js';
 
 /**
  * Calculate the safe area based on aspect ratio.
