@@ -366,29 +366,7 @@ export default class NoteRenderer {
     cctx.setTransform(1, 0, 0, 1, 0, 0);
     cctx.scale(dpr * this._resScale, dpr * this._resScale);
 
-    // Draw background image (very faint through glass)
-    if (this._bgImage) {
-      cctx.save();
-      cctx.globalAlpha = 0.04;
-      const ia = this._bgImage.width / this._bgImage.height;
-      const ca = this.w / this.h;
-      let dw, dh, dx, dy;
-      if (ca > ia) { dw = this.w; dh = this.w / ia; dx = 0; dy = (this.h - dh) / 2; }
-      else { dh = this.h; dw = this.h * ia; dx = (this.w - dw) / 2; dy = 0; }
-      cctx.drawImage(this._bgImage, dx, dy, dw, dh);
-      cctx.restore();
-    }
-
-    // Background dimming overlay
-    if (this._bgDim > 0) {
-      cctx.save();
-      cctx.globalAlpha = Math.min(1, this._bgDim / 100);
-      cctx.fillStyle = '#000000';
-      cctx.fillRect(0, 0, this.w, this.h);
-      cctx.restore();
-    }
-
-    // ── Glass playfield with translucent lanes ──
+    // ── Layout constants ──
     const topY = this._getTopY();
     const judgeLineY = this._getJudgeLineY();
     const bottomY = this._getBottomY();
@@ -404,20 +382,73 @@ export default class NoteRenderer {
     const leftBottom = this._getLaneGeometry(0, bottomY, laneCount);
     const rightBottom = this._getLaneGeometry(laneCount, bottomY, laneCount);
 
-    // ── Lane fills — matte glass, 30% transparent ──
+    // ── Frosted glass: blurred background image clipped to playfield ──
+    const pfFullPath = () => {
+      cctx.beginPath();
+      cctx.moveTo(leftTop.x, topY);
+      cctx.lineTo(rightTop.x, topY);
+      cctx.lineTo(rightJudge.x, judgeLineY);
+      cctx.lineTo(rightBottom.x, bottomY);
+      cctx.lineTo(leftBottom.x, bottomY);
+      cctx.lineTo(leftJudge.x, judgeLineY);
+      cctx.closePath();
+    };
+
+    if (this._bgImage) {
+      // Draw opaque dark base under playfield (blocks Three.js background)
+      cctx.save();
+      pfFullPath();
+      cctx.fillStyle = 'rgba(6,6,8,1)';
+      cctx.fill();
+      cctx.restore();
+
+      // Draw blurred background through the playfield shape (frosted glass base)
+      cctx.save();
+      pfFullPath();
+      cctx.clip();
+      cctx.globalAlpha = 0.18;
+      cctx.filter = 'blur(24px) brightness(0.7) saturate(1.2)';
+      const ia = this._bgImage.width / this._bgImage.height;
+      const ca = this.w / this.h;
+      let dw, dh, dx, dy;
+      if (ca > ia) { dw = this.w; dh = this.w / ia; dx = 0; dy = (this.h - dh) / 2; }
+      else { dh = this.h; dw = this.h * ia; dx = (this.w - dw) / 2; dy = 0; }
+      // Draw slightly larger to avoid blur edge artifacts inside clip
+      cctx.drawImage(this._bgImage, dx - 30, dy - 30, dw + 60, dh + 60);
+      cctx.filter = 'none';
+      cctx.restore();
+    } else {
+      // No background image — draw opaque dark base under playfield
+      cctx.save();
+      pfFullPath();
+      cctx.fillStyle = 'rgba(6,6,8,1)';
+      cctx.fill();
+      cctx.restore();
+    }
+
+    // Background dimming overlay
+    if (this._bgDim > 0) {
+      cctx.save();
+      cctx.globalAlpha = Math.min(1, this._bgDim / 100);
+      cctx.fillStyle = '#000000';
+      cctx.fillRect(0, 0, this.w, this.h);
+      cctx.restore();
+    }
+
+    // ── Lane fills — frosted matte glass, semi-opaque ──
     for (let i = 0; i < laneCount; i++) {
       const topGeom = this._getLaneGeometry(i, topY, laneCount);
       const judgeGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
       const bottomGeom = this._getLaneGeometry(i, bottomY, laneCount);
 
-      // Above judge line: translucent matte trapezoid
+      // Above judge line: semi-opaque matte trapezoid over blurred bg
       cctx.beginPath();
       cctx.moveTo(topGeom.x, topY);
       cctx.lineTo(topGeom.x + topGeom.width, topY);
       cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
       cctx.lineTo(judgeGeom.x, judgeLineY);
       cctx.closePath();
-      cctx.fillStyle = i % 2 === 0 ? 'rgba(12,12,14,0.30)' : 'rgba(16,16,18,0.30)';
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(10,10,12,0.75)' : 'rgba(14,14,16,0.75)';
       cctx.fill();
 
       // Subtle glass highlight at 30% height
@@ -430,22 +461,22 @@ export default class NoteRenderer {
       cctx.closePath();
       cctx.clip();
       const highlightY = topY + (judgeLineY - topY) * 0.3;
-      const hlGrad = cctx.createLinearGradient(0, highlightY - 6, 0, highlightY + 6);
+      const hlGrad = cctx.createLinearGradient(0, highlightY - 8, 0, highlightY + 8);
       hlGrad.addColorStop(0, 'rgba(255,255,255,0)');
-      hlGrad.addColorStop(0.5, 'rgba(255,255,255,0.03)');
+      hlGrad.addColorStop(0.5, 'rgba(255,255,255,0.025)');
       hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
       cctx.fillStyle = hlGrad;
-      cctx.fillRect(topGeom.x - 2, highlightY - 6, topGeom.width + 4, 12);
+      cctx.fillRect(topGeom.x - 2, highlightY - 8, topGeom.width + 4, 16);
       cctx.restore();
 
-      // Below judge line: same translucent matte as above
+      // Below judge line: same semi-opaque matte as above
       cctx.beginPath();
       cctx.moveTo(judgeGeom.x, judgeLineY);
       cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
       cctx.lineTo(bottomGeom.x + bottomGeom.width, bottomY);
       cctx.lineTo(bottomGeom.x, bottomY);
       cctx.closePath();
-      cctx.fillStyle = i % 2 === 0 ? 'rgba(10,10,12,0.30)' : 'rgba(14,14,16,0.30)';
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(8,8,10,0.75)' : 'rgba(12,12,14,0.75)';
       cctx.fill();
 
       // Subtle fade-to-black at the very bottom edge for smooth edge blending

@@ -1671,3 +1671,22 @@ Stage Summary:
 - Playfield is now 30% transparent matte glass — background image/video shows through lanes
 - Song select → game transition: flying card + burst + fade-to-black works cleanly without ScreenManager interference
 - Game → result → song-select: instant swap (no jarring 3D animations when coming from game canvas)
+---
+Task ID: 1
+Agent: Main
+Task: Make playfield less transparent and add frosted glass blur effect to the background
+
+Work Log:
+- Read current `_rebuildBackgroundCache()` in NoteRenderer.js — lane fills were at 0.30 opacity with background image at 0.04 alpha
+- Restructured the method: moved layout constants and lane geometry computation before the blurred background section to fix temporal dead zone issue
+- Added opaque dark base (`rgba(6,6,8,1)`) under the playfield shape to block Three.js background from showing through
+- Added frosted glass effect: blurred background image drawn at 0.18 alpha with `ctx.filter = 'blur(24px) brightness(0.7) saturate(1.2)'`, clipped to playfield shape
+- Increased lane fill opacity from 0.30 to 0.75 for above-judge lanes and 0.75 for below-judge lanes
+- Removed unused `pfTopPath()` and `pfBottomPath()` helpers, kept only `pfFullPath()` 
+- Considered CSS `backdrop-filter: blur()` on game canvas but rejected due to performance concerns at 60fps
+
+Stage Summary:
+- Playfield is now significantly less transparent (0.75 vs 0.30 alpha)
+- Background image is blurred (24px blur + brightness/saturation adjustments) and shows through at 18% opacity creating frosted glass look
+- Opaque dark base blocks Three.js video/image background from bleeding through the playfield
+- No performance impact (blur is applied once to cached offscreen canvas, not per-frame)
