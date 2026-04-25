@@ -49,6 +49,10 @@ export default class NoteRenderer {
     this._bgCacheBgImage = null;
     this._bgCacheBgDim = -1;
 
+    // Miss flash effects — pool for red flashes at judge line on miss
+    this._missFlashPool = [];
+    this._missFlashCount = 0;
+
     this.resize();
   }
 
@@ -192,6 +196,18 @@ export default class NoteRenderer {
     this._effectIndex++;
   }
 
+  /** Add a miss flash at the judge line */
+  addMissFlash(lane, laneCount) {
+    if (this._missFlashCount >= 8) return;
+    const geom = this._getLaneGeometry(lane, this._getJudgeLineY(), laneCount);
+    // Each flash: [x, y, width, life, maxLife] — 5 elements
+    this._missFlashPool.push(
+      geom.centerX, geom.x, geom.width,
+      0.4, 0.4
+    );
+    this._missFlashCount++;
+  }
+
   /** Get pre-rendered glow sprite for a color */
   _getGlowSprite(color) {
     return this._glowSprites.get(color) || this._whiteGlow;
@@ -238,7 +254,7 @@ export default class NoteRenderer {
 
   getLaneHitPosition(lane, laneCount) {
     const sa = this.safeArea;
-    const judgeLineY = sa.y + sa.h * 0.92;
+    const judgeLineY = this._getJudgeLineY();
     const geom = this._getLaneGeometry(lane, judgeLineY, laneCount);
     return { x: geom.centerX, y: judgeLineY };
   }
@@ -283,6 +299,7 @@ export default class NoteRenderer {
     }
 
     this._drawBackgroundCached(laneCount);
+    this._drawMissFlashes(delta);
     this._drawEffects();
     this._drawHoldSparks();
     this._drawLaneGlows(laneCount);
@@ -359,10 +376,13 @@ export default class NoteRenderer {
     for (let i = 0; i < laneCount; i++) {
       const topGeom = this._getLaneGeometry(i, topY, laneCount);
       const judgeGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
+      const bottomGeom = this._getLaneGeometry(i, bottomY, laneCount);
 
       cctx.fillStyle = i % 2 === 0
         ? 'rgba(10,7,5,1)'
         : 'rgba(18,13,9,1)';
+
+      // Above judge line: perspective trapezoid (top -> judge)
       cctx.beginPath();
       cctx.moveTo(topGeom.x, topY);
       cctx.lineTo(topGeom.x + topGeom.width, topY);
@@ -371,8 +391,14 @@ export default class NoteRenderer {
       cctx.closePath();
       cctx.fill();
 
-      // Below judge line
-      cctx.fillRect(judgeGeom.x, judgeLineY, judgeGeom.width, bottomY - judgeLineY);
+      // Below judge line: perspective trapezoid (judge -> bottom)
+      cctx.beginPath();
+      cctx.moveTo(judgeGeom.x, judgeLineY);
+      cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
+      cctx.lineTo(bottomGeom.x + bottomGeom.width, bottomY);
+      cctx.lineTo(bottomGeom.x, bottomY);
+      cctx.closePath();
+      cctx.fill();
     }
 
     // Depth gradient overlay
@@ -387,6 +413,7 @@ export default class NoteRenderer {
     // Fade overlay below judge line
     for (let i = 0; i < laneCount; i++) {
       const laneGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
+      const bottomGeom = this._getLaneGeometry(i, bottomY, laneCount);
       const laneColor = NoteRenderer.LANE_COLORS[i % NoteRenderer.LANE_COLORS.length];
       const rgb = this._hexToRgb(laneColor);
       const fadeGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
@@ -396,7 +423,14 @@ export default class NoteRenderer {
       fadeGrad.addColorStop(0.5, 'rgba(0,0,0,0.15)');
       fadeGrad.addColorStop(1, 'rgba(0,0,0,0.95)');
       cctx.fillStyle = fadeGrad;
-      cctx.fillRect(laneGeom.x, judgeLineY, laneGeom.width, bottomY - judgeLineY);
+      // Use trapezoid for fade overlay too
+      cctx.beginPath();
+      cctx.moveTo(laneGeom.x, judgeLineY);
+      cctx.lineTo(laneGeom.x + laneGeom.width, judgeLineY);
+      cctx.lineTo(bottomGeom.x + bottomGeom.width, bottomY);
+      cctx.lineTo(bottomGeom.x, bottomY);
+      cctx.closePath();
+      cctx.fill();
     }
 
     // Bright glow strip right below judge line
@@ -411,7 +445,7 @@ export default class NoteRenderer {
       cctx.fillRect(laneGeom.x, judgeLineY, laneGeom.width, glowH);
     }
 
-    // Lane dividers — within the perspective trapezoid only
+    // Lane dividers — above AND below judge line (perspective continuation)
     for (let i = 0; i <= laneCount; i++) {
       cctx.save();
       const divGrad = cctx.createLinearGradient(0, topY, 0, judgeLineY);
@@ -429,9 +463,25 @@ export default class NoteRenderer {
       cctx.lineTo(judgeG.x, judgeLineY);
       cctx.stroke();
       cctx.restore();
+
+      // Below judge line — continuing perspective lines (fading out)
+      const bottomG = this._getLaneGeometry(i, bottomY, laneCount);
+      cctx.save();
+      const belowGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
+      belowGrad.addColorStop(0, 'rgba(255,255,255,0.06)');
+      belowGrad.addColorStop(0.15, 'rgba(255,255,255,0.04)');
+      belowGrad.addColorStop(0.5, 'rgba(255,255,255,0.01)');
+      belowGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      cctx.strokeStyle = belowGrad;
+      cctx.lineWidth = 1;
+      cctx.beginPath();
+      cctx.moveTo(judgeG.x, judgeLineY);
+      cctx.lineTo(bottomG.x, bottomY);
+      cctx.stroke();
+      cctx.restore();
     }
 
-    // Side edges
+    // Side edges — above judge line
     cctx.save();
     const leftTop = this._getLaneGeometry(0, topY, laneCount);
     const leftJudge = this._getLaneGeometry(0, judgeLineY, laneCount);
@@ -452,6 +502,25 @@ export default class NoteRenderer {
     cctx.moveTo(rightTop.x, topY);
     cctx.lineTo(rightJudge.x, judgeLineY);
     cctx.stroke();
+
+    // Side edges — below judge line (continuing perspective, fading)
+    const leftBottom = this._getLaneGeometry(0, bottomY, laneCount);
+    const rightBottom = this._getLaneGeometry(laneCount, bottomY, laneCount);
+
+    cctx.shadowBlur = 0;
+    cctx.strokeStyle = 'rgba(170,255,0,0.04)';
+    cctx.lineWidth = 1.5;
+
+    cctx.beginPath();
+    cctx.moveTo(leftJudge.x, judgeLineY);
+    cctx.lineTo(leftBottom.x, bottomY);
+    cctx.stroke();
+
+    cctx.beginPath();
+    cctx.moveTo(rightJudge.x, judgeLineY);
+    cctx.lineTo(rightBottom.x, bottomY);
+    cctx.stroke();
+
     cctx.restore();
 
     // Update cache metadata
@@ -475,7 +544,7 @@ export default class NoteRenderer {
   /* ── Layout (Perspective) ── */
 
   _getJudgeLineY() {
-    return this.safeArea.y + this.safeArea.h * 0.92;
+    return this.safeArea.y + this.safeArea.h * 0.82;
   }
 
   _getTopY() {
@@ -483,14 +552,22 @@ export default class NoteRenderer {
   }
 
   _getBottomY() {
-    return this.safeArea.y + this.safeArea.h * 1.12;
+    return this.safeArea.y + this.safeArea.h * 1.25;
   }
 
   _getPerspectiveScale(y) {
     const judgeLineY = this._getJudgeLineY();
     const topY = this._getTopY();
-    const t = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
-    return 0.3 + 0.7 * t;
+    const bottomY = this._getBottomY();
+
+    if (y <= judgeLineY) {
+      const t = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
+      return 0.3 + 0.7 * t;
+    } else {
+      // Below judge line: subtle widening effect
+      const t = Math.min(1, (y - judgeLineY) / (bottomY - judgeLineY));
+      return 1.0 + 0.08 * t;
+    }
   }
 
   _getLaneGeometry(laneIndex, y, laneCount) {
@@ -592,14 +669,15 @@ export default class NoteRenderer {
   _drawNotes(notes, currentTime, laneCount) {
     const judgeLineY = this._getJudgeLineY();
     const topY = this._getTopY();
+    const bottomY = this._getBottomY();
     const clipTop = topY - 80;
-    const clipBottom = judgeLineY + 30;
+    const clipBottom = bottomY + 20;
 
     // Draw hold note bodies first
     for (let i = 0; i < notes.length; i++) {
       const note = notes[i];
       if (note.type === 'hold' && note.duration >= NoteRenderer.MIN_HOLD_DURATION) {
-        this._drawHoldNote(note, currentTime, laneCount, judgeLineY, topY);
+        this._drawHoldNote(note, currentTime, laneCount, judgeLineY, topY, bottomY);
       }
     }
 
@@ -609,15 +687,28 @@ export default class NoteRenderer {
       if (note.type === 'hold' && note.duration >= NoteRenderer.MIN_HOLD_DURATION) continue;
 
       if (note.hit && note.judgement !== 'miss') continue;
-      if (note.judgement === 'miss' && currentTime - note.time > 0.5) continue;
+      // No 0.5s timeout — missed notes scroll down and fade out naturally
+      if (note.judgement === 'miss') {
+        const noteY = this._noteY(note.time, currentTime, judgeLineY);
+        const fadeOut = this._fadeOut(noteY, judgeLineY);
+        if (fadeOut <= 0) continue; // Fully faded out, don't draw
+      }
 
       const noteY = this._noteY(note.time, currentTime, judgeLineY);
       if (noteY < clipTop || noteY > clipBottom) continue;
 
       const fadeIn = this._fadeIn(noteY, judgeLineY);
-      const alpha = note.judgement === 'miss' ? 0.3 : 1;
+      const fadeOut = this._fadeOut(noteY, judgeLineY);
+      const missAlpha = note.judgement === 'miss' ? 0.7 : 1;
+      const alpha = fadeIn * fadeOut * missAlpha;
       const color = NoteRenderer.LANE_COLORS[note.lane % NoteRenderer.LANE_COLORS.length];
-      this._drawTapNote(note.lane, noteY, laneCount, color, fadeIn * alpha);
+
+      // Motion blur / trail effect on missed notes
+      if (note.judgement === 'miss' && noteY > judgeLineY) {
+        this._drawTapNoteTrail(note.lane, noteY, laneCount, color, alpha * 0.3);
+      }
+
+      this._drawTapNote(note.lane, noteY, laneCount, color, alpha);
     }
   }
 
@@ -629,8 +720,15 @@ export default class NoteRenderer {
   _getNoteScale(noteY) {
     const judgeLineY = this._getJudgeLineY();
     const topY = this._getTopY();
-    const t = Math.max(0, Math.min(1, (noteY - topY) / (judgeLineY - topY)));
-    return 0.3 + 0.7 * t;
+    const bottomY = this._getBottomY();
+
+    if (noteY <= judgeLineY) {
+      const t = Math.max(0, Math.min(1, (noteY - topY) / (judgeLineY - topY)));
+      return 0.3 + 0.7 * t;
+    } else {
+      const t = Math.min(1, (noteY - judgeLineY) / (bottomY - judgeLineY));
+      return 1.0 + 0.06 * t; // subtle enlargement
+    }
   }
 
   /**
@@ -646,6 +744,43 @@ export default class NoteRenderer {
     const t = Math.min(1, Math.max(0, distFromTop / fadeZone));
     // Smooth ease-out for more natural appearance
     return t * t * (3 - 2 * t); // smoothstep
+  }
+
+  /**
+   * Fade-out: notes below judge line fade to transparent at bottom.
+   * Uses inverse smoothstep for a smooth, natural fade.
+   */
+  _fadeOut(noteY, judgeLineY) {
+    if (noteY <= judgeLineY) return 1;
+    const bottomY = this._getBottomY();
+    const distFromJudge = noteY - judgeLineY;
+    const totalDist = bottomY - judgeLineY;
+    if (totalDist <= 0) return 0;
+    const t = Math.min(1, distFromJudge / totalDist);
+    return 1 - t * t * (3 - 2 * t); // inverse smoothstep
+  }
+
+  /** Draw motion blur trail for missed notes falling below judge line */
+  _drawTapNoteTrail(lane, noteY, laneCount, color, alpha) {
+    const ctx = this.ctx;
+    const trailOffset = 18; // pixels above the note
+    const trailY = noteY - trailOffset;
+    if (trailY <= this._getJudgeLineY()) return;
+
+    const geom = this._getLaneGeometry(lane, noteY, laneCount);
+    const scale = this._getNoteScale(noteY);
+    const pad = 5 * scale;
+    const x = geom.x + pad;
+    const w = geom.width - pad * 2;
+    const h = this.noteHeight * scale;
+    const r = Math.max(2, 8 * scale);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    this._roundRect(ctx, x, trailY - h / 2, w, h, r);
+    ctx.fill();
+    ctx.restore();
   }
 
   /* ── Tap note ── */
@@ -686,7 +821,7 @@ export default class NoteRenderer {
 
   /* ── Hold note ── */
 
-  _drawHoldNote(note, currentTime, laneCount, judgeLineY, topY) {
+  _drawHoldNote(note, currentTime, laneCount, judgeLineY, topY, bottomY) {
     const headTime = note.time;
     const tailTime = note.time + note.duration;
     const color = NoteRenderer.LANE_COLORS[note.lane % NoteRenderer.LANE_COLORS.length];
@@ -694,36 +829,43 @@ export default class NoteRenderer {
     const isHolding = note.hit && note.judgement !== 'miss' && !note.released;
     const isMissed = note.judgement === 'miss';
 
-    if (isMissed && currentTime - headTime > 0.5) return;
+    // No 0.5s timeout — missed hold notes scroll down and fade out naturally
+    if (isMissed) {
+      const rawHeadY = this._noteY(headTime, currentTime, judgeLineY);
+      const fadeOut = this._fadeOut(rawHeadY, judgeLineY);
+      if (fadeOut <= 0) return;
+    }
     if (note.released && !isMissed) return;
-
-    const missAlpha = isMissed ? 0.3 : 1;
 
     const rawHeadY = this._noteY(headTime, currentTime, judgeLineY);
     const headY = isHolding ? judgeLineY : rawHeadY;
     const tailY = this._noteY(tailTime, currentTime, judgeLineY);
 
     const clipTop = topY - 40;
-    const clipBottom = judgeLineY;
+    const clipBottom = bottomY;
 
     const bodyTop = Math.max(tailY, clipTop);
     const bodyBottom = Math.min(headY, clipBottom);
 
     // Draw body with per-pixel gradient fade
     if (bodyTop < bodyBottom && bodyBottom > clipTop && bodyTop < clipBottom) {
-      this._drawHoldBody(note, laneCount, color, bodyTop, bodyBottom, judgeLineY, missAlpha, isHolding);
+      this._drawHoldBody(note, laneCount, color, bodyTop, bodyBottom, judgeLineY, isMissed, isHolding);
     }
 
-    // Draw tail cap with fade-in
+    // Draw tail cap with fade-in / fade-out
     if (tailY >= clipTop && tailY <= clipBottom) {
       const fadeIn = this._fadeIn(tailY, judgeLineY);
-      this._drawHoldCap(note.lane, tailY, laneCount, color, fadeIn * missAlpha);
+      const fadeOut = this._fadeOut(tailY, judgeLineY);
+      const missAlpha = isMissed ? 0.7 : 1;
+      this._drawHoldCap(note.lane, tailY, laneCount, color, fadeIn * fadeOut * missAlpha);
     }
 
     // Draw head cap with fade-in (only if NOT holding)
     if (!isHolding && headY >= clipTop && headY <= clipBottom) {
       const fadeIn = this._fadeIn(headY, judgeLineY);
-      this._drawHoldCap(note.lane, headY, laneCount, color, fadeIn * missAlpha);
+      const fadeOut = this._fadeOut(headY, judgeLineY);
+      const missAlpha = isMissed ? 0.7 : 1;
+      this._drawHoldCap(note.lane, headY, laneCount, color, fadeIn * fadeOut * missAlpha);
     }
 
     // Holding glow + sparks at judge line
@@ -740,11 +882,12 @@ export default class NoteRenderer {
    * while the head (near judge line) is fully opaque.
    * Uses a vertical gradient to blend alpha along the body length.
    */
-  _drawHoldBody(note, laneCount, color, topY, bottomY, judgeLineY, missAlpha, isHolding) {
+  _drawHoldBody(note, laneCount, color, topY, bottomY, judgeLineY, isMissed, isHolding) {
     const ctx = this.ctx;
     const gfx = this._gfx();
+    const missAlpha = isMissed ? 0.7 : 1;
 
-    // Draw in N segments, each with its own alpha based on _fadeIn at that Y position
+    // Draw in N segments, each with its own alpha based on _fadeIn/_fadeOut at that Y position
     const segments = Math.max(1, Math.ceil((bottomY - topY) / 12)); // one segment per ~12px (perf)
     const segH = (bottomY - topY) / segments;
 
@@ -752,9 +895,9 @@ export default class NoteRenderer {
       const segTop = topY + s * segH;
       const segBot = segTop + segH + 0.5; // +0.5 to avoid gaps
 
-      // Fade alpha: gradient from tail fade to head full opacity
-      const fadeAtTop = this._fadeIn(segTop, judgeLineY) * missAlpha;
-      const fadeAtBot = this._fadeIn(segBot, judgeLineY) * missAlpha;
+      // Fade alpha: gradient from tail fade to head full opacity, including fadeOut below judge line
+      const fadeAtTop = this._fadeIn(segTop, judgeLineY) * this._fadeOut(segTop, judgeLineY) * missAlpha;
+      const fadeAtBot = this._fadeIn(segBot, judgeLineY) * this._fadeOut(segBot, judgeLineY) * missAlpha;
       const avgAlpha = (fadeAtTop + fadeAtBot) / 2;
       if (avgAlpha < 0.005) continue; // skip nearly invisible segments
 
@@ -873,6 +1016,57 @@ export default class NoteRenderer {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 2, judgeLineY - 1.5, w - 4, 3);
     ctx.restore();
+  }
+
+  /* ── Miss Flashes — red flash at judge line on miss ── */
+
+  _drawMissFlashes(delta) {
+    if (this._missFlashCount === 0) return;
+    const ctx = this.ctx;
+    const judgeLineY = this._getJudgeLineY();
+    const STRIDE = 5; // [x, y, width, life, maxLife]
+
+    let write = 0;
+    for (let i = 0; i < this._missFlashCount; i++) {
+      const base = i * STRIDE;
+      this._missFlashPool[base + 3] -= delta; // life
+      if (this._missFlashPool[base + 3] <= 0) continue;
+      if (write !== i) {
+        for (let j = 0; j < STRIDE; j++) this._missFlashPool[write * STRIDE + j] = this._missFlashPool[base + j];
+      }
+      write++;
+    }
+    this._missFlashCount = write;
+    if (write === 0) return;
+
+    for (let i = 0; i < write; i++) {
+      const base = i * STRIDE;
+      const cx = this._missFlashPool[base];     // center x
+      const leftX = this._missFlashPool[base + 1]; // left x
+      const w = this._missFlashPool[base + 2];    // width
+      const life = this._missFlashPool[base + 3];
+      const maxLife = this._missFlashPool[base + 4];
+      const ratio = life / maxLife;
+
+      ctx.save();
+      ctx.globalAlpha = ratio * 0.6;
+      const flashH = 14;
+      const flashW = w * (1 + (1 - ratio) * 0.4);
+      const grad = ctx.createLinearGradient(0, judgeLineY - flashH, 0, judgeLineY + flashH);
+      grad.addColorStop(0, 'rgba(255,0,0,0)');
+      grad.addColorStop(0.35, `rgba(255,60,60,${ratio * 0.5})`);
+      grad.addColorStop(0.5, `rgba(255,80,80,${ratio * 0.8})`);
+      grad.addColorStop(0.65, `rgba(255,60,60,${ratio * 0.5})`);
+      grad.addColorStop(1, 'rgba(255,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(cx - flashW / 2, judgeLineY - flashH, flashW, flashH * 2);
+
+      // White core flash at the center
+      ctx.globalAlpha = ratio * 0.4;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx - flashW / 4, judgeLineY - 2, flashW / 2, 4);
+      ctx.restore();
+    }
   }
 
   /* ── HP Bar — perspective trapezoid ─ */

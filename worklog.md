@@ -1077,3 +1077,35 @@ Stage Summary:
 - Video loops continuously, auto-restarts on ended, retries on play rejection
 - Multiple event listeners ensure video initializes regardless of format
 - Periodic sync keeps video aligned with audio preview time
+---
+Task ID: 5
+Agent: main
+Task: Fix gameStart sound TypeError + gameplay overhaul (extended playfield, long note mechanics, visual polish)
+
+Work Log:
+- Fixed main.js line 74-78: Added missing `gameStart` method to ZZZTheme.init() proxy object. Was causing `_crtSounds.gameStart is not a function` TypeError when double-clicking difficulty to start game.
+- Major NoteRenderer.js rewrite (1214 → 1408 lines) with extended playfield below judge line:
+  - Moved judge line from 92% → 82% of safe area height
+  - Extended bottom from 112% → 125% of safe area height
+  - Added perspective continuation below judge line (1.0 → 1.08 scale widening)
+  - Added note scale continuation below judge line (1.0 → 1.06 enlargement)
+  - Added `_fadeOut()` method using inverse smoothstep for smooth fade below judge line
+  - Removed hard clip at `judgeLineY + 30` — now uses `bottomY + 20`
+  - Missed notes now visually fall past judge line and fade out naturally (no more 0.5s vanish)
+  - Hold notes: removed 0.5s miss timeout, body extends below judge line when head passes
+  - Hold note body segments use `_fadeIn * _fadeOut * missAlpha` for proper gradient
+  - Background cache: below-judge-line lanes now use perspective trapezoids instead of flat rects
+  - Lane dividers extend below judge line with fade-out gradient
+  - Side edges continue below judge line
+  - Added motion blur trail effect for missed notes falling below judge line
+  - Added `addMissFlash()` + `_drawMissFlashes()` — red flash at judge line on miss
+
+Stage Summary:
+- gameStart sound now works correctly (proxy method was missing)
+- Playfield extends 18% below judge line with smooth perspective widening
+- Missed notes visually fall through and fade out naturally
+- Long notes render correctly below judge line when missed
+- Motion blur trail on falling missed notes
+- Red miss flash effect at judge line position
+- All changes in NoteRenderer.js + main.js
+- Lint passes clean, compiles successfully
