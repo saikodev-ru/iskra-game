@@ -8,6 +8,7 @@ import HitSounds     from './game/HitSounds.js';
 import BeatMap       from './game/BeatMap.js';
 import JudgementSystem from './game/JudgementSystem.js';
 import NoteRenderer  from './game/NoteRenderer.js';
+import ColorExtractor from './game/ColorExtractor.js';
 import JudgementDisplay from './ui/JudgementDisplay.js';
 import HUD           from './ui/HUD.js';
 import ScreenManager from './ui/ScreenManager.js';
@@ -217,6 +218,21 @@ async function boot() {
       three._clearBackgroundVideo();
     }
 
+    // Extract accent colors from background for note colors
+    if (map.backgroundUrl) {
+      const bgImg = new Image();
+      bgImg.crossOrigin = 'anonymous';
+      bgImg.onload = () => {
+        try {
+          const colors = ColorExtractor.extract(bgImg);
+          const extended = [];
+          while (extended.length < 8) extended.push(...colors);
+          NoteRenderer.setLaneColors(extended);
+        } catch (_) {}
+      };
+      bgImg.src = map.backgroundUrl;
+    }
+
     // Start the game immediately — the song-select transition already
     // provides the visual delay. Audio starts only in _actuallyStartGame.
     _actuallyStartGame(shiftedMap);
@@ -324,6 +340,7 @@ async function boot() {
         // Death: HP depleted — start death sequence (once only)
         if (stats.health <= 0 && !_dying) {
           _dying = true;
+          currentJudgement._died = true; // Force D rank
           if (hitSounds) hitSounds.fail();
           input.disable();
           // Slow music down over 2.5 seconds

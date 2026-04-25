@@ -847,9 +847,14 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   from { opacity: 0; transform: translateY(24px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes result-slide-right {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 .result-screen {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  height: 100%; gap: 20px; padding: 24px; overflow-y: auto;
+  height: 100%; gap: 16px; padding: 20px; overflow-y: auto;
 }
 .result-screen > * {
   opacity: 0; animation: result-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -861,6 +866,34 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 .result-screen > *:nth-child(5) { animation-delay: 0.36s; }
 .result-screen > *:nth-child(6) { animation-delay: 0.44s; }
 .result-screen > *:nth-child(7) { animation-delay: 0.52s; }
+
+/* Death result — red tint, glitched entrance */
+.result-screen--death > * {
+  animation-name: result-death-enter;
+}
+@keyframes result-death-enter {
+  0%   { opacity: 0; transform: translateY(16px) skewX(3deg); filter: blur(4px); }
+  40%  { opacity: 0.6; transform: translateY(-4px) skewX(-1deg); filter: blur(1px); }
+  70%  { opacity: 0.9; transform: translateY(2px) skewX(0.5deg); filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.rc-death-label {
+  font-family: var(--zzz-font); font-weight: 900; font-size: 12px;
+  color: #FF3D3D; letter-spacing: 0.3em; text-transform: uppercase;
+  text-shadow: 0 0 12px rgba(255,61,61,0.6), 0 0 24px rgba(255,61,61,0.2);
+  margin-bottom: 4px;
+  animation: rc-death-pulse 1.5s ease-in-out infinite;
+}
+@keyframes rc-death-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.result-score-panel--death {
+  border-color: rgba(255,61,61,0.15);
+}
+.result-score-panel--death::before {
+  background: linear-gradient(90deg, transparent, rgba(255,61,61,0.2), transparent);
+}
 
 .result-grade {
   font-family: var(--zzz-font); font-weight: 900; font-size: 140px;
@@ -925,36 +958,75 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   font-variant-numeric: tabular-nums; line-height: 1;
 }
 
-.result-judge-panel {
-  background: rgba(17, 17, 17, 0.6); border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 16px; padding: 16px 20px; width: 100%; max-width: 480px;
-  backdrop-filter: blur(12px); position: relative; overflow: hidden;
+/* ── JUDGMENT CARDS (horizontal layout, best → worst) ── */
+.rc-judge-cards {
+  display: flex; gap: 8px; width: 100%; max-width: 560px;
+  justify-content: center; flex-wrap: wrap;
 }
-.result-judge-panel::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+.rc-judge-card {
+  flex: 1; min-width: 70px; max-width: 110px;
+  background: rgba(17, 17, 17, 0.6);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 14px;
+  padding: 12px 8px 10px;
+  text-align: center;
+  position: relative; overflow: hidden;
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  animation: rc-card-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--rc-jc-delay, 0s);
 }
-.result-judge-bar-track {
-  display: flex; height: 6px; border-radius: 3px; overflow: hidden;
-  background: rgba(255,255,255,0.04); margin-bottom: 14px;
+@keyframes rc-card-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-.result-judge-bar-seg {
-  height: 100%; transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+.rc-judge-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--rc-jc-color, #fff);
+  opacity: 0.5;
 }
-.result-judge-row {
-  display: flex; justify-content: space-between; align-items: center;
+.rc-judge-card::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(180deg, var(--rc-jc-color, #fff) 0%, transparent 30%);
+  opacity: 0.03; pointer-events: none;
 }
-.result-judge-item {
-  text-align: center; flex: 1;
+.rc-judge-card-label {
+  font-family: var(--zzz-font); font-weight: 700; font-size: 8px;
+  color: var(--zzz-muted); letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 4px;
 }
-.result-judge-item-label {
-  font-family: var(--zzz-font); font-weight: 700; font-size: 9px;
-  color: var(--zzz-muted); letter-spacing: 0.12em; text-transform: uppercase;
-  margin-bottom: 3px;
+.rc-judge-card-value {
+  font-family: var(--zzz-font); font-weight: 900; font-size: 22px;
+  color: var(--rc-jc-color, #fff); line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px var(--rc-jc-color, #fff);
 }
-.result-judge-item-value {
-  font-family: var(--zzz-font); font-weight: 800; font-size: 18px;
-  font-variant-numeric: tabular-nums; line-height: 1;
+.rc-judge-card-pct {
+  font-family: var(--zzz-mono); font-weight: 600; font-size: 9px;
+  color: rgba(255,255,255,0.3); margin-top: 2px;
+}
+.rc-judge-card-bar-track {
+  height: 3px; border-radius: 2px; overflow: hidden;
+  background: rgba(255,255,255,0.04);
+  margin-top: 8px;
+}
+.rc-judge-card-bar-fill {
+  height: 100%; border-radius: 2px; width: 0%;
+  background: var(--rc-jc-color, #fff);
+  opacity: 0.7;
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 0 6px var(--rc-jc-color, #fff);
+}
+.rc-judge-card-bar-fill--sb {
+  background: repeating-linear-gradient(90deg, #FF8C00, #FF8C00 4px, transparent 4px, transparent 8px);
+  box-shadow: none;
+  opacity: 0.5;
+}
+.rc-judge-card--sb {
+  border-color: rgba(255,140,0,0.1);
+}
+.rc-judge-card--sb::before {
+  background: #FF8C00; opacity: 0.3;
 }
 
 .result-buttons {
@@ -994,8 +1066,10 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   .result-stats-grid { gap: 8px; }
   .result-stat-card { padding: 10px 8px; }
   .result-stat-value { font-size: 18px; }
-  .result-judge-panel { padding: 12px 14px; }
-  .result-judge-item-value { font-size: 15px; }
+  .rc-judge-cards { gap: 6px; max-width: 100%; }
+  .rc-judge-card { min-width: 56px; max-width: 80px; padding: 10px 6px 8px; border-radius: 12px; }
+  .rc-judge-card-value { font-size: 18px; }
+  .rc-judge-card-label { font-size: 7px; }
   .result-buttons { gap: 8px; }
   .result-btn { padding: 12px 24px; font-size: 12px; }
 }

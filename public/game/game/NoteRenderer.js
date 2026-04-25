@@ -1,14 +1,15 @@
-const LANE_COLORS = [
-  '#CCFF33', '#FFD700', '#FF3355', '#BF5FFF',
-  '#CCFF33', '#FFD700', '#FF3355', '#BF5FFF'
-];
+import ColorExtractor, { DEFAULT_COLORS } from './ColorExtractor.js';
+
+// Default lane colors — will be overridden by background-extracted colors
 
 export default class NoteRenderer {
+  static LANE_COLORS = [...DEFAULT_COLORS];
+
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.scrollSpeed = 400;
-    this.noteHeight = 20;
+    this.noteHeight = 26;
     this._resScale = 1.0;
     this._effectsPool = new Array(64);
     for (let i = 0; i < 64; i++) {
@@ -81,13 +82,28 @@ export default class NoteRenderer {
     this._bgLoadAttempted = true;
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => { this._bgImage = img; this.invalidateBackgroundCache(); };
+    img.onload = () => {
+      this._bgImage = img;
+      this.invalidateBackgroundCache();
+      // Extract accent colors from background and update lane colors
+      const newColors = ColorExtractor.extract(img);
+      // Extend to 8 lanes (repeat pattern)
+      const extended = [];
+      while (extended.length < 8) extended.push(...newColors);
+      NoteRenderer.setLaneColors(extended);
+      // Rebuild glow sprites for new colors
+      this._rebuildLaneGlowSprites();
+    };
     img.src = url;
   }
 
   clearBackground() {
     this._bgImage = null;
     this._bgLoadAttempted = false;
+    // Reset to default colors
+    const defaults = [...DEFAULT_COLORS, ...DEFAULT_COLORS];
+    NoteRenderer.setLaneColors(defaults);
+    this._rebuildLaneGlowSprites();
     this.invalidateBackgroundCache();
   }
 
@@ -108,7 +124,34 @@ export default class NoteRenderer {
     this._whiteGlow = c;
 
     // Per-lane-color glow sprites
-    for (const color of LANE_COLORS) {
+    const laneColors = NoteRenderer.LANE_COLORS;
+    for (const color of laneColors) {
+      const gc = document.createElement('canvas');
+      gc.width = sz; gc.height = sz;
+      const gx = gc.getContext('2d');
+      const rgb = this._hexToRgb(color);
+      const gg = gx.createRadialGradient(sz / 2, sz / 2, 0, sz / 2, sz / 2, sz / 2);
+      gg.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},1)`);
+      gg.addColorStop(0.2, `rgba(${rgb.r},${rgb.g},${rgb.b},0.6)`);
+      gg.addColorStop(0.5, `rgba(${rgb.r},${rgb.g},${rgb.b},0.12)`);
+      gg.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+      gx.fillStyle = gg;
+      gx.fillRect(0, 0, sz, sz);
+      this._glowSprites.set(color, gc);
+    }
+  }
+
+  /** Rebuild glow sprites when lane colors change */
+  static _rebuildGlowSpritesForColors(colors) {
+    // This rebuilds for the next instance that calls _buildGlowSprites
+    // Existing instances need their sprites rebuilt too
+  }
+
+  /** Rebuild glow sprites for the current lane colors */
+  _rebuildLaneGlowSprites() {
+    const sz = 64;
+    for (const color of NoteRenderer.LANE_COLORS) {
+      if (this._glowSprites.has(color)) continue; // already cached
       const gc = document.createElement('canvas');
       gc.width = sz; gc.height = sz;
       const gx = gc.getContext('2d');
@@ -344,7 +387,7 @@ export default class NoteRenderer {
     // Fade overlay below judge line
     for (let i = 0; i < laneCount; i++) {
       const laneGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
-      const laneColor = LANE_COLORS[i % LANE_COLORS.length];
+      const laneColor = NoteRenderer.LANE_COLORS[i % NoteRenderer.LANE_COLORS.length];
       const rgb = this._hexToRgb(laneColor);
       const fadeGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
       fadeGrad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},0.25)`);
@@ -536,6 +579,16 @@ export default class NoteRenderer {
 
   static MIN_HOLD_DURATION = 0.05;
 
+  /** Get current lane colors (static, shared across instances) */
+  static getLaneColors() { return NoteRenderer.LANE_COLORS; }
+
+  /** Set lane colors (called when background image is loaded and colors extracted) */
+  static setLaneColors(colors) {
+    NoteRenderer.LANE_COLORS = colors;
+    // Rebuild glow sprites for new colors
+    NoteRenderer._rebuildGlowSpritesForColors(colors);
+  }
+
   _drawNotes(notes, currentTime, laneCount) {
     const judgeLineY = this._getJudgeLineY();
     const topY = this._getTopY();
@@ -563,7 +616,7 @@ export default class NoteRenderer {
 
       const fadeIn = this._fadeIn(noteY, judgeLineY);
       const alpha = note.judgement === 'miss' ? 0.3 : 1;
-      const color = LANE_COLORS[note.lane % LANE_COLORS.length];
+      const color = NoteRenderer.LANE_COLORS[note.lane % NoteRenderer.LANE_COLORS.length];
       this._drawTapNote(note.lane, noteY, laneCount, color, fadeIn * alpha);
     }
   }
@@ -613,11 +666,11 @@ export default class NoteRenderer {
     this._roundRect(ctx, x, noteY - h / 2, w, h, r);
     ctx.fill();
 
-    // Glow via pre-rendered sprite (no shadowBlur)
+    // Glow via pre-rendered sprite (reduced intensity)
     const glowSprite = this._getGlowSprite(color);
     if (glowSprite) {
-      const gs = Math.max(w, h) * 2.5 * scale;
-      ctx.globalAlpha = alpha * 0.35;
+      const gs = Math.max(w, h) * 1.8 * scale;
+      ctx.globalAlpha = alpha * 0.18;
       ctx.drawImage(glowSprite, x + w / 2 - gs / 2, noteY - gs / 2, gs, gs);
       ctx.globalAlpha = alpha;
     }
@@ -768,11 +821,11 @@ export default class NoteRenderer {
     this._roundRect(ctx, x, y - h / 2, w, h, r);
     ctx.fill();
 
-    // Glow via pre-rendered sprite (no shadowBlur)
+    // Glow via pre-rendered sprite (reduced intensity)
     const glowSprite = this._getGlowSprite(color);
     if (glowSprite) {
-      const gs = Math.max(w, h) * 2.5 * scale;
-      ctx.globalAlpha = alpha * 0.3;
+      const gs = Math.max(w, h) * 1.8 * scale;
+      ctx.globalAlpha = alpha * 0.15;
       ctx.drawImage(glowSprite, x + w / 2 - gs / 2, y - gs / 2, gs, gs);
       ctx.globalAlpha = alpha;
     }

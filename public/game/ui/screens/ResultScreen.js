@@ -1,6 +1,5 @@
 const GRADE_GRADIENTS = {
   X:  { bg: 'linear-gradient(180deg, #FFD700 0%, #FFA500 100%)', glow: 'rgba(255,215,0,0.5)', stroke: 'rgba(0,0,0,0.8)' },
-  SS: { bg: 'linear-gradient(180deg, #67E8F9 0%, #FDA4AF 100%)', glow: 'rgba(103,232,249,0.4)', stroke: 'rgba(0,0,0,0.8)' },
   S:  { bg: 'linear-gradient(180deg, #FDE68A 0%, #F97316 100%)', glow: 'rgba(253,230,138,0.4)', stroke: 'rgba(0,0,0,0.75)' },
   A:  { bg: 'linear-gradient(180deg, #86EFAC 0%, #22D3EE 100%)', glow: 'rgba(134,239,172,0.35)', stroke: 'rgba(0,0,0,0.75)' },
   B:  { bg: 'linear-gradient(180deg, #60A5FA 0%, #A855F7 100%)', glow: 'rgba(96,165,250,0.35)', stroke: 'rgba(0,0,0,0.75)' },
@@ -8,41 +7,72 @@ const GRADE_GRADIENTS = {
   D:  { bg: 'linear-gradient(180deg, #EF4444 0%, #7F1D1D 100%)', glow: 'rgba(239,68,68,0.35)', stroke: 'rgba(0,0,0,0.85)' },
 };
 
-const JUDGE_COLORS = {
-  perfect: '#AAFF00',
-  great: '#00E5FF',
-  good: '#F5C518',
-  bad: '#FF8C00',
-  miss: '#FF3D3D',
-};
+const JUDGE_CARDS = [
+  { key: 'perfect', label: 'PERFECT', color: '#AAFF00' },
+  { key: 'great',   label: 'GREAT',   color: '#00E5FF' },
+  { key: 'good',    label: 'GOOD',    color: '#F5C518' },
+  { key: 'bad',     label: 'BAD',     color: '#FF8C00' },
+  { key: 'miss',    label: 'MISS',    color: '#FF3D3D' },
+];
 
 export default class ResultScreen {
   constructor({ screens }) { this.screens = screens; this._stats = null; this._lastMap = null; this._keyHandler = null; }
 
   build() {
-    const s = this._stats || { score: 0, accuracy: 100, maxCombo: 0, rank: 'D', sliderBreaks: 0, hitCounts: { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 }, totalNotes: 0 };
+    const s = this._stats || { score: 0, accuracy: 100, maxCombo: 0, rank: 'D', sliderBreaks: 0, died: false, hitCounts: { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 }, totalNotes: 0 };
     const map = this._lastMap || {};
     const meta = map.metadata || {};
     const grade = GRADE_GRADIENTS[s.rank] || GRADE_GRADIENTS.D;
+    const isDeath = !!s.died;
 
     // Song info
     const songTitle = meta.title || 'Unknown';
     const songArtist = meta.artist || '';
     const songDiff = meta.version || meta.difficulty || '';
 
-    // Judgment bar percentages — per-note basis (one judgement per note)
+    // Judgment counts
     const total = s.totalNotes || Math.max(1, Object.values(s.hitCounts).reduce((a, b) => a + b, 0));
-    const pPct = (s.hitCounts.perfect / total * 100).toFixed(1);
-    const gPct = (s.hitCounts.great / total * 100).toFixed(1);
-    const goPct = (s.hitCounts.good / total * 100).toFixed(1);
-    const bPct = (s.hitCounts.bad / total * 100).toFixed(1);
-    const mPct = (s.hitCounts.miss / total * 100).toFixed(1);
+
+    // Build horizontal judgment cards (best to worst)
+    const judgeCardsHTML = JUDGE_CARDS.map((jc, idx) => {
+      const count = s.hitCounts[jc.key] || 0;
+      const pct = (count / total * 100).toFixed(1);
+      const barWidth = count > 0 ? Math.max(4, (count / total) * 100) : 0;
+      return `
+        <div class="rc-judge-card" style="--rc-jc-color: ${jc.color}; --rc-jc-delay: ${idx * 0.08}s;">
+          <div class="rc-judge-card-label">${jc.label}</div>
+          <div class="rc-judge-card-value">${count}</div>
+          <div class="rc-judge-card-pct">${pct}%</div>
+          <div class="rc-judge-card-bar-track">
+            <div class="rc-judge-card-bar-fill" data-width="${barWidth}"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Death-specific header
+    const deathHeader = isDeath ? `
+      <div class="rc-death-label">FAILED</div>
+    ` : '';
+
+    // SB card if any slider breaks
+    const sbCard = s.sliderBreaks > 0 ? `
+      <div class="rc-judge-card rc-judge-card--sb" style="--rc-jc-color: #FF8C00; --rc-jc-delay: ${JUDGE_CARDS.length * 0.08}s;">
+        <div class="rc-judge-card-label">SB</div>
+        <div class="rc-judge-card-value">${s.sliderBreaks}</div>
+        <div class="rc-judge-card-pct">&nbsp;</div>
+        <div class="rc-judge-card-bar-track">
+          <div class="rc-judge-card-bar-fill rc-judge-card-bar-fill--sb"></div>
+        </div>
+      </div>
+    ` : '';
 
     return `
-      <div class="result-screen">
+      <div class="result-screen ${isDeath ? 'result-screen--death' : ''}">
 
         <!-- Song info -->
         <div class="result-song-info">
+          ${deathHeader}
           <div class="result-song-title">${songTitle}</div>
           ${songArtist ? `<div style="font-family:var(--zzz-font);font-weight:500;font-size:11px;color:rgba(255,255,255,0.35);letter-spacing:0.04em;margin-top:1px;text-shadow:0 2px 8px rgba(0,0,0,0.8);">${songArtist}</div>` : ''}
           ${songDiff ? `<div class="result-song-diff">${songDiff}</div>` : ''}
@@ -55,7 +85,7 @@ export default class ResultScreen {
         </div>
 
         <!-- Score -->
-        <div class="result-score-panel">
+        <div class="result-score-panel ${isDeath ? 'result-score-panel--death' : ''}">
           <div class="result-score-label">SCORE</div>
           <div class="result-score-value">${s.score.toLocaleString()}</div>
         </div>
@@ -64,7 +94,7 @@ export default class ResultScreen {
         <div class="result-stats-grid">
           <div class="result-stat-card">
             <div class="result-stat-label">ACCURACY</div>
-            <div class="result-stat-value" style="color:var(--zzz-lime);">${s.accuracy.toFixed(2)}%</div>
+            <div class="result-stat-value" style="color:${isDeath ? '#FF3D3D' : 'var(--zzz-lime)'};">${s.accuracy.toFixed(2)}%</div>
           </div>
           <div class="result-stat-card">
             <div class="result-stat-label">MAX COMBO</div>
@@ -74,46 +104,12 @@ export default class ResultScreen {
             <div class="result-stat-label">NOTES</div>
             <div class="result-stat-value" style="color:var(--zzz-text);">${total}</div>
           </div>
-          ${s.sliderBreaks > 0 ? `
-          <div class="result-stat-card">
-            <div class="result-stat-label">SB</div>
-            <div class="result-stat-value" style="color:#FF8C00;font-size:18px;">${s.sliderBreaks}</div>
-          </div>` : ''}
         </div>
 
-        <!-- Judgment breakdown -->
-        <div class="result-judge-panel">
-          <!-- Stacked bar -->
-          <div class="result-judge-bar-track">
-            ${s.hitCounts.perfect > 0 ? `<div class="result-judge-bar-seg" data-width="${pPct}" style="width:0%;background:${JUDGE_COLORS.perfect};box-shadow:0 0 6px ${JUDGE_COLORS.perfect};"></div>` : ''}
-            ${s.hitCounts.great > 0 ? `<div class="result-judge-bar-seg" data-width="${gPct}" style="width:0%;background:${JUDGE_COLORS.great};box-shadow:0 0 6px ${JUDGE_COLORS.great};"></div>` : ''}
-            ${s.hitCounts.good > 0 ? `<div class="result-judge-bar-seg" data-width="${goPct}" style="width:0%;background:${JUDGE_COLORS.good};box-shadow:0 0 6px ${JUDGE_COLORS.good};"></div>` : ''}
-            ${s.hitCounts.bad > 0 ? `<div class="result-judge-bar-seg" data-width="${bPct}" style="width:0%;background:${JUDGE_COLORS.bad};box-shadow:0 0 6px ${JUDGE_COLORS.bad};"></div>` : ''}
-            ${s.hitCounts.miss > 0 ? `<div class="result-judge-bar-seg" data-width="${mPct}" style="width:0%;background:${JUDGE_COLORS.miss};box-shadow:0 0 6px ${JUDGE_COLORS.miss};"></div>` : ''}
-          </div>
-          <!-- Count row -->
-          <div class="result-judge-row">
-            <div class="result-judge-item">
-              <div class="result-judge-item-label">PERFECT</div>
-              <div class="result-judge-item-value" style="color:${JUDGE_COLORS.perfect};">${s.hitCounts.perfect}</div>
-            </div>
-            <div class="result-judge-item">
-              <div class="result-judge-item-label">GREAT</div>
-              <div class="result-judge-item-value" style="color:${JUDGE_COLORS.great};">${s.hitCounts.great}</div>
-            </div>
-            <div class="result-judge-item">
-              <div class="result-judge-item-label">GOOD</div>
-              <div class="result-judge-item-value" style="color:${JUDGE_COLORS.good};">${s.hitCounts.good}</div>
-            </div>
-            <div class="result-judge-item">
-              <div class="result-judge-item-label">BAD</div>
-              <div class="result-judge-item-value" style="color:${JUDGE_COLORS.bad};">${s.hitCounts.bad}</div>
-            </div>
-            <div class="result-judge-item">
-              <div class="result-judge-item-label">MISS</div>
-              <div class="result-judge-item-value" style="color:${JUDGE_COLORS.miss};">${s.hitCounts.miss}</div>
-            </div>
-          </div>
+        <!-- Judgment cards — horizontal, best to worst -->
+        <div class="rc-judge-cards">
+          ${judgeCardsHTML}
+          ${sbCard}
         </div>
 
         <!-- Buttons -->
@@ -129,14 +125,14 @@ export default class ResultScreen {
     if (data && data.stats) this._stats = data.stats;
     if (data && data.map) this._lastMap = data.map;
 
-    // Animate judgment bar segments
+    // Animate judgment card bars
     requestAnimationFrame(() => {
       setTimeout(() => {
-        document.querySelectorAll('.result-judge-bar-seg').forEach(seg => {
-          const w = seg.dataset.width;
-          if (w) seg.style.width = w + '%';
+        document.querySelectorAll('.rc-judge-card-bar-fill[data-width]').forEach(bar => {
+          const w = bar.dataset.width;
+          if (w) bar.style.width = w + '%';
         });
-      }, 400);
+      }, 500);
     });
 
     document.querySelectorAll('[data-action]').forEach(btn => {

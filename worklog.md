@@ -819,3 +819,57 @@ Stage Summary:
 - Lenient system no longer "plays long notes for you" (much shorter grace period)
 - All PERFECT = 1,000,000 score / 100.00% acc / X rank
 - Any GREAT → max 98.36% acc → SS rank (impossible to get X)
+
+---
+Task ID: 2
+Agent: main
+Task: Remove SS rank, death D rank, note thickness, color extraction, result screen redesign
+
+Work Log:
+- Removed SS rank from JudgementSystem.getRank() — now X, S, A, B, C, D
+- Adjusted rank thresholds: X≥100, S≥90, A≥80, B≥70, C≥60, D<60
+- Added `_died` flag to JudgementSystem — set when HP hits 0 in main.js death handler
+- Death always forces D rank regardless of accuracy
+- Removed SS from HUD rank styles
+- Removed SS from ResultScreen grade gradients
+
+- Note thickness: increased noteHeight from 20 to 26
+- Reduced note glow: tap glow 0.35→0.18, hold cap glow 0.3→0.15, glow size 2.5×→1.8×
+
+- Created ColorExtractor.js: smart k-means color extraction from background images
+  - Samples pixels at 100x100 downscale
+  - K-means++ clustering (k=8, 12 iterations)
+  - Filters out near-black, near-white, low-saturation colors
+  - Selects 4 maximally hue-spread colors
+  - Boosts saturation by 20% for punchier note colors
+  - Falls back to DEFAULT_COLORS on any error
+
+- Integrated ColorExtractor into NoteRenderer:
+  - LANE_COLORS is now static and dynamically settable
+  - setBackgroundImage() auto-extracts colors and updates lane colors
+  - clearBackground() resets to defaults
+  - _rebuildLaneGlowSprites() rebuilds sprite cache for new colors
+
+- main.js: extracts colors from map's backgroundUrl when starting a game
+- All LANE_COLORS references updated from const to NoteRenderer.LANE_COLORS
+
+- Result screen redesigned:
+  - Judgment breakdown now horizontal cards (best → worst: PERFECT, GREAT, GOOD, BAD, MISS)
+  - Each card shows: label, count, percentage, animated bar
+  - SB card appears separately with dashed pattern bar
+  - Death result: red "FAILED" label, glitched entrance animation (skew + blur)
+  - Score panel gets red border on death
+  - Accuracy shown in red on death
+  - CSS: .rc-judge-card, .rc-judge-cards, .result-screen--death
+
+- Weakened lenient hold system (from previous task):
+  - HOLD_GRACE_PERIOD: 80ms (tightened from 150ms)
+  - RELEASE_WINDOWS: 1.2× normal (tightened from 1.5×)
+  - Slider break HP: -0.8 (harsher)
+
+Stage Summary:
+- Ranks: X (100%), S (≥90%), A (≥80%), B (≥70%), C (≥60%), D (<60% or death)
+- Notes are 30% thicker with reduced glow
+- Lane colors automatically adapt to map's background image
+- Result screen uses horizontal card layout with staggered animations
+- Death shows D rank with red-tinted, glitched transition

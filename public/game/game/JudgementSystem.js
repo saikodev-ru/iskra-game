@@ -43,6 +43,7 @@ export default class JudgementSystem {
     this.hp = 100; // osu!mania-style HP (0–100, drain-based)
     this._totalNotes = 0; // total note objects (per-note, not per-judgement-slot)
     this._baseScore = 0; // 1,000,000 / totalNotes — score per note at PERFECT
+    this._died = false; // true when HP reached 0 (forces D rank)
   }
 
   reset() {
@@ -54,6 +55,7 @@ export default class JudgementSystem {
     this._missCheckIndex = 0;
     this.hp = 100;
     this._lastDrainTime = 0;
+    this._died = false;
 
     // Reset all note flags
     for (const note of this.map.notes) {
@@ -315,13 +317,15 @@ export default class JudgementSystem {
   }
 
   getRank() {
+    // Death always forces D rank regardless of accuracy
+    if (this._died) return 'D';
     const acc = this.getAccuracy();
     if (acc >= 100) return 'X';   // Only all PERFECT (305 each)
-    if (acc >= 95)  return 'SS';  // Almost perfect
     if (acc >= 90)  return 'S';
     if (acc >= 80)  return 'A';
     if (acc >= 70)  return 'B';
-    return 'C';
+    if (acc >= 60)  return 'C';
+    return 'D';
   }
 
   isComplete(currentTime) {
@@ -339,6 +343,7 @@ export default class JudgementSystem {
       rank: this.getRank(),
       health: this.hp,
       sliderBreaks: this.sliderBreaks,
+      died: this._died,
       hitCounts: { ...this.hitCounts },
       totalNotes: this._totalNotes,
     };

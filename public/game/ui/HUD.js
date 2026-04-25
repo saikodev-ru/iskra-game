@@ -171,7 +171,6 @@ export default class HUD {
     this._currentRank = rank;
     const rankStyles = {
       X:  { bg: 'linear-gradient(180deg, #FFD700, #FFA500)' },
-      SS: { bg: 'linear-gradient(180deg, #67E8F9, #FDA4AF)' },
       S:  { bg: 'linear-gradient(180deg, #FDE68A, #F97316)' },
       A:  { bg: 'linear-gradient(180deg, #86EFAC, #22D3EE)' },
       B:  { bg: 'linear-gradient(180deg, #60A5FA, #A855F7)' },
