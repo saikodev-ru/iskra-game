@@ -1707,3 +1707,23 @@ Stage Summary:
 - Screen transitions now have a solid black background during 3D fade-out — no more bleed-through
 - Song preview auto-plays when returning from game to song select
 - Song background (video/image) is also restored on return
+
+---
+Task ID: 1
+Agent: main
+Task: Add kiai note glow, bigger hit effects, remove CRT from game screen
+
+Work Log:
+- Added colored glow to tap notes during kiai: larger glow sprite + additive bloom ring that pulses with beat
+- Added same kiai glow effect to hold note caps
+- Increased hit effect maxRadius: perfect 80→140, great 60→105, other 35→55
+- Increased dot particles: perfect 10→14, great 6→8, speed 80→110, size 2.5→3.0
+- Enhanced hit effect duration 0.35s→0.45s, thicker rings, additive outer bloom for perfect/great
+- Added inner ring layer for perfect/great hits, larger white center flash
+- Added explicit CRT removal in startGame(): three.setCrtIntensity(0) + ZZZTheme.removeCrtOverlay()
+
+Stage Summary:
+- Notes now glow with their lane color during kiai sections, pulsing with the beat
+- Hit effects are ~75% larger with more dramatic visual impact (bloom, rings, particles)
+- CRT effect completely removed during gameplay, kept only on song select background
+- Files modified: public/game/game/NoteRenderer.js, public/game/main.js

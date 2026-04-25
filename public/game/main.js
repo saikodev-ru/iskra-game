@@ -216,6 +216,10 @@ async function boot() {
     // Clear previous background state
     noteRenderer.clearBackground();
 
+    // Disable CRT effect during gameplay — CRT is only for song select background
+    three.setCrtIntensity(0);
+    ZZZTheme.removeCrtOverlay();
+
     // Enable lead-in offset for video sync (game has 1s silence prepended to audio)
     three._leadInOffset = LEAD_IN;
 

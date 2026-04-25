@@ -185,19 +185,19 @@ export default class NoteRenderer {
     effect.active = true;
     effect.x = x; effect.y = y;
     effect.radius = 5;
-    effect.maxRadius = type === 'perfect' ? 80 : type === 'great' ? 60 : 35;
+    effect.maxRadius = type === 'perfect' ? 140 : type === 'great' ? 105 : 55;
     effect.opacity = 1; effect.color = color; effect.age = 0; effect.type = type;
     effect.dots = []; // flat: [angle, speed, size, life, ...]
 
     if (type === 'perfect' || type === 'great') {
       // Pre-compute dot params as flat array for zero-alloc rendering
-      const n = type === 'perfect' ? 10 : 6;
+      const n = type === 'perfect' ? 14 : 8;
       for (let i = 0; i < n; i++) {
         effect.dots.push(
           (Math.PI * 2 / n) * i + (Math.random() - 0.5) * 0.6,
-          80 + Math.random() * 70,
-          2.5 + Math.random() * 2,
-          0.35 + Math.random() * 0.2
+          110 + Math.random() * 90,
+          3.0 + Math.random() * 2.5,
+          0.4 + Math.random() * 0.2
         );
       }
     }
@@ -1329,6 +1329,7 @@ export default class NoteRenderer {
     const ctx = this.ctx;
     const corners = this._getNoteCorners(lane, noteY, laneCount);
     const r = Math.max(2, 8 * corners.scale);
+    const kiai = this._kiaiIntensity;
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -1336,12 +1337,28 @@ export default class NoteRenderer {
     this._drawPerspectiveRoundRect(ctx, corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y, corners.br.x, corners.br.y, corners.bl.x, corners.bl.y, r);
     ctx.fill();
 
-    // Glow via pre-rendered sprite (reduced intensity)
+    // Glow via pre-rendered sprite
     const glowSprite = this._getGlowSprite(color);
     if (glowSprite) {
+      // Base glow (always visible, subtle)
       const gs = Math.max(corners.width, corners.height) * 1.2 * corners.scale;
       ctx.globalAlpha = alpha * 0.08;
       ctx.drawImage(glowSprite, corners.centerX - gs / 2, noteY - gs / 2, gs, gs);
+
+      // Kiai glow — larger, brighter colored halo pulsing with beat
+      if (kiai > 0.01) {
+        const kiaiPulse = 0.7 + this._kiaiSmoothPulse * 0.3;
+        const kiaiGlowSize = gs * (1.8 + kiai * 1.2) * kiaiPulse;
+        ctx.globalAlpha = alpha * (0.12 + kiai * 0.30) * kiaiPulse;
+        ctx.drawImage(glowSprite, corners.centerX - kiaiGlowSize / 2, noteY - kiaiGlowSize / 2, kiaiGlowSize, kiaiGlowSize);
+
+        // Additive bloom ring around note during kiai
+        ctx.globalCompositeOperation = 'lighter';
+        const bloomSize = gs * (2.2 + kiai * 1.5) * kiaiPulse;
+        ctx.globalAlpha = alpha * (0.04 + kiai * 0.10) * kiaiPulse;
+        ctx.drawImage(glowSprite, corners.centerX - bloomSize / 2, noteY - bloomSize / 2, bloomSize, bloomSize);
+        ctx.globalCompositeOperation = 'source-over';
+      }
       ctx.globalAlpha = alpha;
     }
     const grad = ctx.createLinearGradient(corners.centerX, corners.tl.y, corners.centerX, corners.bl.y);
@@ -1494,6 +1511,7 @@ export default class NoteRenderer {
     const ctx = this.ctx;
     const corners = this._getNoteCorners(laneIndex, y, laneCount);
     const r = Math.max(2, 8 * corners.scale);
+    const kiai = this._kiaiIntensity;
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -1501,12 +1519,25 @@ export default class NoteRenderer {
     this._drawPerspectiveRoundRect(ctx, corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y, corners.br.x, corners.br.y, corners.bl.x, corners.bl.y, r);
     ctx.fill();
 
-    // Glow via pre-rendered sprite (reduced intensity)
+    // Glow via pre-rendered sprite
     const glowSprite = this._getGlowSprite(color);
     if (glowSprite) {
       const gs = Math.max(corners.width, corners.height) * 1.2 * corners.scale;
       ctx.globalAlpha = alpha * 0.06;
       ctx.drawImage(glowSprite, corners.centerX - gs / 2, y - gs / 2, gs, gs);
+
+      // Kiai glow on hold caps
+      if (kiai > 0.01) {
+        const kiaiPulse = 0.7 + this._kiaiSmoothPulse * 0.3;
+        const kiaiGlowSize = gs * (1.6 + kiai * 1.0) * kiaiPulse;
+        ctx.globalAlpha = alpha * (0.10 + kiai * 0.25) * kiaiPulse;
+        ctx.drawImage(glowSprite, corners.centerX - kiaiGlowSize / 2, y - kiaiGlowSize / 2, kiaiGlowSize, kiaiGlowSize);
+        ctx.globalCompositeOperation = 'lighter';
+        const bloomSize = gs * (2.0 + kiai * 1.3) * kiaiPulse;
+        ctx.globalAlpha = alpha * (0.03 + kiai * 0.08) * kiaiPulse;
+        ctx.drawImage(glowSprite, corners.centerX - bloomSize / 2, y - bloomSize / 2, bloomSize, bloomSize);
+        ctx.globalCompositeOperation = 'source-over';
+      }
       ctx.globalAlpha = alpha;
     }
     const grad = ctx.createLinearGradient(corners.centerX, corners.tl.y, corners.centerX, corners.bl.y);
@@ -1761,51 +1792,76 @@ export default class NoteRenderer {
     for (const e of this._effectsPool) {
       if (!e.active) continue;
       e.age += delta;
-      const dur = 0.35;
+      const dur = 0.45;
       const p = e.age / dur;
       if (p >= 1) { e.active = false; continue; }
 
       const ep = 1 - (1 - p) * (1 - p); // ease-out quad
       const r = Math.max(0, e.maxRadius * ep);
       const fade = 1 - p * p;
+      const isPerfect = e.type === 'perfect';
+      const isGreat = e.type === 'great';
 
-      // ── Layer 1: Expanding radial gradient flash (single fillRect) ──
+      // ── Layer 0: Additive outer bloom (large, soft) ──
       const sprite = this._getGlowSprite(e.color);
-      const flashSize = r * 2.2;
+      if (isPerfect || isGreat) {
+        const bloomSize = r * 3.2;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = fade * 0.25 * gfx;
+        ctx.drawImage(sprite, e.x - bloomSize / 2, e.y - bloomSize / 2, bloomSize, bloomSize);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.restore();
+      }
+
+      // ── Layer 1: Expanding radial gradient flash ──
+      const flashSize = r * 2.4;
       ctx.save();
-      ctx.globalAlpha = fade * 0.6 * gfx;
+      ctx.globalAlpha = fade * 0.7 * gfx;
       ctx.drawImage(sprite, e.x - flashSize / 2, e.y - flashSize / 2, flashSize, flashSize);
       ctx.restore();
 
-      // ── Layer 2: White center flash (first 20% only, single drawImage) ──
-      if (p < 0.22 && this._whiteGlow) {
-        const fP = p / 0.22;
-        const fSize = (24 + 30 * (1 - fP)) * 2;
+      // ── Layer 2: White center flash (bigger, longer) ──
+      if (p < 0.28 && this._whiteGlow) {
+        const fP = p / 0.28;
+        const fSize = isPerfect ? (36 + 50 * (1 - fP)) * 2 : (28 + 36 * (1 - fP)) * 2;
         ctx.save();
-        ctx.globalAlpha = (1 - fP) * 0.7;
+        ctx.globalAlpha = (1 - fP) * 0.85;
         ctx.drawImage(this._whiteGlow, e.x - fSize / 2, e.y - fSize / 2, fSize, fSize);
         ctx.restore();
       }
 
-      // ── Layer 3: Expanding ring (single stroke, no shadowBlur) ──
+      // ── Layer 3: Expanding ring (thicker, brighter) ──
       ctx.save();
-      ctx.globalAlpha = fade * 0.45;
+      ctx.globalAlpha = fade * 0.55;
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = Math.max(0.5, 2.5 * (1 - p));
+      ctx.lineWidth = Math.max(0.5, (isPerfect ? 4.0 : 3.0) * (1 - p));
       ctx.beginPath();
       ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
-      // ── Layer 4: Colored ring (single stroke, no shadowBlur) ──
+      // ── Layer 3b: Outer colored ring ──
       ctx.save();
-      ctx.globalAlpha = fade * 0.3;
+      ctx.globalAlpha = fade * 0.35;
       ctx.strokeStyle = e.color;
-      ctx.lineWidth = Math.max(0.5, 1.8 * (1 - p));
+      ctx.lineWidth = Math.max(0.5, (isPerfect ? 2.5 : 2.0) * (1 - p));
       ctx.beginPath();
-      ctx.arc(e.x, e.y, Math.max(0, r * 0.55), 0, Math.PI * 2);
+      ctx.arc(e.x, e.y, Math.max(0, r * 0.65), 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
+
+      // ── Layer 4: Second inner ring for perfect/great ──
+      if (isPerfect || isGreat) {
+        ctx.save();
+        ctx.globalAlpha = fade * 0.25;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(0.5, 1.5 * (1 - p));
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, Math.max(0, r * 0.35), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
 
       // ── Layer 5: Dots — BATCHED: one beginPath, all arcs, single fill ──
       if (e.dots.length > 0) {
