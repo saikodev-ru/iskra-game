@@ -55,11 +55,11 @@ export default class SongSelect {
           <div class="ss-loading-text">RHYMIX</div>
         </div>
 
-        <!-- Darken background by 30% -->
-        <div style="position:absolute;inset:0;z-index:0;background:rgba(0,0,0,0.3);pointer-events:none;"></div>
+        <!-- Slight darken background -->
+        <div style="position:absolute;inset:0;z-index:0;background:rgba(0,0,0,0.08);pointer-events:none;"></div>
 
         <!-- Subtle vignette overlay (behind UI panels) -->
-        <div style="position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.18) 72%, rgba(0,0,0,0.45) 100%);"></div>
+        <div style="position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.06) 72%, rgba(0,0,0,0.15) 100%);"></div>
 
         <!-- Song info (top-right) with parallax -->
         <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:20px;right:20px;z-index:10;width:clamp(280px, 42%, 440px);pointer-events:auto;text-align:right;"></div>
@@ -70,7 +70,7 @@ export default class SongSelect {
         <!-- Left column: toolbar + search + list + actions -->
         <div id="ss-right-column" class="parallax-layer" data-parallax="2" style="flex:1;display:flex;justify-content:flex-start;overflow:hidden;padding:16px 0 0 24px;z-index:2;position:relative;">
           <!-- Gradient behind the entire left column — fades to black going left -->
-          <div style="position:absolute;top:-40px;left:0;right:-80px;bottom:-40px;background:linear-gradient(270deg,transparent 0%,rgba(0,0,0,0.25) 30%,rgba(0,0,0,0.6) 70%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:-1;"></div>
+          <div style="position:absolute;top:-40px;left:0;right:-80px;bottom:-40px;background:linear-gradient(270deg,transparent 0%,rgba(0,0,0,0.10) 30%,rgba(0,0,0,0.25) 70%,rgba(0,0,0,0.40) 100%);pointer-events:none;z-index:-1;"></div>
           <div class="song-list-column" style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden;">
 
             <!-- Top toolbar: glass panel -->
