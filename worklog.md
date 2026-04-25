@@ -1131,3 +1131,34 @@ Stage Summary:
 - All colors removed from below-judge playfield: monochrome white→black gradient, no lime edges
 - Notes falling below judge line gradually desaturate to grayscale
 - No visual artifacts, dev server running clean
+---
+Task ID: 1
+Agent: Main
+Task: Darken playfield (already done from previous session), add hit sounds, create loading screen
+
+Work Log:
+- Verified playfield was already dark with light gray edges from previous session changes
+- Copied 4 hit sound .ogg files from /upload to /public/game/sounds/ (perfect.ogg, great.ogg, good.ogg, tap.ogg)
+- Rewrote HitSounds.js to support preloaded .ogg files via static preloadHitSounds() function
+  - Added _playBuffer() method to play preloaded AudioBuffers
+  - Added granular methods: perfect(), great(), good(), emptyHit() 
+  - Each method falls back to synthesized sound if .ogg not loaded
+  - Exported preloadHitSounds for use in loading screen
+- Created LoadingScreen.js in /public/game/ui/screens/
+  - Shows RHYMIX logo with pulsing glow animation
+  - Animated progress bar with status text
+  - Preloads hit sounds, initializes renderer and scene
+  - Shows "READY" + "CLICK TO START" button when complete
+- Added loading screen CSS keyframes to ZZZTheme.js
+- Updated main.js:
+  - Added imports for preloadHitSounds and LoadingScreen
+  - Replaced boot sequence: loading screen → preload → click to start → main menu
+  - Updated hitHandler to use granular sounds: perfect→perfect(), great→great(), good→good(), bad→emptyHit()
+  - Updated releaseHandler similarly for granular hold release sounds
+  - gameStart() sound plays on click-to-start
+
+Stage Summary:
+- Hit sounds fully integrated with .ogg file preloading + synthesized fallbacks
+- Loading screen shows before main menu, preloads all resources
+- Game boot flow: Loading Screen → Resources Preloaded → Click to Start → Main Menu
+- All 4 hit sound files accessible at /game/sounds/*.ogg

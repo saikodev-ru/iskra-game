@@ -1,3 +1,43 @@
+/**
+ * HitSounds — Audio feedback for note hits, misses, and UI interactions.
+ * Supports preloaded .ogg sound files with Web Audio API synthesis fallbacks.
+ */
+
+// Static preloaded audio buffers (shared across all instances)
+const _buffers = {
+  perfect: null,
+  great: null,
+  good: null,
+  tap: null,
+};
+
+/** Preload hit sound .ogg files. Call once during boot. Returns a promise. */
+export async function preloadHitSounds(audioCtx) {
+  const sounds = [
+    { key: 'perfect', path: '/game/sounds/perfect.ogg' },
+    { key: 'great', path: '/game/sounds/great.ogg' },
+    { key: 'good', path: '/game/sounds/good.ogg' },
+    { key: 'tap', path: '/game/sounds/tap.ogg' },
+  ];
+
+  const results = await Promise.allSettled(
+    sounds.map(async ({ key, path }) => {
+      try {
+        const resp = await fetch(path);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const arrayBuf = await resp.arrayBuffer();
+        _buffers[key] = await audioCtx.decodeAudioData(arrayBuf);
+      } catch (e) {
+        console.warn(`[HitSounds] Failed to load ${key}:`, e.message);
+      }
+    })
+  );
+
+  const loaded = results.filter(r => r.status === 'fulfilled' && _buffers[sounds[results.indexOf(r)]?.key]).length;
+  console.log(`[HitSounds] Loaded ${loaded}/${sounds.length} sound files`);
+  return loaded;
+}
+
 export default class HitSounds {
   constructor(audioCtx) {
     this._ctx = audioCtx;
@@ -28,45 +68,30 @@ export default class HitSounds {
     fn(g);
   }
 
-  /** Normal hit — short open-hat style: filtered noise burst */
-  hit() {
-    this._play(g => {
-      const dur = 0.06;
-      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) {
-        const t = i / data.length;
-        // Noise shaped with a quick decay
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 4) * 0.5;
-      }
-      const src = this._ctx.createBufferSource();
-      src.buffer = buf;
+  /** Play a preloaded buffer if available */
+  _playBuffer(bufferKey, gainValue = 1.0) {
+    const buf = _buffers[bufferKey];
+    if (!buf || !this._ctx) return false;
 
-      // Bandpass for open-hat character (high-mid metallic)
-      const filt = this._ctx.createBiquadFilter();
-      filt.type = 'bandpass';
-      filt.frequency.value = 8000;
-      filt.Q.value = 1.2;
+    this._ensureMasterGain();
+    const g = this._ctx.createGain();
+    g.connect(this._masterGain);
+    g.gain.setValueAtTime(gainValue, this._ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + buf.duration);
 
-      // Highpass to remove low rumble
-      const hp = this._ctx.createBiquadFilter();
-      hp.type = 'highpass';
-      hp.frequency.value = 5000;
-
-      src.connect(filt);
-      filt.connect(hp);
-      hp.connect(g);
-
-      g.gain.setValueAtTime(0.25, this._ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
-
-      src.start();
-      src.stop(this._ctx.currentTime + dur);
-    });
+    const src = this._ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(g);
+    src.start();
+    return true;
   }
 
-  /** Perfect hit — open-hat with a subtle tonal shimmer */
+  // ── Game hit sounds ──────────────────────────────────────────
+
+  /** Perfect / MAX hit */
   perfect() {
+    if (this._playBuffer('perfect', 0.6)) return;
+    // Synthesized fallback
     this._play(g => {
       const dur = 0.08;
       const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
@@ -77,45 +102,85 @@ export default class HitSounds {
       }
       const src = this._ctx.createBufferSource();
       src.buffer = buf;
-
       const filt = this._ctx.createBiquadFilter();
-      filt.type = 'bandpass';
-      filt.frequency.value = 10000;
-      filt.Q.value = 1.5;
-
+      filt.type = 'bandpass'; filt.frequency.value = 10000; filt.Q.value = 1.5;
       const hp = this._ctx.createBiquadFilter();
-      hp.type = 'highpass';
-      hp.frequency.value = 6000;
-
-      src.connect(filt);
-      filt.connect(hp);
-      hp.connect(g);
-
+      hp.type = 'highpass'; hp.frequency.value = 6000;
+      src.connect(filt); filt.connect(hp); hp.connect(g);
       g.gain.setValueAtTime(0.3, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
-
-      src.start();
-      src.stop(this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
     });
-
-    // Add subtle metallic ring
+    // Metallic ring
     this._play(g => {
       const o = this._ctx.createOscillator();
       const env = this._ctx.createGain();
       o.type = 'square';
       o.frequency.setValueAtTime(6800, this._ctx.currentTime);
       o.frequency.exponentialRampToValueAtTime(5200, this._ctx.currentTime + 0.04);
-      o.connect(env);
-      env.connect(g);
+      o.connect(env); env.connect(g);
       env.gain.setValueAtTime(0.06, this._ctx.currentTime);
       env.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + 0.04);
-      o.start();
-      o.stop(this._ctx.currentTime + 0.04);
+      o.start(); o.stop(this._ctx.currentTime + 0.04);
     });
   }
 
-  /** Empty key press — very quiet open-hat tick */
+  /** Great hit */
+  great() {
+    if (this._playBuffer('great', 0.5)) return;
+    // Synthesized fallback — crisp open-hat
+    this._play(g => {
+      const dur = 0.06;
+      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const t = i / data.length;
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 4) * 0.5;
+      }
+      const src = this._ctx.createBufferSource();
+      src.buffer = buf;
+      const filt = this._ctx.createBiquadFilter();
+      filt.type = 'bandpass'; filt.frequency.value = 8000; filt.Q.value = 1.2;
+      const hp = this._ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 5000;
+      src.connect(filt); filt.connect(hp); hp.connect(g);
+      g.gain.setValueAtTime(0.25, this._ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
+    });
+  }
+
+  /** Good hit */
+  good() {
+    if (this._playBuffer('good', 0.4)) return;
+    // Synthesized fallback — softer tick
+    this._play(g => {
+      const dur = 0.05;
+      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const t = i / data.length;
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 5) * 0.35;
+      }
+      const src = this._ctx.createBufferSource();
+      src.buffer = buf;
+      const filt = this._ctx.createBiquadFilter();
+      filt.type = 'bandpass'; filt.frequency.value = 6000; filt.Q.value = 1.0;
+      src.connect(filt); filt.connect(g);
+      g.gain.setValueAtTime(0.2, this._ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
+    });
+  }
+
+  /** Generic hit — used for great/good/bad as a fallback (deprecated, use granular methods) */
+  hit() {
+    this.great();
+  }
+
+  /** Empty key press / tap — quiet tick */
   emptyHit() {
+    if (this._playBuffer('tap', 0.25)) return;
     this._play(g => {
       const dur = 0.03;
       const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
@@ -126,16 +191,15 @@ export default class HitSounds {
       const src = this._ctx.createBufferSource();
       src.buffer = buf;
       const filt = this._ctx.createBiquadFilter();
-      filt.type = 'highpass';
-      filt.frequency.value = 7000;
-      src.connect(filt);
-      filt.connect(g);
+      filt.type = 'highpass'; filt.frequency.value = 7000;
+      src.connect(filt); filt.connect(g);
       g.gain.setValueAtTime(0.1, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
-      src.start();
-      src.stop(this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
     });
   }
+
+  // ── Negative feedback ───────────────────────────────────────
 
   miss() {
     this._play(g => {
@@ -172,9 +236,10 @@ export default class HitSounds {
     });
   }
 
+  // ── UI sounds (always synthesized) ─────────────────────────
+
   crtClick() {
     this._play(g => {
-      // Soft, muted click — very short noise burst
       const dur = 0.018;
       const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
       const data = buf.getChannelData(0);
@@ -189,36 +254,30 @@ export default class HitSounds {
       src.connect(filt); filt.connect(g);
       g.gain.setValueAtTime(1.0, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
-      src.start();
-      src.stop(this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
     });
   }
 
   crtSwitch() {
-    // Soft TV channel switch: brief electronic pop + subtle static whoosh
-    // Layer 1: Short low-frequency pop (the CRT relay click)
+    // Layer 1: Low-frequency pop
     this._play(g => {
       const dur = 0.04;
       const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < data.length; i++) {
         const t = i / data.length;
-        // Quick attack, smooth decay — mimics CRT relay snap
         data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3);
       }
       const src = this._ctx.createBufferSource();
       src.buffer = buf;
-      // Low-mid pass gives it a warm, muffled character
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'lowpass'; filt.frequency.value = 1200; filt.Q.value = 0.7;
       src.connect(filt); filt.connect(g);
       g.gain.setValueAtTime(1.0, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
-      src.start();
-      src.stop(this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
     });
-
-    // Layer 2: Very short high-frequency static sweep (the channel tuning hiss)
+    // Layer 2: High-frequency static sweep
     this._play(g => {
       const dur = 0.06;
       const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
@@ -229,7 +288,6 @@ export default class HitSounds {
       }
       const src = this._ctx.createBufferSource();
       src.buffer = buf;
-      // Sweep from high to mid — like tuning across frequencies
       const filt = this._ctx.createBiquadFilter();
       filt.type = 'bandpass'; filt.Q.value = 0.8;
       filt.frequency.setValueAtTime(5000, this._ctx.currentTime);
@@ -237,18 +295,15 @@ export default class HitSounds {
       src.connect(filt); filt.connect(g);
       g.gain.setValueAtTime(1.0, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
-      src.start();
-      src.stop(this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
     });
-
-    // Layer 3: Brief horizontal interference bar (like TV static lines)
+    // Layer 3: Interference burst
     this._play(g => {
       const dur = 0.08;
       const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < data.length; i++) {
         const t = i / data.length;
-        // Sharp attack, quick noise burst
         data[i] = (Math.random() * 2 - 1) * (t < 0.1 ? 0.8 : Math.pow(1 - (t - 0.1) / 0.9, 3) * 0.4);
       }
       const src = this._ctx.createBufferSource();
@@ -260,8 +315,7 @@ export default class HitSounds {
       src.connect(hp); hp.connect(lp); lp.connect(g);
       g.gain.setValueAtTime(0.7, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
-      src.start();
-      src.stop(this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
     });
   }
 
@@ -281,18 +335,17 @@ export default class HitSounds {
     });
   }
 
-  /** Game start — a satisfying "whoosh + rising tone" that signals the game is launching */
+  /** Game start — rising sweep + impact + ding */
   gameStart() {
-    // Layer 1: Short rising sweep (the anticipation rise)
+    // Layer 1: Rising sweep
     this._play(g => {
       const dur = 0.25;
       const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < data.length; i++) {
         const t = i / data.length;
-        const freq = 300 + t * 1200; // sweep from 300Hz to 1500Hz
+        const freq = 300 + t * 1200;
         data[i] = Math.sin(2 * Math.PI * freq * t * dur) * 0.3 * Math.pow(1 - t, 1.5);
-        // Add subtle harmonics
         data[i] += Math.sin(2 * Math.PI * freq * 2 * t * dur) * 0.1 * Math.pow(1 - t, 2);
       }
       const src = this._ctx.createBufferSource();
@@ -305,15 +358,13 @@ export default class HitSounds {
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start(); src.stop(this._ctx.currentTime + dur);
     });
-
-    // Layer 2: Crisp impact click at the peak
+    // Layer 2: Impact click
     this._play(g => {
       const dur = 0.06;
       const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < data.length; i++) {
         const t = i / data.length;
-        // Sharp attack noise burst with fast decay
         data[i] = (Math.random() * 2 - 1) * (t < 0.05 ? 1.0 : Math.pow(1 - (t - 0.05) / 0.95, 4) * 0.6);
       }
       const src = this._ctx.createBufferSource();
@@ -327,8 +378,7 @@ export default class HitSounds {
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start(); src.stop(this._ctx.currentTime + dur);
     });
-
-    // Layer 3: Resonant "ding" tone (the satisfying confirmation)
+    // Layer 3: Resonant ding
     this._play(g => {
       const o = this._ctx.createOscillator();
       const env = this._ctx.createGain();

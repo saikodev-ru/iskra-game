@@ -1844,6 +1844,25 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 @keyframes ss-spin { to { transform:rotate(360deg); } }
 .ss-loading-text { font-family:var(--zzz-font);font-weight:700;font-size:12px;color:var(--zzz-muted);letter-spacing:0.2em;text-transform:uppercase;animation:ss-pulse 1.5s ease-in-out infinite; }
 @keyframes ss-pulse { 0%,100%{opacity:0.4;} 50%{opacity:1;} }
+
+/* ── LOADING SCREEN ────────────────────── */
+@keyframes loading-title-pulse {
+  0%, 100% { text-shadow: 0 0 60px rgba(170,255,0,0.35),0 0 120px rgba(170,255,0,0.15); }
+  50% { text-shadow: 0 0 80px rgba(170,255,0,0.5),0 0 160px rgba(170,255,0,0.25); }
+}
+@keyframes loading-ready-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+#loading-start-btn {
+  transition: all 0.2s ease;
+}
+#loading-start-btn:hover {
+  border-color: var(--zzz-lime);
+  color: var(--zzz-lime);
+  box-shadow: 0 0 20px rgba(170,255,0,0.2);
+  transform: translateY(-1px);
+}
 `;
 
 let _crtSounds = null;

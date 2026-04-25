@@ -4,7 +4,8 @@ import ThreeScene    from './scene/ThreeScene.js';
 import GameLoop      from './core/GameLoop.js';
 import InputManager  from './core/InputManager.js';
 import EventBus      from './core/EventBus.js';
-import HitSounds     from './game/HitSounds.js';
+import HitSounds, { preloadHitSounds } from './game/HitSounds.js';
+import LoadingScreen  from './ui/screens/LoadingScreen.js';
 import BeatMap       from './game/BeatMap.js';
 import JudgementSystem from './game/JudgementSystem.js';
 import NoteRenderer  from './game/NoteRenderer.js';
@@ -263,7 +264,9 @@ async function boot() {
 
         if (hitSounds) {
           if (result.judgement === 'perfect') hitSounds.perfect();
-          else if (result.judgement !== 'miss') hitSounds.hit();
+          else if (result.judgement === 'great') hitSounds.great();
+          else if (result.judgement === 'good') hitSounds.good();
+          else if (result.judgement === 'bad') hitSounds.emptyHit();
         }
         judgementDisplay.checkMilestone(currentJudgement.combo);
         if (hitSounds && [50, 100, 200, 500].includes(currentJudgement.combo)) hitSounds.milestone(currentJudgement.combo);
@@ -290,7 +293,11 @@ async function boot() {
       const hitColor = laneColors[lane % laneColors.length] || '#AAFF00';
       noteRenderer.addEffect(pos.x, pos.y, hitColor, result.judgement);
 
-      if (hitSounds && result.judgement !== 'bad' && result.judgement !== 'miss') hitSounds.hit();
+      if (hitSounds) {
+        if (result.judgement === 'perfect') hitSounds.perfect();
+        else if (result.judgement === 'great') hitSounds.great();
+        else if (result.judgement === 'good') hitSounds.good();
+      }
       judgementDisplay.checkMilestone(currentJudgement.combo);
     };
 
@@ -635,7 +642,73 @@ async function boot() {
   });
   screens.register('game', (data) => { if (data && data.map) startGame(data.map); return { build: () => '', init: () => {}, destroy: () => {} }; });
 
-  screens.show('main-menu');
+  // ── Loading Screen ──
+  // Show loading screen, preload resources, then transition to main menu
+  const loadingScreen = new LoadingScreen({
+    onReady: () => {
+      // Resume audio context on user click
+      audio._ensureCtx();
+      if (hitSounds) hitSounds.gameStart();
+      loadingScreen.destroy();
+      screens.show('main-menu');
+    }
+  });
+  screens.register('loading', () => loadingScreen);
+  screens.show('loading');
+
+  // Preload hit sounds in the background
+  const loadingContainer = document.getElementById('screen');
+  const doLoad = async () => {
+    try {
+      // Wait a frame so the loading screen renders
+      await new Promise(r => requestAnimationFrame(r));
+
+      if (loadingScreen.setProgress) loadingScreen.setProgress(5);
+      if (loadingScreen.setDetails) loadingScreen.setDetails('Initializing audio...');
+
+      // Ensure AudioContext (may need user gesture on mobile)
+      audio._ensureCtx();
+
+      if (loadingScreen.setProgress) loadingScreen.setProgress(15);
+      if (loadingScreen.setDetails) loadingScreen.setDetails('Loading hit sounds...');
+
+      // Preload hit sound files
+      if (audio.ctx) {
+        await preloadHitSounds(audio.ctx);
+      }
+
+      if (loadingScreen.setProgress) loadingScreen.setProgress(70);
+      if (loadingScreen.setDetails) loadingScreen.setDetails('Initializing renderer...');
+
+      // Small delay to let renderer warm up
+      await new Promise(r => setTimeout(r, 300));
+
+      if (loadingScreen.setProgress) loadingScreen.setProgress(85);
+      if (loadingScreen.setDetails) loadingScreen.setDetails('Setting up scene...');
+
+      // Ensure ThreeScene is ready
+      three.update(performance.now());
+      noteRenderer.clear();
+
+      if (loadingScreen.setProgress) loadingScreen.setProgress(95);
+      if (loadingScreen.setDetails) loadingScreen.setDetails('Almost ready...');
+
+      await new Promise(r => setTimeout(r, 200));
+
+      if (loadingScreen.setProgress) loadingScreen.setProgress(100);
+      if (loadingScreen.setDetails) loadingScreen.setDetails('Ready!');
+
+      // Show the "Click to Start" button
+      await new Promise(r => setTimeout(r, 300));
+      if (loadingScreen.complete) loadingScreen.complete();
+    } catch (err) {
+      console.error('[RHYMIX] Loading error:', err);
+      // Even on error, show the start button
+      if (loadingScreen.setProgress) loadingScreen.setProgress(100);
+      if (loadingScreen.complete) loadingScreen.complete();
+    }
+  };
+  doLoad();
 
   const bgLoop = () => {
     if (!gameActive) three.update(performance.now());
