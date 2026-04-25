@@ -5,6 +5,7 @@ export default class HUD {
     this.container = container;
     this.els = {};
     this._hidden = true;
+    this._frozen = false;       // true when game is paused — stops all animation
     this._displayScore = 0;
     this._displayCombo = 0;
     this._displayAccuracy = 100;
@@ -15,6 +16,8 @@ export default class HUD {
     this._currentRank = 'X';
     this._rankScale = 1;
     this._comboPopScale = 1;
+    this._lastComboStr = '0';
+    this._lastScoreStr = '0';
     this._build();
   }
 
@@ -23,11 +26,11 @@ export default class HUD {
       <div id="hud-inner" style="position:relative;width:100%;height:100%;pointer-events:none;display:none;">
 
         <!-- ── LEFT: Score + Accuracy ── -->
-        <div style="position:absolute;left:3%;top:44%;transform:translateY(-50%);text-align:right;">
+        <div style="position:absolute;left:5%;top:55%;transform:translateY(-50%);text-align:right;">
           <!-- Score label -->
           <div style="font-family:var(--zzz-font);font-weight:500;font-size:10px;color:rgba(170,255,0,0.45);letter-spacing:0.25em;text-transform:uppercase;margin-bottom:2px;text-shadow:0 0 8px rgba(0,0,0,0.9);">SCORE</div>
-          <!-- Score value -->
-          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:44px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);transition:transform 0.08s;">0</div>
+          <!-- Score value with digit containers -->
+          <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:44px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);display:flex;justify-content:flex-end;gap:0;">0</div>
           <!-- Separator line -->
           <div style="width:60px;height:1px;background:linear-gradient(to right,transparent,rgba(170,255,0,0.3));margin:8px auto 8px 0;"></div>
           <!-- Accuracy label -->
@@ -37,7 +40,7 @@ export default class HUD {
         </div>
 
         <!-- ── RIGHT: Combo + Rank ── -->
-        <div style="position:absolute;right:5%;top:44%;transform:translateY(-50%);text-align:left;">
+        <div style="position:absolute;right:5%;top:55%;transform:translateY(-50%);text-align:left;">
           <!-- Combo value -->
           <div style="display:flex;align-items:baseline;gap:8px;">
             <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:64px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transition:transform 0.1s cubic-bezier(0.2,0,0,1);">0</div>
@@ -86,6 +89,66 @@ export default class HUD {
     this._startAnimLoop();
   }
 
+  /** Freeze all number animations (called on pause) */
+  freeze() {
+    this._frozen = true;
+  }
+
+  /** Unfreeze number animations (called on resume) */
+  unfreeze() {
+    this._frozen = false;
+  }
+
+  /** Trigger a vertical spin animation on changed digits */
+  _spinDigits(el, oldStr, newStr) {
+    if (!el || oldStr === newStr) return;
+
+    // Normalize to same length (right-aligned)
+    const maxLen = Math.max(oldStr.replace(/,/g, '').length, newStr.replace(/,/g, '').length);
+
+    // For score (has commas), we spin individual character groups
+    // For combo (no commas), we spin individual digits
+    const oldClean = oldStr.replace(/,/g, '');
+    const newClean = newStr.replace(/,/g, '');
+    const oldPadded = oldClean.padStart(maxLen, ' ');
+    const newPadded = newClean.padStart(maxLen, ' ');
+
+    // Build formatted new string with commas
+    const numVal = parseInt(newClean) || 0;
+    const formatted = numVal.toLocaleString();
+
+    // Find which digits actually changed
+    let changed = false;
+    for (let i = 0; i < Math.min(oldPadded.length, newPadded.length); i++) {
+      if (oldPadded[i] !== newPadded[i]) { changed = true; break; }
+    }
+    if (!changed && oldPadded.length === newPadded.length) {
+      el.textContent = formatted;
+      return;
+    }
+
+    // Apply vertical spin animation
+    el.style.transition = 'none';
+    el.style.transform = 'translateY(-40%) rotateX(45deg)';
+    el.style.opacity = '0.3';
+
+    // Force reflow
+    void el.offsetHeight;
+
+    el.textContent = formatted;
+    el.style.transition = 'transform 0.35s cubic-bezier(0.22,1,0.36,1), opacity 0.2s ease-out';
+    el.style.transform = 'translateY(0) rotateX(0deg)';
+    el.style.opacity = '1';
+
+    // Clean up transition after animation
+    setTimeout(() => {
+      if (el) {
+        el.style.transition = '';
+        el.style.transform = '';
+      }
+    }, 400);
+  }
+
   _startAnimLoop() {
     const tick = () => {
       this._animateNumbers();
@@ -95,27 +158,42 @@ export default class HUD {
   }
 
   _animateNumbers() {
+    // When frozen (paused), don't animate anything
+    if (this._frozen) return;
+
     // Score
     const scoreDiff = this._targetScore - this._displayScore;
     if (Math.abs(scoreDiff) > 1) {
       this._displayScore += scoreDiff * 0.2;
-      if (this.els.score) this.els.score.textContent = Math.round(this._displayScore).toLocaleString();
+      const newStr = Math.round(this._displayScore).toLocaleString();
+      if (this.els.score && newStr !== this._lastScoreStr) {
+        this._spinDigits(this.els.score, this._lastScoreStr, newStr);
+        this._lastScoreStr = newStr;
+      }
     } else if (scoreDiff !== 0) {
       this._displayScore = this._targetScore;
-      if (this.els.score) this.els.score.textContent = this._targetScore.toLocaleString();
+      const newStr = this._targetScore.toLocaleString();
+      if (this.els.score && newStr !== this._lastScoreStr) {
+        this._spinDigits(this.els.score, this._lastScoreStr, newStr);
+        this._lastScoreStr = newStr;
+      }
     }
 
     // Combo
     const comboDiff = this._targetCombo - this._displayCombo;
     if (Math.abs(comboDiff) > 1) {
       this._displayCombo += comboDiff * 0.35;
-      if (this.els.combo) {
-        this.els.combo.textContent = `${Math.round(this._displayCombo)}`;
+      const newStr = `${Math.round(this._displayCombo)}`;
+      if (this.els.combo && newStr !== this._lastComboStr) {
+        this._spinDigits(this.els.combo, this._lastComboStr, newStr);
+        this._lastComboStr = newStr;
       }
     } else if (comboDiff !== 0) {
       this._displayCombo = this._targetCombo;
-      if (this.els.combo) {
-        this.els.combo.textContent = `${this._targetCombo}`;
+      const newStr = `${this._targetCombo}`;
+      if (this.els.combo && newStr !== this._lastComboStr) {
+        this._spinDigits(this.els.combo, this._lastComboStr, newStr);
+        this._lastComboStr = newStr;
       }
     }
 
@@ -145,18 +223,24 @@ export default class HUD {
     }
   }
 
-  show() { this._hidden = false; this.els.inner.style.display = 'block'; }
-  hide() { this._hidden = true; this.els.inner.style.display = 'none'; }
+  show() {
+    this._hidden = false;
+    this._frozen = false;
+    this.els.inner.style.display = 'block';
+  }
+  hide() {
+    this._hidden = true;
+    this._frozen = true;
+    this.els.inner.style.display = 'none';
+  }
 
   setScore(n) {
+    if (this._frozen) return; // Don't accept score changes while frozen
     this._targetScore = n;
-    if (this.els.score) {
-      this.els.score.style.transform = 'scale(1.06)';
-      setTimeout(() => { if (this.els.score) this.els.score.style.transform = ''; }, 80);
-    }
   }
 
   setCombo(n) {
+    if (this._frozen) return; // Don't accept combo changes while frozen
     this._targetCombo = n;
     if (n > 0) {
       this._comboPopScale = 1.15;
@@ -197,6 +281,7 @@ export default class HUD {
   }
 
   setAccuracy(n) {
+    if (this._frozen) return;
     this._targetAccuracy = n;
   }
 
@@ -207,7 +292,7 @@ export default class HUD {
   setProgress(ratio) { this.els.progress.style.width = (ratio * 100) + '%'; }
 
   update(stats) {
-    if (this._hidden) return;
+    if (this._hidden || this._frozen) return;
     this.setScore(stats.score);
     this.setCombo(stats.combo);
     this.setAccuracy(stats.accuracy);

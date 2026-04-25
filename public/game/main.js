@@ -479,6 +479,7 @@ async function boot() {
     audio.pause();
     if (gameLoop) gameLoop.stop();
     three.pauseVideo();
+    hud.freeze(); // Stop score/combo animation while paused
 
     const sa = calcSafeArea();
     const overlay = document.createElement('div');
@@ -582,6 +583,7 @@ async function boot() {
     // Start game loop in countdown mode (renders frozen frame, skips judgement)
     gameActive = true;
     _inCountdown = true;
+    hud.freeze(); // Keep frozen during countdown
     if (gameLoop) gameLoop.start();
 
     // 3-2-1 countdown (3 beats at ~600ms each = 1.8s total)
@@ -593,6 +595,7 @@ async function boot() {
         // Countdown done — NOW resume audio and video for real
         countdownOverlay.remove();
         _inCountdown = false;
+        hud.unfreeze(); // Resume score/combo animation
         audio.resume();
         three.resumeVideo();
         const vol = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;

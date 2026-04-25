@@ -7,29 +7,79 @@ export default class ScreenManager {
     this._current = null;
     this._currentName = '';
     this._transitioning = false;
+    this._transitionOverlay = null; // reusable overlay element
   }
   register(name, factory) { this._screens[name] = factory; }
+
   show(name, data = {}) {
     if (this._transitioning || name === this._currentName) return;
     const from = this._currentName;
     this._transitioning = true;
     const factory = this._screens[name];
     if (!factory) { console.error(`Screen "${name}" not registered`); this._transitioning = false; return; }
-    const destroyCurrent = () => { if (this._current) { if (this._current.destroy) this._current.destroy(); this.container.innerHTML = ''; this._current = null; } };
-    if (this._current) { this.container.classList.add('screen-exit'); setTimeout(() => { destroyCurrent(); this._showNew(name, factory, data, from); }, 200); }
-    else { destroyCurrent(); this._showNew(name, factory, data, from); }
+
+    const destroyCurrent = () => {
+      if (this._current) {
+        if (this._current.destroy) this._current.destroy();
+        this.container.innerHTML = '';
+        this._current = null;
+      }
+    };
+
+    if (this._current) {
+      // Exit transition: 3D perspective fly-out
+      this._3DExit(() => {
+        destroyCurrent();
+        this._3DEnter(name, factory, data, from);
+      });
+    } else {
+      destroyCurrent();
+      this._3DEnter(name, factory, data, from);
+    }
   }
-  _showNew(name, factory, data, from) {
+
+  /** 3D exit: current screen flies back and fades with perspective */
+  _3DExit(callback) {
+    this.container.style.perspective = '1200px';
+    this.container.style.transformStyle = 'preserve-3d';
+    this.container.classList.add('screen-3d-exit');
+
+    setTimeout(() => {
+      this.container.classList.remove('screen-3d-exit');
+      this.container.style.perspective = '';
+      this.container.style.transformStyle = '';
+      callback();
+    }, 280);
+  }
+
+  /** 3D enter: new screen flies in from front with perspective */
+  _3DEnter(name, factory, data, from) {
     const screen = factory(data);
     this._current = screen;
     this._currentName = name;
-    if (screen.build) { const el = screen.build(); if (typeof el === 'string') this.container.innerHTML = el; else { this.container.innerHTML = ''; this.container.appendChild(el); } }
+
+    if (screen.build) {
+      const el = screen.build();
+      if (typeof el === 'string') this.container.innerHTML = el;
+      else { this.container.innerHTML = ''; this.container.appendChild(el); }
+    }
     if (screen.init) screen.init(data);
-    this.container.classList.remove('screen-exit');
-    this.container.classList.add('screen-enter');
-    setTimeout(() => { this.container.classList.remove('screen-enter'); this._transitioning = false; }, 250);
+
+    // 3D entrance animation
+    this.container.style.perspective = '1200px';
+    this.container.style.transformStyle = 'preserve-3d';
+    this.container.classList.add('screen-3d-enter');
+
+    setTimeout(() => {
+      this.container.classList.remove('screen-3d-enter');
+      this.container.style.perspective = '';
+      this.container.style.transformStyle = '';
+      this._transitioning = false;
+    }, 380);
+
     EventBus.emit('screen:change', { from, to: name });
   }
+
   get currentName() { return this._currentName; }
   get current() { return this._current; }
 
@@ -47,7 +97,6 @@ export default class ScreenManager {
       }
     }
     if (screen.init) screen.init();
-    // Store reference so the overlay can be cleaned up later
     this._overlay = screen;
   }
 
@@ -57,7 +106,6 @@ export default class ScreenManager {
       if (this._overlay.destroy) this._overlay.destroy();
       this._overlay = null;
     }
-    // Remove the settings overlay DOM element
     const overlay = document.getElementById('settings-overlay');
     if (overlay) overlay.remove();
   }

@@ -343,7 +343,21 @@ body.zzz-active::before {
   transform: translateX(-50%); pointer-events: none; white-space: nowrap;
 }
 
-/* SCREEN TRANSITIONS */
+/* SCREEN TRANSITIONS — 3D Perspective */
+@keyframes screen-3d-enter {
+  0%   { opacity: 0; transform: perspective(1200px) rotateX(-4deg) translateY(20px) scale(0.95); filter: brightness(1.3) blur(2px); }
+  30%  { opacity: 1; filter: brightness(1.1) blur(0px); }
+  100% { opacity: 1; transform: perspective(1200px) rotateX(0deg) translateY(0) scale(1); filter: brightness(1) blur(0); }
+}
+@keyframes screen-3d-exit {
+  0%   { opacity: 1; transform: perspective(1200px) rotateX(0deg) translateY(0) scale(1); filter: brightness(1) blur(0); }
+  40%  { opacity: 0.6; filter: brightness(1.2) blur(1px); }
+  100% { opacity: 0; transform: perspective(1200px) rotateX(4deg) translateY(-16px) scale(0.97); filter: brightness(0.7) blur(3px); }
+}
+.screen-3d-enter { animation: screen-3d-enter 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.screen-3d-exit  { animation: screen-3d-exit 0.28s cubic-bezier(0.4, 0, 0.7, 0.2) forwards; }
+
+/* Fallback simple transitions (kept for compatibility) */
 @keyframes screen-fade-in  { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
 @keyframes screen-fade-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.98); } }
 .screen-enter { animation: screen-fade-in 0.25s ease-out forwards; }

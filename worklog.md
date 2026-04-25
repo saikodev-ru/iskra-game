@@ -1211,3 +1211,34 @@ Stage Summary:
 - Hold grace period increased to 150ms to match the wider release windows
 - Releases within 300ms of hold end are lenient (no combo break)
 - Lint passes clean
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix score on pause, vertical spinning digits, HUD position, 3D screen transitions
+
+Work Log:
+- HUD.js: Added freeze()/unfreeze() methods that stop all number animation when game is paused (_frozen flag checked in _animateNumbers())
+- HUD.js: Added _spinDigits() method for vertical spinning digit animation — uses translateY(-40%) rotateX(45deg) → translateY(0) rotateX(0deg) CSS transition for a smooth vertical tumble effect when score/combo digits change
+- HUD.js: Changed _animateNumbers() to track _lastScoreStr and _lastComboStr — only triggers spin animation when the formatted string actually changes (prevents redundant animations)
+- HUD.js: Lowered HUD text positions from top:44% to top:55% (both left and right sides)
+- HUD.js: Brought left/right sides closer together: left:3%→5%, right:5%→5% (symmetric)
+- HUD.js: Removed score scale pulse on update (was causing jitter during rapid score changes) — replaced with clean spin animation
+- main.js: Added hud.freeze() call in pauseGame() to stop score animation while paused
+- main.js: Added hud.freeze() in resumeGame() countdown mode (stays frozen during 3-2-1)
+- main.js: Added hud.unfreeze() in resumeGame() countdown completion (resumes when audio starts)
+- ScreenManager.js: Replaced simple screen-exit/screen-enter with 3D perspective transitions:
+  - _3DExit(): applies perspective(1200px) + rotateX(4deg) + translateY(-16px) + blur(3px) + brightness(0.7) animation
+  - _3DEnter(): applies perspective(1200px) + rotateX(-4deg) + translateY(20px) + blur(2px) + brightness(1.3) animation
+  - Uses cubic-bezier easing for smooth deceleration
+  - Adds/removes perspective and transformStyle on container for 3D effect
+- ZZZTheme.js: Added @keyframes screen-3d-enter and screen-3d-exit with full 3D perspective transforms (rotateX, translateY, scale, filter brightness/blur)
+- ZZZTheme.js: Kept old screen-enter/screen-exit as fallback for compatibility
+
+Stage Summary:
+- Score stops updating on pause (freeze flag blocks all HUD animation)
+- Score resumes only after countdown completes and audio starts
+- Vertical spinning digit animation on score/combo changes (translateY + rotateX CSS transition)
+- HUD text lowered to 55% from top, sides brought closer (5% each)
+- All screen transitions now use 3D perspective with subtle rotation, blur, and brightness shifts
+- Lint passes clean
