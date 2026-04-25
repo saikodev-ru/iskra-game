@@ -857,20 +857,22 @@ async function boot() {
     const glowA = active ? 0.18 : 0.06;
     return `
     <div class="vol-knob-wrap ${active ? 'vol-knob--active' : ''}" data-knob="${k.id}">
-      <svg viewBox="0 0 100 100" width="${size}" height="${size}" style="filter:drop-shadow(0 0 ${active ? 14 : 6}px rgba(${k.rgb},${glowA}));">
-        <circle cx="50" cy="50" r="${KNOB_R}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"
-          stroke-dasharray="${KNOB_ARC} ${KNOB_GAP}" stroke-linecap="round" transform="rotate(135 50 50)" />
-        <circle cx="50" cy="50" r="${KNOB_R}" fill="none" stroke="${k.color}" stroke-width="5"
-          stroke-dasharray="${KNOB_ARC} ${KNOB_GAP}" stroke-dashoffset="${arcOff}" stroke-linecap="round"
-          transform="rotate(135 50 50)" class="vk-prog" data-knob="${k.id}"
-          style="transition:stroke-dashoffset 0.12s ease-out;" />
-        <circle cx="50" cy="50" r="28" fill="rgba(14,14,16,0.95)" stroke="rgba(255,255,255,${active ? 0.12 : 0.06})" stroke-width="1.2" />
-        <circle cx="50" cy="50" r="25" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="0.5" />
-        <line x1="50" y1="50" x2="50" y2="24" stroke="${k.color}" stroke-width="2.5" stroke-linecap="round"
-          transform="rotate(${indAngle} 50 50)" class="vk-ind" data-knob="${k.id}"
-          style="transition:transform 0.12s ease-out;" />
-        <circle cx="50" cy="50" r="2.5" fill="rgba(255,255,255,0.1)" />
-      </svg>
+      <div class="vol-knob-bg" style="width:${size + 16}px;height:${size + 16}px;background:radial-gradient(circle at 50% 45%,rgba(30,30,34,0.96) 0%,rgba(14,14,16,0.98) 100%);border-radius:50%;box-shadow:0 4px 24px rgba(0,0,0,0.55),0 0 0 1px rgba(255,255,255,${active ? 0.09 : 0.04}),inset 0 1px 0 rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;transition:box-shadow 0.25s ease,transform 0.2s ease;">
+        <svg viewBox="0 0 100 100" width="${size}" height="${size}" style="filter:drop-shadow(0 0 ${active ? 14 : 6}px rgba(${k.rgb},${glowA}));">
+          <circle cx="50" cy="50" r="${KNOB_R}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"
+            stroke-dasharray="${KNOB_ARC} ${KNOB_GAP}" stroke-linecap="round" transform="rotate(135 50 50)" />
+          <circle cx="50" cy="50" r="${KNOB_R}" fill="none" stroke="${k.color}" stroke-width="5"
+            stroke-dasharray="${KNOB_ARC} ${KNOB_GAP}" stroke-linecap="round"
+            transform="rotate(135 50 50)" class="vk-prog" data-knob="${k.id}"
+            style="stroke-dashoffset:${arcOff}px;transition:stroke-dashoffset 0.15s cubic-bezier(0.25,0.46,0.45,0.94);" />
+          <circle cx="50" cy="50" r="28" fill="rgba(14,14,16,0.95)" stroke="rgba(255,255,255,${active ? 0.12 : 0.06})" stroke-width="1.2" class="vk-face" data-knob="${k.id}" />
+          <circle cx="50" cy="50" r="25" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="0.5" />
+          <line x1="50" y1="50" x2="50" y2="24" stroke="${k.color}" stroke-width="2.5" stroke-linecap="round"
+            transform="rotate(${indAngle} 50 50)" class="vk-ind" data-knob="${k.id}"
+            style="transition:transform 0.15s cubic-bezier(0.25,0.46,0.45,0.94);" />
+          <circle cx="50" cy="50" r="2.5" fill="rgba(255,255,255,0.1)" />
+        </svg>
+      </div>
       <span class="vk-label" data-knob="${k.id}" style="color:${active ? k.color : 'rgba(255,255,255,0.4)'};">${k.label}</span>
       <span class="vk-val" data-knob="${k.id}">${vol}%</span>
     </div>`;
@@ -888,7 +890,7 @@ async function boot() {
     wrap.style.cssText = `position:fixed;bottom:${sa.y + sa.h * 0.05}px;left:50%;transform:translateX(-50%);z-index:200;pointer-events:auto;animation:pause-fade-in 0.15s ease-out forwards;`;
     let knobs = '';
     for (const k of KNOBS) knobs += _knobSVG(k, _readKnob(k), k.id === activeId, sz);
-    wrap.innerHTML = `<div style="display:flex;align-items:center;gap:${gap}px;padding:${pad}px ${pad * 1.6}px;border-radius:20px;background:rgba(0,0,0,0.88);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.06);box-shadow:0 8px 32px rgba(0,0,0,0.5);">${knobs}</div>`;
+    wrap.innerHTML = `<div style="display:flex;align-items:center;gap:${gap}px;padding:${pad * 0.6}px 0;">${knobs}</div>`;
     wrap.querySelectorAll('.vol-knob-wrap').forEach(el => {
       el.addEventListener('mouseenter', () => { _hoveredKnob = el.dataset.knob; _hlKnob(_hoveredKnob); });
       el.addEventListener('mouseleave', () => { _hoveredKnob = null; _hlKnob(null); });
@@ -905,7 +907,15 @@ async function boot() {
       el.classList.toggle('vol-knob--active', on);
       const k = KNOBS.find(x => x.id === el.dataset.knob);
       const lbl = el.querySelector('.vk-label');
+      const bg = el.querySelector('.vol-knob-bg');
+      const face = el.querySelector('.vk-face');
       if (lbl && k) lbl.style.color = on ? k.color : 'rgba(255,255,255,0.4)';
+      if (bg && k) {
+        const a = on ? 0.09 : 0.04;
+        const gl = on ? 0.35 : 0.18;
+        bg.style.boxShadow = `0 4px 24px rgba(0,0,0,0.55),0 0 0 1px rgba(255,255,255,${a}),0 0 ${on ? 16 : 0}px rgba(${k.rgb},${gl}),inset 0 1px 0 rgba(255,255,255,0.04)`;
+      }
+      if (face && k) face.setAttribute('stroke', `rgba(255,255,255,${on ? 0.12 : 0.06})`);
     });
   };
 
@@ -913,7 +923,7 @@ async function boot() {
     const arcOff = KNOB_ARC * (1 - v / 100);
     const ang = -135 + (v / 100) * 270;
     const prog = _volumeOverlay?.querySelector(`.vk-prog[data-knob="${id}"]`);
-    if (prog) prog.setAttribute('stroke-dashoffset', arcOff);
+    if (prog) prog.style.strokeDashoffset = arcOff + 'px';
     const ind = _volumeOverlay?.querySelector(`.vk-ind[data-knob="${id}"]`);
     if (ind) ind.setAttribute('transform', `rotate(${ang} 50 50)`);
     const val = _volumeOverlay?.querySelector(`.vk-val[data-knob="${id}"]`);
