@@ -383,47 +383,23 @@ export default class NoteRenderer {
     const leftBottom = this._getLaneGeometry(0, bottomY, laneCount);
     const rightBottom = this._getLaneGeometry(laneCount, bottomY, laneCount);
 
-    // ── Outer glow around the entire playfield ──
-    cctx.save();
-    const outerGlowGrad = cctx.createLinearGradient(cx - fullPw * 0.7, 0, cx + fullPw * 0.7, 0);
-    outerGlowGrad.addColorStop(0, 'rgba(170,255,0,0)');
-    outerGlowGrad.addColorStop(0.15, 'rgba(170,255,0,0.02)');
-    outerGlowGrad.addColorStop(0.5, 'rgba(170,255,0,0.04)');
-    outerGlowGrad.addColorStop(0.85, 'rgba(170,255,0,0.02)');
-    outerGlowGrad.addColorStop(1, 'rgba(170,255,0,0)');
-    cctx.fillStyle = outerGlowGrad;
-    cctx.fillRect(cx - fullPw * 0.7, topY, fullPw * 1.4, judgeLineY - topY);
-    cctx.restore();
-
-    // ── Lane fills — translucent dark glass ──
+    // ── Lane fills — solid dark ──
     for (let i = 0; i < laneCount; i++) {
       const topGeom = this._getLaneGeometry(i, topY, laneCount);
       const judgeGeom = this._getLaneGeometry(i, judgeLineY, laneCount);
       const bottomGeom = this._getLaneGeometry(i, bottomY, laneCount);
 
-      // Above judge line: glass trapezoid
+      // Above judge line: dark trapezoid
       cctx.beginPath();
       cctx.moveTo(topGeom.x, topY);
       cctx.lineTo(topGeom.x + topGeom.width, topY);
       cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
       cctx.lineTo(judgeGeom.x, judgeLineY);
       cctx.closePath();
-
-      // Glass gradient: darker at edges, translucent center
-      const laneGrad = cctx.createLinearGradient(topGeom.x, 0, topGeom.x + topGeom.width, 0);
-      if (i % 2 === 0) {
-        laneGrad.addColorStop(0, 'rgba(15,20,25,0.88)');
-        laneGrad.addColorStop(0.5, 'rgba(20,28,35,0.75)');
-        laneGrad.addColorStop(1, 'rgba(15,20,25,0.88)');
-      } else {
-        laneGrad.addColorStop(0, 'rgba(18,22,28,0.85)');
-        laneGrad.addColorStop(0.5, 'rgba(24,32,40,0.72)');
-        laneGrad.addColorStop(1, 'rgba(18,22,28,0.85)');
-      }
-      cctx.fillStyle = laneGrad;
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(12,12,14,1)' : 'rgba(16,16,18,1)';
       cctx.fill();
 
-      // Glass highlight — horizontal reflection band at 30% height
+      // Subtle glass highlight at 30% height
       cctx.save();
       cctx.beginPath();
       cctx.moveTo(topGeom.x, topY);
@@ -433,15 +409,15 @@ export default class NoteRenderer {
       cctx.closePath();
       cctx.clip();
       const highlightY = topY + (judgeLineY - topY) * 0.3;
-      const hlGrad = cctx.createLinearGradient(0, highlightY - 8, 0, highlightY + 8);
+      const hlGrad = cctx.createLinearGradient(0, highlightY - 6, 0, highlightY + 6);
       hlGrad.addColorStop(0, 'rgba(255,255,255,0)');
-      hlGrad.addColorStop(0.5, 'rgba(255,255,255,0.04)');
+      hlGrad.addColorStop(0.5, 'rgba(255,255,255,0.025)');
       hlGrad.addColorStop(1, 'rgba(255,255,255,0)');
       cctx.fillStyle = hlGrad;
-      cctx.fillRect(topGeom.x - 2, highlightY - 8, topGeom.width + 4, 16);
+      cctx.fillRect(topGeom.x - 2, highlightY - 6, topGeom.width + 4, 12);
       cctx.restore();
 
-      // Below judge line: darker glass, fading to black
+      // Below judge line: fade to black
       cctx.beginPath();
       cctx.moveTo(judgeGeom.x, judgeLineY);
       cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
@@ -449,37 +425,21 @@ export default class NoteRenderer {
       cctx.lineTo(bottomGeom.x, bottomY);
       cctx.closePath();
       const belowGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
-      belowGrad.addColorStop(0, 'rgba(12,16,20,0.90)');
-      belowGrad.addColorStop(0.3, 'rgba(8,10,14,0.95)');
+      belowGrad.addColorStop(0, 'rgba(10,10,12,1)');
+      belowGrad.addColorStop(0.4, 'rgba(6,6,8,1)');
       belowGrad.addColorStop(1, 'rgba(0,0,0,1)');
       cctx.fillStyle = belowGrad;
       cctx.fill();
     }
 
-    // ── Glowing walls (left + right edges) ──
+    // ── Light gray walls (left + right edges) ──
     // Left wall
     cctx.save();
-    const wallGradL = cctx.createLinearGradient(leftTop.x - 12, 0, leftJudge.x + 4, 0);
-    wallGradL.addColorStop(0, 'rgba(170,255,0,0)');
-    wallGradL.addColorStop(0.3, 'rgba(170,255,0,0.06)');
-    wallGradL.addColorStop(0.7, 'rgba(170,255,0,0.12)');
-    wallGradL.addColorStop(1, 'rgba(170,255,0,0)');
-
-    cctx.beginPath();
-    cctx.moveTo(leftTop.x - 6, topY);
-    cctx.lineTo(leftTop.x + 4, topY);
-    cctx.lineTo(leftJudge.x + 4, judgeLineY);
-    cctx.lineTo(leftJudge.x - 6, judgeLineY);
-    cctx.closePath();
-    cctx.fillStyle = wallGradL;
-    cctx.fill();
-
-    // Left wall edge line
     const lwGrad = cctx.createLinearGradient(0, topY, 0, judgeLineY);
-    lwGrad.addColorStop(0, 'rgba(170,255,0,0.05)');
-    lwGrad.addColorStop(0.4, 'rgba(170,255,0,0.2)');
-    lwGrad.addColorStop(0.8, 'rgba(170,255,0,0.35)');
-    lwGrad.addColorStop(1, 'rgba(170,255,0,0.15)');
+    lwGrad.addColorStop(0, 'rgba(180,180,185,0.04)');
+    lwGrad.addColorStop(0.4, 'rgba(180,180,185,0.18)');
+    lwGrad.addColorStop(0.8, 'rgba(200,200,205,0.32)');
+    lwGrad.addColorStop(1, 'rgba(180,180,185,0.12)');
     cctx.strokeStyle = lwGrad;
     cctx.lineWidth = 1.5;
     cctx.beginPath();
@@ -490,26 +450,11 @@ export default class NoteRenderer {
 
     // Right wall
     cctx.save();
-    const wallGradR = cctx.createLinearGradient(rightJudge.x - 4, 0, rightTop.x + 12, 0);
-    wallGradR.addColorStop(0, 'rgba(170,255,0,0)');
-    wallGradR.addColorStop(0.3, 'rgba(170,255,0,0.12)');
-    wallGradR.addColorStop(0.7, 'rgba(170,255,0,0.06)');
-    wallGradR.addColorStop(1, 'rgba(170,255,0,0)');
-
-    cctx.beginPath();
-    cctx.moveTo(rightTop.x - 4, topY);
-    cctx.lineTo(rightTop.x + 6, topY);
-    cctx.lineTo(rightJudge.x + 6, judgeLineY);
-    cctx.lineTo(rightJudge.x - 4, judgeLineY);
-    cctx.closePath();
-    cctx.fillStyle = wallGradR;
-    cctx.fill();
-
     const rwGrad = cctx.createLinearGradient(0, topY, 0, judgeLineY);
-    rwGrad.addColorStop(0, 'rgba(170,255,0,0.05)');
-    rwGrad.addColorStop(0.4, 'rgba(170,255,0,0.2)');
-    rwGrad.addColorStop(0.8, 'rgba(170,255,0,0.35)');
-    rwGrad.addColorStop(1, 'rgba(170,255,0,0.15)');
+    rwGrad.addColorStop(0, 'rgba(180,180,185,0.04)');
+    rwGrad.addColorStop(0.4, 'rgba(180,180,185,0.18)');
+    rwGrad.addColorStop(0.8, 'rgba(200,200,205,0.32)');
+    rwGrad.addColorStop(1, 'rgba(180,180,185,0.12)');
     cctx.strokeStyle = rwGrad;
     cctx.lineWidth = 1.5;
     cctx.beginPath();
@@ -520,11 +465,11 @@ export default class NoteRenderer {
 
     // Below-judge walls (fading quickly)
     cctx.save();
-    const bwGradL = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
-    bwGradL.addColorStop(0, 'rgba(255,255,255,0.12)');
-    bwGradL.addColorStop(0.2, 'rgba(255,255,255,0.04)');
-    bwGradL.addColorStop(1, 'rgba(255,255,255,0)');
-    cctx.strokeStyle = bwGradL;
+    const bwGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
+    bwGrad.addColorStop(0, 'rgba(180,180,185,0.10)');
+    bwGrad.addColorStop(0.25, 'rgba(180,180,185,0.03)');
+    bwGrad.addColorStop(1, 'rgba(180,180,185,0)');
+    cctx.strokeStyle = bwGrad;
     cctx.lineWidth = 1;
     cctx.beginPath();
     cctx.moveTo(leftJudge.x, judgeLineY);
@@ -536,7 +481,7 @@ export default class NoteRenderer {
     cctx.stroke();
     cctx.restore();
 
-    // ── Lane dividers — subtle glass lines ──
+    // ── Lane dividers — subtle gray lines ──
     for (let i = 1; i < laneCount; i++) {
       const topG = this._getLaneGeometry(i, topY, laneCount);
       const judgeG = this._getLaneGeometry(i, judgeLineY, laneCount);
@@ -545,10 +490,10 @@ export default class NoteRenderer {
       // Above judge line
       cctx.save();
       const divGrad = cctx.createLinearGradient(0, topY, 0, judgeLineY);
-      divGrad.addColorStop(0, 'rgba(170,255,0,0.01)');
-      divGrad.addColorStop(0.5, 'rgba(255,255,255,0.05)');
-      divGrad.addColorStop(0.9, 'rgba(255,255,255,0.08)');
-      divGrad.addColorStop(1, 'rgba(255,255,255,0.03)');
+      divGrad.addColorStop(0, 'rgba(255,255,255,0.01)');
+      divGrad.addColorStop(0.6, 'rgba(255,255,255,0.04)');
+      divGrad.addColorStop(0.9, 'rgba(255,255,255,0.06)');
+      divGrad.addColorStop(1, 'rgba(255,255,255,0.02)');
       cctx.strokeStyle = divGrad;
       cctx.lineWidth = 0.5;
       cctx.beginPath();
@@ -560,8 +505,8 @@ export default class NoteRenderer {
       // Below judge line
       cctx.save();
       const belowDivGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
-      belowDivGrad.addColorStop(0, 'rgba(255,255,255,0.04)');
-      belowDivGrad.addColorStop(0.3, 'rgba(255,255,255,0.02)');
+      belowDivGrad.addColorStop(0, 'rgba(255,255,255,0.03)');
+      belowDivGrad.addColorStop(0.3, 'rgba(255,255,255,0.01)');
       belowDivGrad.addColorStop(1, 'rgba(255,255,255,0)');
       cctx.strokeStyle = belowDivGrad;
       cctx.lineWidth = 0.5;
@@ -579,15 +524,15 @@ export default class NoteRenderer {
     cctx.fillStyle = fogGrad;
     cctx.fillRect(leftTop.x - 8, topY, rightTop.x - leftTop.x + 16, (judgeLineY - topY) * 0.25);
 
-    // ── Bright glow strip at judge line ──
+    // ── White glow strip at judge line ──
     const glowH = 40;
     cctx.save();
     const jlGlow = cctx.createLinearGradient(0, judgeLineY - glowH / 2, 0, judgeLineY + glowH / 2);
-    jlGlow.addColorStop(0, 'rgba(170,255,0,0)');
-    jlGlow.addColorStop(0.35, 'rgba(170,255,0,0.06)');
-    jlGlow.addColorStop(0.5, 'rgba(170,255,0,0.12)');
-    jlGlow.addColorStop(0.65, 'rgba(170,255,0,0.06)');
-    jlGlow.addColorStop(1, 'rgba(170,255,0,0)');
+    jlGlow.addColorStop(0, 'rgba(255,255,255,0)');
+    jlGlow.addColorStop(0.35, 'rgba(255,255,255,0.05)');
+    jlGlow.addColorStop(0.5, 'rgba(255,255,255,0.10)');
+    jlGlow.addColorStop(0.65, 'rgba(255,255,255,0.05)');
+    jlGlow.addColorStop(1, 'rgba(255,255,255,0)');
     cctx.fillStyle = jlGlow;
     cctx.fillRect(leftJudge.x - 4, judgeLineY - glowH / 2, rightJudge.x - leftJudge.x + 8, glowH);
     cctx.restore();
@@ -675,20 +620,20 @@ export default class NoteRenderer {
       ctx.save();
 
       if (isWholeBeat) {
-        // Whole beat — brighter line
+        // Whole beat — subtle white line
         const fadeIn = this._fadeIn(y, judgeLineY);
-        const alpha = fadeIn * 0.12;
+        const alpha = fadeIn * 0.10;
         ctx.globalAlpha = alpha;
-        ctx.strokeStyle = '#AAFF00';
+        ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(leftG.x + 2, y);
         ctx.lineTo(rightG.x - 2, y);
         ctx.stroke();
       } else {
-        // Half beat — dimmer, thinner
+        // Half beat — very faint
         const fadeIn = this._fadeIn(y, judgeLineY);
-        const alpha = fadeIn * 0.04;
+        const alpha = fadeIn * 0.035;
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 0.5;
