@@ -934,7 +934,7 @@ async function boot() {
   let _songSelectInstance = null;
   screens.register('song-select', () => {
     if (_songSelectInstance) {
-      _songSelectInstance.reenable();
+      _songSelectInstance._reenable();
       return _songSelectInstance;
     }
     _songSelectInstance = new SongSelect({ audio, three, screens });
