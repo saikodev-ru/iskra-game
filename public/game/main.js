@@ -358,6 +358,13 @@ async function boot() {
         const ct = audio.currentTime; // Single source of truth: game time = audio time
         // During countdown (after resume), skip game logic
         if (_inCountdown) return;
+
+        // ── Focus guard: prevent any element from stealing keyboard focus during gameplay ──
+        const ae = document.activeElement;
+        if (ae && ae !== document.body && ae !== document.documentElement) {
+          ae.blur();
+        }
+
         _updateQuickRestart();
         currentJudgement.checkMisses(ct);
         // osu!mania HP drain: tick per frame
@@ -842,6 +849,14 @@ async function boot() {
       e.stopPropagation();
     }
   }, true); // capture phase — runs before InputManager's handler
+
+  // Keep focus on document.body during gameplay — prevent any element from stealing focus
+  // This catches clicks that land on overlay divs, canvases, or any other element
+  document.addEventListener('mousedown', () => {
+    if (gameActive && document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement) {
+      document.activeElement.blur();
+    }
+  });
 
   // Keep focus on the game when window regains focus during gameplay
   window.addEventListener('focus', () => {

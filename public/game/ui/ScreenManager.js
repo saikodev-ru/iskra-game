@@ -23,6 +23,8 @@ export default class ScreenManager {
         if (this._current.destroy) this._current.destroy();
         this.container.innerHTML = '';
         this._current = null;
+        // Disable pointer events when no interactive screen is shown
+        this.container.style.pointerEvents = 'none';
       }
     };
 
@@ -76,6 +78,10 @@ export default class ScreenManager {
       this.container.style.transformStyle = '';
       this._transitioning = false;
     }, 380);
+
+    // Enable pointer events for interactive screens (menus, settings)
+    // The 'game' screen factory clears innerHTML and doesn't need clicks
+    this.container.style.pointerEvents = name === 'game' ? 'none' : 'auto';
 
     EventBus.emit('screen:change', { from, to: name });
   }

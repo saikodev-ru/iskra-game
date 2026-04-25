@@ -1505,3 +1505,41 @@ Stage Summary:
 - Death shows GAME OVER menu with Restart/Settings/Quit (no Continue)
 - Result is never saved when dying
 
+---
+Task ID: 1
+Agent: main
+Task: Fix random keyboard input loss during gameplay
+
+Work Log:
+- Investigation found NO explicit focus-stealing code (no alert/confirm/prompt/focus/iframe)
+- Root cause: external focus loss (browser, OS) + hidden video element + #screen div intercepting clicks
+- Applied 4-layer defense:
+
+1. Focus guard in game loop (main.js update):
+   - Every frame checks document.activeElement
+   - If not document.body/documentElement, calls .blur() to return focus
+   - Catches ANY element that steals focus during gameplay
+
+2. Mousedown focus reclaim (main.js):
+   - On every mousedown during gameplay, blurs any non-body active element
+   - Catches the user's click-to-refocus gesture
+
+3. Video element protection (ThreeScene.js):
+   - Added tabIndex=-1 to hidden <video> element
+   - Prevents browser from focusing video on play() calls
+   - Update loop's auto-resume can no longer steal focus
+
+4. pointer-events fix (page.tsx + ScreenManager.js):
+   - #screen div now has pointer-events:none by default
+   - ScreenManager enables pointer-events:auto for interactive screens (menus)
+   - ScreenManager disables pointer-events for 'game' screen
+   - Both canvases have tabIndex=-1 to prevent focus
+   - Clicks pass through to window during gameplay instead of being swallowed
+
+Stage Summary:
+- 4-layer defense against focus loss during gameplay
+- Focus guard runs every frame in game loop
+- Mousedown handler catches user refocus attempts
+- Video element can no longer steal focus
+- #screen div no longer intercepts clicks during gameplay
+

@@ -37,11 +37,11 @@ export default function Home() {
 
   return (
     <div style={{ margin: 0, overflow: 'hidden', background: '#000000', width: '100vw', height: '100vh', position: 'relative' }}>
-      <canvas id="three" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0 }} />
-      <canvas id="game" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }} />
+      <canvas id="three" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0, tabIndex: -1 }} />
+      <canvas id="game" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1, tabIndex: -1 }} />
       <div id="judgement-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2, pointerEvents: 'none', overflow: 'hidden' }} />
       <div id="hud" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 3, pointerEvents: 'none', overflow: 'hidden' }} />
-      <div id="screen" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 5, overflow: 'hidden' }} />
+      <div id="screen" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 5, overflow: 'hidden', pointerEvents: 'none' }} />
       <div id="modal" style={{ position: 'fixed', inset: 0, zIndex: 10, pointerEvents: 'none' }} />
     </div>
   );

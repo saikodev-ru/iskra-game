@@ -574,6 +574,7 @@ export default class ThreeScene {
     video.playsInline = true;
     video.preload = 'auto';
     video.loop = true;  // Loop in song-select preview mode
+    video.tabIndex = -1; // prevent video element from stealing keyboard focus
     video.style.display = 'none';
     document.body.appendChild(video);
 
