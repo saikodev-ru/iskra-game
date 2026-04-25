@@ -144,19 +144,29 @@ body.zzz-active::before {
 
 .zzz-btn--sm { padding: 8px 20px; font-size: 12px; }
 
-/* JUDGEMENT — bigger, bolder */
+/* JUDGEMENT — ultra bold, stylish */
 .judgement-text {
   font-family: var(--zzz-font);
   font-weight: 900;
-  font-size: 38px;
+  font-size: 52px;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
-  text-shadow: 0 0 20px currentColor, 0 3px 0 #000, 0 6px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+  letter-spacing: 0.22em;
+  text-shadow:
+    0 0 20px currentColor,
+    0 0 40px currentColor,
+    0 3px 0 #000,
+    0 6px 0 #000,
+    -2px -2px 0 #000,
+    2px -2px 0 #000,
+    -2px 2px 0 #000,
+    2px 2px 0 #000;
   pointer-events: none; user-select: none;
   position: absolute;
   left: 50%; top: 45%;
   transform: translate(-50%, -50%);
   white-space: nowrap;
+  -webkit-text-stroke: 1.5px rgba(255,255,255,0.15);
+  paint-order: stroke fill;
 }
 
 .judgement--perfect {
@@ -166,23 +176,40 @@ body.zzz-active::before {
   -webkit-background-clip: text;
   background-clip: text;
   text-shadow: none;
-  filter: drop-shadow(0 0 8px rgba(253,164,175,0.6)) drop-shadow(0 2px 0 rgba(0,0,0,0.8)) drop-shadow(0 4px 0 rgba(0,0,0,0.4));
+  -webkit-text-stroke: 2px rgba(253,164,175,0.25);
+  filter:
+    drop-shadow(0 0 6px rgba(253,164,175,0.8))
+    drop-shadow(0 0 18px rgba(103,232,249,0.5))
+    drop-shadow(0 2px 0 rgba(0,0,0,0.9))
+    drop-shadow(0 5px 0 rgba(0,0,0,0.5));
 }
-.judgement--great   { color: #00E5FF; }
-.judgement--good    { color: #F5C518; }
-.judgement--bad     { color: #FF8C00; }
-.judgement--miss    { color: #FF3D3D; }
+.judgement--great   {
+  color: #00E5FF;
+  text-shadow: 0 0 12px rgba(0,229,255,0.5), 0 0 30px rgba(0,229,255,0.2), 0 3px 0 #000, 0 6px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+}
+.judgement--good    {
+  color: #F5C518;
+  text-shadow: 0 0 10px rgba(245,197,24,0.4), 0 0 24px rgba(245,197,24,0.15), 0 3px 0 #000, 0 6px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+}
+.judgement--bad     {
+  color: #FF8C00;
+  text-shadow: 0 0 8px rgba(255,140,0,0.4), 0 3px 0 #000, 0 6px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+}
+.judgement--miss    {
+  color: #FF3D3D;
+  text-shadow: 0 0 12px rgba(255,61,61,0.5), 0 0 28px rgba(255,61,61,0.2), 0 3px 0 #000, 0 6px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+}
 
 @keyframes judge-in  { 
-  from { transform: translate(-50%, -50%) scale(1.5); opacity:0; } 
+  from { transform: translate(-50%, -50%) scale(1.8); opacity:0; } 
   to   { transform: translate(-50%, -50%) scale(1); opacity:1; } 
 }
 @keyframes judge-out { 
-  from { opacity:1; transform: translate(-50%, -50%); } 
-  to   { opacity:0; transform: translate(-50%, -50%) translateY(-16px); } 
+  from { opacity:1; transform: translate(-50%, -50%) scale(1); } 
+  to   { opacity:0; transform: translate(-50%, -50%) translateY(-20px) scale(0.9); } 
 }
-.judgement--in  { animation: judge-in  0.08s ease-out forwards; }
-.judgement--out { animation: judge-out 0.2s ease-in forwards; }
+.judgement--in  { animation: judge-in  0.06s cubic-bezier(0.22,1,0.36,1) forwards; }
+.judgement--out { animation: judge-out 0.22s ease-in forwards; }
 
 /* COMBO BREAK — red vignette overlay on game canvas */
 @keyframes combo-fly { to { transform: translateY(-50px); opacity:0; } }

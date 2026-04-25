@@ -375,7 +375,7 @@ async function boot() {
       render(delta) {
         if (!gameActive) return;
         const ct = audio.currentTime;
-        noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount, delta });
+        noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount, delta, bpm: currentBeatMap.metadata.bpm || 120 });
         three.update(performance.now());
       }
     });
