@@ -257,7 +257,8 @@ export default class ColorExtractor {
   }
 
   static _rgbToHex(r, g, b) {
-    return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return '#cccccc';
+    return '#' + [r, g, b].map(c => Math.round(c).toString(16).padStart(2, '0')).join('');
   }
 }
 
