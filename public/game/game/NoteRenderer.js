@@ -371,7 +371,7 @@ export default class NoteRenderer {
     const bottomY = this._getBottomY();
     const sa = this.safeArea;
     const cx = sa.x + sa.w / 2;
-    const fullPw = sa.w * 0.65; // Wider playfield (was 0.55)
+    const fullPw = sa.w * 0.48; // Playfield width (matches _getLaneGeometry)
 
     for (let i = 0; i < laneCount; i++) {
       const topGeom = this._getLaneGeometry(i, topY, laneCount);
@@ -542,7 +542,7 @@ export default class NoteRenderer {
   /* ── Layout (Perspective) ── */
 
   _getJudgeLineY() {
-    return this.safeArea.y + this.safeArea.h * 0.82;
+    return this.safeArea.y + this.safeArea.h * 0.78;
   }
 
   _getTopY() {
@@ -560,7 +560,7 @@ export default class NoteRenderer {
 
     if (y <= judgeLineY) {
       const t = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
-      return 0.3 + 0.7 * t;
+      return 0.32 + 0.68 * t;
     } else {
       // Below judge line: widening perspective (floor expanding away from viewer)
       const t = Math.min(1, (y - judgeLineY) / (bottomY - judgeLineY));
@@ -570,7 +570,7 @@ export default class NoteRenderer {
 
   _getLaneGeometry(laneIndex, y, laneCount) {
     const sa = this.safeArea;
-    const pw = sa.w * 0.65; // Wider playfield (was 0.55)
+    const pw = sa.w * 0.48; // Playfield width at judge line
     const cx = sa.x + sa.w / 2;
     const scale = this._getPerspectiveScale(y);
     const scaledPw = pw * scale;
@@ -724,7 +724,7 @@ export default class NoteRenderer {
 
     if (noteY <= judgeLineY) {
       const t = Math.max(0, Math.min(1, (noteY - topY) / (judgeLineY - topY)));
-      return 0.3 + 0.7 * t;
+      return 0.32 + 0.68 * t;
     } else {
       // Below judge line: notes widen with expanding perspective
       const t = Math.min(1, (noteY - judgeLineY) / (bottomY - judgeLineY));
