@@ -1,376 +1,254 @@
 /**
- * GameCursor — RHYMIX neon pulsing circle cursor with glowing comet trail
+ * GameCursor — RHYMIX minimal neon ring cursor
  *
- * A ring cursor that pulses in sync with the song BPM, featuring a smooth
- * tapered trail, dual-contrast visibility (dark outline + inner glow), and
- * interactive hover/click feedback. Hides system cursor globally.
+ * A thin luminous ring that breathes in sync with the song's beat (half-BPM),
+ * leaving a smooth fading comet trail. Dual-contrast design ensures visibility
+ * on any background surface.
  *
  * API:
  *   static init()       — Create cursor, inject styles, start animation
  *   static show()       — Make cursor visible
  *   static hide()       — Hide cursor
- *   static setBPM(bpm)  — Update BPM for pulsing (0 → default 60 BPM)
+ *   static setBPM(bpm)  — Update BPM for pulsing (0 → gentle default)
  */
 
 export class GameCursor {
-  /* ── Constants ── */
-  static _ACCENT      = '#AAFF00';
-  static _ACCENT_RGB  = '170,255,0';
-  static _RING_SIZE   = 28;           // base diameter in px
-  static _TRAIL_COUNT = 14;           // number of trail segments
-  static _TRAIL_MAX   = 26;           // max trail element width in px
-  static _DEFAULT_BPM = 60;
+  static _ACCENT     = '#AAFF00';
+  static _AR         = '170,255,0';
+  static _SIZE       = 32;
+  static _TRAIL_N    = 12;
+  static _DEF_BPM    = 72;
 
-  /* ── State ── */
-  static _el          = null;         // cursor container
-  static _svgRing     = null;         // the SVG <circle> element
-  static _svgGlow     = null;         // outer glow ring
-  static _svgInner    = null;         // inner fill circle (hover)
-  static _svgDot      = null;         // center dot
-  static _trailEls    = [];           // trail DOM elements
-  static _trail       = [];           // trail position data [{x,y}]
-  static _visible     = true;
-  static _bpm         = 0;            // 0 = use default
-  static _hovered     = false;
-  static _clicked     = false;
-  static _clickTime   = 0;
-  static _rX          = -200;
-  static _rY          = -200;
-  static _tX          = -200;
-  static _tY          = -200;
-  static _animId      = null;
-  static _startTime   = 0;
+  static _el         = null;
+  static _ring       = null;
+  static _glow       = null;
+  static _fill       = null;
+  static _dot        = null;
+  static _trailEls   = [];
+  static _trail      = [];
+  static _visible    = true;
+  static _bpm        = 0;
+  static _hovered    = false;
+  static _pressed    = false;
+  static _pressT     = 0;
+  static _rX = -300;  static _rY = -300;
+  static _tX = -300;  static _tY = -300;
+  static _animId     = null;
+  static _t0         = 0;
 
-  /* ── Init ── */
+  /* ───────────── init ───────────── */
   static init() {
     if (GameCursor._el) return;
+    GameCursor._t0 = performance.now();
 
-    GameCursor._startTime = performance.now();
+    // hide system cursor
+    const css = document.createElement('style');
+    css.id = 'game-cursor-css';
+    css.textContent = `*,*::before,*::after{cursor:none!important}`;
+    document.head.appendChild(css);
 
-    // ── Inject global cursor-hiding + trail keyframe stylesheet ──
-    const style = document.createElement('style');
-    style.id = 'game-cursor-hide';
-    style.textContent = `
-      *, *::before, *::after {
-        cursor: none !important;
-      }
-    `;
-    document.head.appendChild(style);
+    // container
+    const el = document.createElement('div');
+    el.id = 'game-cursor';
+    Object.assign(el.style, {
+      position: 'fixed', top: 0, left: 0,
+      width: GameCursor._SIZE + 'px', height: GameCursor._SIZE + 'px',
+      pointerEvents: 'none', zIndex: 99999,
+      opacity: 0, transition: 'opacity .2s',
+      willChange: 'transform',
+    });
 
-    // ── Create cursor container ──
-    const container = document.createElement('div');
-    container.id = 'game-cursor';
-    container.style.cssText = `
-      position: fixed;
-      top: 0; left: 0;
-      width: ${GameCursor._RING_SIZE + 16}px;
-      height: ${GameCursor._RING_SIZE + 16}px;
-      pointer-events: none;
-      z-index: 99999;
-      opacity: 0;
-      transition: opacity 0.25s ease;
-      will-change: transform, opacity;
-    `;
-    container.setAttribute('aria-hidden', 'true');
-
-    // ── SVG ring cursor ──
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const half = (GameCursor._RING_SIZE + 16) / 2;
-    const r = GameCursor._RING_SIZE / 2;
-
-    const svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('viewBox', `0 0 ${GameCursor._RING_SIZE + 16} ${GameCursor._RING_SIZE + 16}`);
-    svg.setAttribute('width', GameCursor._RING_SIZE + 16);
-    svg.setAttribute('height', GameCursor._RING_SIZE + 16);
+    // svg
+    const ns = 'http://www.w3.org/2000/svg';
+    const s = GameCursor._SIZE;
+    const c = s / 2;
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${s} ${s}`);
+    svg.setAttribute('width', s);
+    svg.setAttribute('height', s);
     svg.style.cssText = 'display:block;width:100%;height:100%;overflow:visible;';
 
-    // Defs: filters
-    const defs = document.createElementNS(svgNS, 'defs');
+    // glow filter
+    const defs = document.createElementNS(ns, 'defs');
 
-    // Outer glow filter (accent color, soft spread)
-    const glowFilter = document.createElementNS(svgNS, 'filter');
-    glowFilter.setAttribute('id', 'cursor-glow');
-    glowFilter.setAttribute('x', '-50%');
-    glowFilter.setAttribute('y', '-50%');
-    glowFilter.setAttribute('width', '200%');
-    glowFilter.setAttribute('height', '200%');
-    glowFilter.innerHTML = `
-      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur1"/>
-      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur2"/>
-      <feMerge>
-        <feMergeNode in="blur2"/>
-        <feMergeNode in="blur1"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    `;
-    defs.appendChild(glowFilter);
+    const f1 = document.createElementNS(ns, 'filter');
+    f1.setAttribute('id', 'cg');
+    f1.setAttribute('x', '-60%'); f1.setAttribute('y', '-60%');
+    f1.setAttribute('width', '220%'); f1.setAttribute('height', '220%');
+    f1.innerHTML = `<feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="a"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge>`;
+    defs.appendChild(f1);
 
-    // Hover glow filter (brighter)
-    const hoverGlowFilter = document.createElementNS(svgNS, 'filter');
-    hoverGlowFilter.setAttribute('id', 'cursor-hover-glow');
-    hoverGlowFilter.setAttribute('x', '-80%');
-    hoverGlowFilter.setAttribute('y', '-80%');
-    hoverGlowFilter.setAttribute('width', '260%');
-    hoverGlowFilter.setAttribute('height', '260%');
-    hoverGlowFilter.innerHTML = `
-      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur1"/>
-      <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur2"/>
-      <feMerge>
-        <feMergeNode in="blur2"/>
-        <feMergeNode in="blur1"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    `;
-    defs.appendChild(hoverGlowFilter);
-
+    const f2 = document.createElementNS(ns, 'filter');
+    f2.setAttribute('id', 'cgh');
+    f2.setAttribute('x', '-80%'); f2.setAttribute('y', '-80%');
+    f2.setAttribute('width', '260%'); f2.setAttribute('height', '260%');
+    f2.innerHTML = `<feGaussianBlur in="SourceGraphic" stdDeviation="4" result="a"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge>`;
+    defs.appendChild(f2);
     svg.appendChild(defs);
 
-    // 1) Dark outline ring (outer shadow for visibility on light backgrounds)
-    const outline = document.createElementNS(svgNS, 'circle');
-    outline.setAttribute('cx', half);
-    outline.setAttribute('cy', half);
-    outline.setAttribute('r', r + 2);
-    outline.setAttribute('fill', 'none');
-    outline.setAttribute('stroke', 'rgba(0,0,0,0.55)');
-    outline.setAttribute('stroke-width', '4');
-    outline.style.cssText = 'transition: stroke-width 0.15s ease;';
-    svg.appendChild(outline);
+    // 1 — dark drop-shadow ring (light-bg visibility)
+    const shadow = document.createElementNS(ns, 'circle');
+    Object.entries({ cx: c, cy: c, r: c - 1, fill: 'none',
+      stroke: 'rgba(0,0,0,.5)', 'stroke-width': 3.5 }).forEach(([k, v]) => shadow.setAttribute(k, v));
+    svg.appendChild(shadow);
 
-    // 2) Accent glow ring (main colored ring)
-    const glowRing = document.createElementNS(svgNS, 'circle');
-    glowRing.setAttribute('cx', half);
-    glowRing.setAttribute('cy', half);
-    glowRing.setAttribute('r', r);
-    glowRing.setAttribute('fill', 'none');
-    glowRing.setAttribute('stroke', GameCursor._ACCENT);
-    glowRing.setAttribute('stroke-width', '2');
-    glowRing.setAttribute('filter', 'url(#cursor-glow)');
-    glowRing.setAttribute('opacity', '0.85');
-    glowRing.style.cssText = 'transition: stroke-width 0.15s ease, opacity 0.15s ease;';
-    GameCursor._svgGlow = glowRing;
-    svg.appendChild(glowRing);
+    // 2 — accent ring (main)
+    const ring = document.createElementNS(ns, 'circle');
+    Object.entries({ cx: c, cy: c, r: c - 2, fill: 'none',
+      stroke: GameCursor._ACCENT, 'stroke-width': 1.8,
+      filter: 'url(#cg)', opacity: .9 }).forEach(([k, v]) => ring.setAttribute(k, v));
+    GameCursor._ring = ring;
+    svg.appendChild(ring);
 
-    // 3) White core ring (inner brightness for dark backgrounds)
-    const whiteRing = document.createElementNS(svgNS, 'circle');
-    whiteRing.setAttribute('cx', half);
-    whiteRing.setAttribute('cy', half);
-    whiteRing.setAttribute('r', r);
-    whiteRing.setAttribute('fill', 'none');
-    whiteRing.setAttribute('stroke', 'rgba(255,255,255,0.7)');
-    whiteRing.setAttribute('stroke-width', '1');
-    whiteRing.style.cssText = 'transition: stroke-width 0.15s ease;';
-    GameCursor._svgRing = whiteRing;
-    svg.appendChild(whiteRing);
+    // 3 — white inner ring (dark-bg readability)
+    const inner = document.createElementNS(ns, 'circle');
+    Object.entries({ cx: c, cy: c, r: c - 2, fill: 'none',
+      stroke: 'rgba(255,255,255,.55)', 'stroke-width': .8 }).forEach(([k, v]) => inner.setAttribute(k, v));
+    svg.appendChild(inner);
 
-    // 4) Inner fill (subtle, shows on hover)
-    const innerFill = document.createElementNS(svgNS, 'circle');
-    innerFill.setAttribute('cx', half);
-    innerFill.setAttribute('cy', half);
-    innerFill.setAttribute('r', r - 3);
-    innerFill.setAttribute('fill', `rgba(${GameCursor._ACCENT_RGB},0)`);
-    innerFill.style.cssText = 'transition: fill 0.2s ease;';
-    GameCursor._svgInner = innerFill;
-    svg.appendChild(innerFill);
+    // 4 — hover fill
+    const fill = document.createElementNS(ns, 'circle');
+    Object.entries({ cx: c, cy: c, r: c - 4, fill: 'rgba(170,255,0,0)' }).forEach(([k, v]) => fill.setAttribute(k, v));
+    GameCursor._fill = fill;
+    svg.appendChild(fill);
 
-    // 5) Center dot
-    const dot = document.createElementNS(svgNS, 'circle');
-    dot.setAttribute('cx', half);
-    dot.setAttribute('cy', half);
-    dot.setAttribute('r', '1.8');
-    dot.setAttribute('fill', `rgba(${GameCursor._ACCENT_RGB},0.9)`);
-    dot.setAttribute('filter', 'url(#cursor-glow)');
-    dot.style.cssText = 'transition: r 0.15s ease;';
-    GameCursor._svgDot = dot;
+    // 5 — center dot
+    const dot = document.createElementNS(ns, 'circle');
+    Object.entries({ cx: c, cy: c, r: 1.6, fill: GameCursor._ACCENT,
+      filter: 'url(#cg)', opacity: .85 }).forEach(([k, v]) => dot.setAttribute(k, v));
+    GameCursor._dot = dot;
     svg.appendChild(dot);
 
-    container.appendChild(svg);
-    document.body.appendChild(container);
-    GameCursor._el = container;
+    el.appendChild(svg);
+    document.body.appendChild(el);
+    GameCursor._el = el;
 
-    // ── Create trail elements (comet-like tapered trail) ──
-    for (let i = 0; i < GameCursor._TRAIL_COUNT; i++) {
-      const seg = document.createElement('div');
-      const t = i / (GameCursor._TRAIL_COUNT - 1); // 0..1 from newest to oldest
-      const width = Math.max(2, GameCursor._TRAIL_MAX * (1 - t * 0.9));
-      const alpha = 0.5 * (1 - t);
-      const blur = 2 + t * 6;
-
-      seg.style.cssText = `
-        position: fixed;
-        top: 0; left: 0;
-        width: ${width}px;
-        height: ${width}px;
-        margin: ${-width / 2}px 0 0 ${-width / 2}px;
-        border-radius: 50%;
-        background: radial-gradient(
-          circle,
-          rgba(${GameCursor._ACCENT_RGB},${alpha}) 0%,
-          rgba(${GameCursor._ACCENT_RGB},${alpha * 0.4}) 50%,
-          transparent 100%
-        );
-        pointer-events: none;
-        z-index: 99998;
-        opacity: 0;
-        transition: opacity 0.25s ease;
-        will-change: transform;
-        box-shadow: 0 0 ${blur}px rgba(${GameCursor._ACCENT_RGB},${alpha * 0.5});
-      `;
-      seg.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(seg);
-      GameCursor._trailEls.push(seg);
-      GameCursor._trail.push({ x: -200, y: -200 });
+    // trail
+    for (let i = 0; i < GameCursor._TRAIL_N; i++) {
+      const d = document.createElement('div');
+      const t = i / (GameCursor._TRAIL_N - 1);
+      const sz = Math.max(2, 22 * (1 - t * .88));
+      const a = .38 * (1 - t);
+      const bl = 1.5 + t * 5;
+      Object.assign(d.style, {
+        position: 'fixed', top: 0, left: 0,
+        width: sz + 'px', height: sz + 'px',
+        marginTop: -sz / 2 + 'px', marginLeft: -sz / 2 + 'px',
+        borderRadius: '50%', pointerEvents: 'none', zIndex: 99998,
+        opacity: 0, transition: 'opacity .2s', willChange: 'transform',
+        background: `radial-gradient(circle,rgba(${GameCursor._AR},${a}) 0%,rgba(${GameCursor._AR},${a * .3}) 55%,transparent 100%)`,
+        boxShadow: `0 0 ${bl}px rgba(${GameCursor._AR},${a * .45})`,
+      });
+      document.body.appendChild(d);
+      GameCursor._trailEls.push(d);
+      GameCursor._trail.push({ x: -300, y: -300 });
     }
 
-    // ── Mouse tracking ──
-    document.addEventListener('mousemove', (e) => {
-      GameCursor._tX = e.clientX;
-      GameCursor._tY = e.clientY;
-    });
-
-    // ── Hover detection on clickable elements ──
-    document.addEventListener('mouseover', (e) => {
+    // events
+    document.addEventListener('mousemove', e => { GameCursor._tX = e.clientX; GameCursor._tY = e.clientY; });
+    const clickable = 'button,a,[role="button"],.song-card,.diff-dropdown-item,.zzz-btn,input,select,[data-clickable],canvas,[onclick],summary,label,.ss-toolbar-btn,.ss-action-btn,.rc-history-card';
+    document.addEventListener('mouseover', e => {
       if (!GameCursor._visible) return;
-      const target = e.target && e.target.closest(
-        'button, a, [role="button"], .song-card, .difficulty-item, .zzz-btn, input, select, [data-clickable], canvas, [onclick], summary, label'
-      );
-      GameCursor._hovered = !!target;
+      GameCursor._hovered = !!(e.target && e.target.closest(clickable));
     });
-
-    document.addEventListener('mouseout', (e) => {
+    document.addEventListener('mouseout', e => {
       if (!GameCursor._visible) return;
-      const target = e.target && e.target.closest(
-        'button, a, [role="button"], .song-card, .difficulty-item, .zzz-btn, input, select, [data-clickable], canvas, [onclick], summary, label'
-      );
-      if (target) GameCursor._hovered = false;
+      if (e.target && e.target.closest(clickable)) GameCursor._hovered = false;
     });
+    document.addEventListener('mousedown', () => { GameCursor._pressed = true; GameCursor._pressT = performance.now(); });
+    document.addEventListener('mouseup', () => { GameCursor._pressed = false; });
 
-    // ── Click snap ──
-    document.addEventListener('mousedown', () => {
-      GameCursor._clicked = true;
-      GameCursor._clickTime = performance.now();
-    });
-    document.addEventListener('mouseup', () => {
-      GameCursor._clicked = false;
-    });
-
-    // ── Start animation loop ──
     GameCursor._animate(performance.now());
-
-    // Show after a short delay to avoid flash
-    setTimeout(() => GameCursor.show(), 120);
+    setTimeout(() => GameCursor.show(), 100);
   }
 
-  /* ── Animation Loop ── */
+  /* ───────────── animation ───────────── */
   static _animate(now) {
-    const elapsed = (now - GameCursor._startTime) / 1000; // seconds since init
-    const bpm = GameCursor._bpm > 0 ? GameCursor._bpm : GameCursor._DEFAULT_BPM;
+    const dt = (now - GameCursor._t0) / 1000;
+    const bpm = GameCursor._bpm > 0 ? GameCursor._bpm : GameCursor._DEF_BPM;
 
-    // Smooth cursor interpolation
-    const lerp = 0.35;
-    GameCursor._rX += (GameCursor._tX - GameCursor._rX) * lerp;
-    GameCursor._rY += (GameCursor._tY - GameCursor._rY) * lerp;
+    // smooth follow
+    const lr = .32;
+    GameCursor._rX += (GameCursor._tX - GameCursor._rX) * lr;
+    GameCursor._rY += (GameCursor._tY - GameCursor._rY) * lr;
 
-    // ── BPM-based pulse ──
-    // Two phases: sin wave gives smooth breathe; abs gives double-time "heartbeat"
-    const beatPhase = (elapsed * bpm / 60) * Math.PI * 2;
-    const pulseRaw = Math.sin(beatPhase);
-    const pulse = Math.abs(pulseRaw); // 0..1 pulsing at double BPM frequency
-    const pulseScale = 1 + pulse * 0.15; // scale from 1.0 to 1.15
-    const glowIntensity = 0.6 + pulse * 0.4; // 0.6..1.0
+    // ── beat pulse (once per beat, smooth cosine wave) ──
+    // bpm/2 so for 180 BPM song → 90 pulses/min → 1 pulse per beat
+    const phase = (dt * bpm / 120) * Math.PI * 2;
+    const pulse = (Math.cos(phase) + 1) * .5;  // 0→1→0 once per beat
 
-    // ── Click snap ──
-    const clickAge = (now - GameCursor._clickTime) / 1000;
-    const clickSnap = GameCursor._clicked
-      ? 0.75
-      : clickAge < 0.15
-        ? 0.75 + 0.25 * Math.min(1, clickAge / 0.15)
-        : 1;
+    const scale = 1 + pulse * .12;              // 1.0 .. 1.12
+    const glow  = .65 + pulse * .35;            // .65 .. 1.0
 
-    // ── Hover fill ──
-    const hoverFill = GameCursor._hovered ? 0.12 + pulse * 0.06 : 0;
-    const hoverStroke = GameCursor._hovered ? 3 : 2;
+    // click snap
+    const age = (now - GameCursor._pressT) / 1000;
+    const snap = GameCursor._pressed
+      ? .72
+      : age < .12 ? .72 + .28 * Math.min(1, age / .12) : 1;
 
-    // ── Combined scale ──
-    const hoverScale = GameCursor._hovered ? 1.08 : 1;
-    const finalScale = pulseScale * hoverScale * clickSnap;
+    // hover
+    const hv = GameCursor._hovered;
+    const hScale = hv ? 1.06 : 1;
+    const fScale = scale * hScale * snap;
 
-    // ── Position offset (center the ring on cursor point) ──
-    const halfSize = (GameCursor._RING_SIZE + 16) / 2;
-    const tx = GameCursor._rX - halfSize;
-    const ty = GameCursor._rY - halfSize;
+    const half = GameCursor._SIZE / 2;
+    const tx = GameCursor._rX - half;
+    const ty = GameCursor._rY - half;
+    if (GameCursor._el) GameCursor._el.style.transform = `translate(${tx}px,${ty}px) scale(${fScale})`;
 
-    // ── Apply transforms to cursor ──
-    if (GameCursor._el) {
-      GameCursor._el.style.transform = `translate(${tx}px, ${ty}px) scale(${finalScale})`;
+    // ring visuals
+    if (GameCursor._ring) {
+      GameCursor._ring.setAttribute('stroke-width', hv ? 2.6 : 1.8);
+      GameCursor._ring.setAttribute('opacity', glow.toFixed(2));
+      GameCursor._ring.setAttribute('filter', hv ? 'url(#cgh)' : 'url(#cg)');
+    }
+    if (GameCursor._fill) {
+      GameCursor._fill.setAttribute('fill', hv
+        ? `rgba(${GameCursor._AR},${(.08 + pulse * .05).toFixed(3)})` : 'rgba(170,255,0,0)');
+    }
+    if (GameCursor._dot) {
+      GameCursor._dot.setAttribute('r', hv ? '2.2' : '1.6');
+      GameCursor._dot.setAttribute('opacity', (.7 + pulse * .3).toFixed(2));
     }
 
-    // ── Update SVG elements ──
-    if (GameCursor._svgGlow) {
-      GameCursor._svgGlow.setAttribute('stroke-width', hoverStroke);
-      GameCursor._svgGlow.setAttribute('opacity', glowIntensity.toFixed(3));
-      if (GameCursor._hovered) {
-        GameCursor._svgGlow.setAttribute('filter', 'url(#cursor-hover-glow)');
-      } else {
-        GameCursor._svgGlow.setAttribute('filter', 'url(#cursor-glow)');
-      }
+    // trail
+    const tr = GameCursor._trail;
+    tr[0].x += (GameCursor._rX - tr[0].x) * .4;
+    tr[0].y += (GameCursor._rY - tr[0].y) * .4;
+    for (let i = 1; i < tr.length; i++) {
+      const f = Math.max(.06, .25 - i * .007);
+      tr[i].x += (tr[i - 1].x - tr[i].x) * f;
+      tr[i].y += (tr[i - 1].y - tr[i].y) * f;
     }
-
-    if (GameCursor._svgRing) {
-      GameCursor._svgRing.setAttribute('stroke-width', GameCursor._hovered ? 1.5 : 1);
-    }
-
-    if (GameCursor._svgInner) {
-      GameCursor._svgInner.setAttribute(
-        'fill',
-        `rgba(${GameCursor._ACCENT_RGB},${hoverFill.toFixed(3)})`
-      );
-    }
-
-    // ── Update trail ──
-    const trail = GameCursor._trail;
-    // Head follows cursor with slight lag
-    trail[0].x += (GameCursor._rX - trail[0].x) * 0.45;
-    trail[0].y += (GameCursor._rY - trail[0].y) * 0.45;
-    // Each subsequent point follows the previous
-    for (let i = 1; i < trail.length; i++) {
-      const follow = 0.28 - i * 0.008; // decreasing follow speed for taper
-      trail[i].x += (trail[i - 1].x - trail[i].x) * Math.max(0.08, follow);
-      trail[i].y += (trail[i - 1].y - trail[i].y) * Math.max(0.08, follow);
-    }
-
-    // Position trail elements with subtle BPM-synced size pulse
     for (let i = 0; i < GameCursor._trailEls.length; i++) {
       const el = GameCursor._trailEls[i];
-      const t = i / (GameCursor._TRAIL_COUNT - 1);
-      // Trail size pulses with beat (delayed slightly per segment)
-      const trailPulse = 1 + pulse * 0.12 * (1 - t * 0.7);
-      const size = Math.max(2, GameCursor._TRAIL_MAX * (1 - t * 0.9)) * trailPulse;
-
-      el.style.transform = `translate(${trail[i].x}px, ${trail[i].y}px)`;
-      el.style.width = `${size}px`;
-      el.style.height = `${size}px`;
-      el.style.marginTop = `${-size / 2}px`;
-      el.style.marginLeft = `${-size / 2}px`;
+      const t = i / (GameCursor._TRAIL_N - 1);
+      const tp = 1 + pulse * .08 * (1 - t * .6);
+      const sz = Math.max(2, 22 * (1 - t * .88)) * tp;
+      el.style.transform = `translate(${tr[i].x}px,${tr[i].y}px)`;
+      el.style.width = sz + 'px';
+      el.style.height = sz + 'px';
+      el.style.marginTop = -sz / 2 + 'px';
+      el.style.marginLeft = -sz / 2 + 'px';
     }
 
     GameCursor._animId = requestAnimationFrame(GameCursor._animate);
   }
 
-  /* ── Public API ── */
-
+  /* ───────────── API ───────────── */
   static show() {
     GameCursor._visible = true;
     if (GameCursor._el) GameCursor._el.style.opacity = '1';
-    for (const el of GameCursor._trailEls) el.style.opacity = '1';
+    for (const e of GameCursor._trailEls) e.style.opacity = '1';
   }
-
   static hide() {
     GameCursor._visible = false;
     if (GameCursor._el) GameCursor._el.style.opacity = '0';
-    for (const el of GameCursor._trailEls) el.style.opacity = '0';
+    for (const e of GameCursor._trailEls) e.style.opacity = '0';
   }
-
-  static setBPM(bpm) {
-    GameCursor._bpm = bpm || 0;
-  }
+  static setBPM(bpm) { GameCursor._bpm = bpm || 0; }
 }
