@@ -487,16 +487,20 @@ body.zzz-active::before {
 
 /* Star spectrum bar — 10 stars */
 .star-spectrum {
-  display: flex; gap: 1px; align-items: center;
+  display: flex; gap: 0; align-items: center;
 }
 .star-spectrum .star {
   font-size: 10px; line-height: 1; transition: all 0.2s;
+  -webkit-text-stroke: 1px rgba(255,255,255,0.15);
+  paint-order: stroke fill;
 }
 .star-spectrum .star.filled {
   text-shadow: 0 0 4px currentColor;
+  -webkit-text-stroke: 0.5px rgba(255,255,255,0.25);
 }
 .star-spectrum .star.empty {
-  opacity: 0.2;
+  opacity: 0.35;
+  -webkit-text-stroke: 1px rgba(255,255,255,0.2);
 }
 
 /* Grade icon in diff panel — osu!mania style badge */
@@ -515,7 +519,7 @@ body.zzz-active::before {
 /* IMPORT BUTTON */
 .zzz-import-btn { border-radius: 12px !important; font-weight: 900 !important; letter-spacing: 0.08em !important; }
 
-/* ── SONG INFO PANEL (top-left) ────────────────────────── */
+/* ── SONG INFO PANEL (top-right) ────────────────────────── */
 .ss-info-panel {
   background: rgba(0,0,0,0.55);
   backdrop-filter: blur(20px);
@@ -524,6 +528,7 @@ body.zzz-active::before {
   padding: 20px 22px 16px;
   position: relative;
   overflow: hidden;
+  text-align: right;
 }
 .ss-info-panel-shine {
   position: absolute; top: 0; left: 0; right: 0; height: 1px;
@@ -543,6 +548,7 @@ body.zzz-active::before {
   word-break: break-word;
   text-shadow: 0 2px 20px rgba(0,0,0,0.9);
   position: relative;
+  text-align: right;
 }
 .ss-info-artist {
   font-family: var(--zzz-font); font-weight: 500;
@@ -557,6 +563,7 @@ body.zzz-active::before {
   font-family: var(--zzz-font); font-size: 10px;
   color: rgba(255,255,255,0.35);
   letter-spacing: 0.04em;
+  justify-content: flex-end;
 }
 .ss-info-mapper svg { opacity: 0.5; flex-shrink: 0; }
 .ss-info-mapper span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -564,6 +571,7 @@ body.zzz-active::before {
 .ss-info-stars-row {
   display: flex; align-items: center; gap: 8px;
   margin-top: 12px;
+  justify-content: flex-end;
 }
 .ss-info-diff-label {
   font-family: var(--zzz-font); font-weight: 900;
@@ -576,6 +584,7 @@ body.zzz-active::before {
 .ss-info-stats {
   display: flex; flex-wrap: wrap; gap: 6px;
   margin-top: 10px;
+  justify-content: flex-end;
 }
 .ss-info-pill {
   display: inline-flex; align-items: center; gap: 5px;
@@ -601,6 +610,7 @@ body.zzz-active::before {
   margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid rgba(255,255,255,0.05);
+  justify-content: flex-end;
 }
 .ss-info-score-value {
   font-family: var(--zzz-font); font-weight: 900;

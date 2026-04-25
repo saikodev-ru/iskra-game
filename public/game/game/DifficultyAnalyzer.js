@@ -142,11 +142,11 @@ export default class DifficultyAnalyzer {
    */
   static getStarColor(stars) {
     if (stars >= 8) return '#FF3D3D';   // Red
-    if (stars >= 6.5) return '#A855F7'; // Purple
-    if (stars >= 5) return '#F5C518';   // Gold
-    if (stars >= 3.5) return '#00E5FF'; // Cyan
-    if (stars >= 2) return '#AAFF00';   // Lime
-    return '#CCCCCC';                     // Light gray
+    if (stars >= 6.5) return '#FF5C9A'; // Pink
+    if (stars >= 5) return '#A855F7';   // Purple
+    if (stars >= 3.5) return '#3B82F6';  // Blue
+    if (stars >= 2) return '#22D3EE';   // Cyan
+    return '#67E8F9';                    // Light cyan
   }
   
   /**

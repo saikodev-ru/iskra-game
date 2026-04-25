@@ -61,16 +61,16 @@ export default class SongSelect {
         <!-- Subtle vignette overlay (behind UI panels) -->
         <div style="position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.18) 72%, rgba(0,0,0,0.45) 100%);"></div>
 
-        <!-- Song info (top-left) with parallax -->
-        <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:20px;left:20px;z-index:10;width:clamp(280px, 42%, 440px);pointer-events:auto;"></div>
+        <!-- Song info (top-right) with parallax -->
+        <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:20px;right:20px;z-index:10;width:clamp(280px, 42%, 440px);pointer-events:auto;text-align:right;"></div>
 
-        <!-- PLAY button (bottom-left) with parallax -->
-        <div id="ss-play-area" class="parallax-layer" data-parallax="5" style="position:absolute;bottom:28px;left:24px;z-index:10;pointer-events:auto;"></div>
+        <!-- PLAY button (bottom-right) with parallax -->
+        <div id="ss-play-area" class="parallax-layer" data-parallax="5" style="position:absolute;bottom:28px;right:24px;z-index:10;pointer-events:auto;"></div>
 
-        <!-- Right column: toolbar + search + list + actions -->
-        <div id="ss-right-column" class="parallax-layer" data-parallax="2" style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:16px 24px 0 0;z-index:2;position:relative;">
-          <!-- Gradient behind the entire right column — fades to black going right -->
-          <div style="position:absolute;top:-40px;left:-80px;right:0;bottom:-40px;background:linear-gradient(90deg,transparent 0%,rgba(0,0,0,0.25) 30%,rgba(0,0,0,0.6) 70%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:-1;"></div>
+        <!-- Left column: toolbar + search + list + actions -->
+        <div id="ss-right-column" class="parallax-layer" data-parallax="2" style="flex:1;display:flex;justify-content:flex-start;overflow:hidden;padding:16px 0 0 24px;z-index:2;position:relative;">
+          <!-- Gradient behind the entire left column — fades to black going left -->
+          <div style="position:absolute;top:-40px;left:0;right:-80px;bottom:-40px;background:linear-gradient(270deg,transparent 0%,rgba(0,0,0,0.25) 30%,rgba(0,0,0,0.6) 70%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:-1;"></div>
           <div class="song-list-column" style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden;">
 
             <!-- Top toolbar: glass panel -->
@@ -558,7 +558,7 @@ export default class SongSelect {
     const partial = stars - Math.floor(stars); // e.g. 0.7 for ★3.7
     const starSize = large ? 16 : 12;
     const numSize = large ? 14 : 11;
-    const gap = large ? 2 : 1;
+    const gap = large ? 0 : -1;
     let html = `<div class="star-spectrum" style="gap:${gap}px;">`;
     for (let i = 1; i <= 10; i++) {
       if (i <= Math.floor(stars)) {
