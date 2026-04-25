@@ -1109,3 +1109,25 @@ Stage Summary:
 - Red miss flash effect at judge line position
 - All changes in NoteRenderer.js + main.js
 - Lint passes clean, compiles successfully
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Shorten below-judge area, add 3D converging perspective, remove colors from below judge line
+
+Work Log:
+- Modified `_getBottomY()` in NoteRenderer.js: changed multiplier from 1.25 to 1.0 (shortened below-judge area from 43% to 18% of total height)
+- Modified `_getPerspectiveScale()` below judge line: changed from widening (1.0 + 0.08*t) to converging (1.0 - 0.3*t) — lanes now recede into depth like a floor
+- Modified `_getNoteScale()` below judge line: changed from enlargement (1.0 + 0.06*t) to shrinking (1.0 - 0.3*t) — notes shrink with perspective
+- Modified `_rebuildBackgroundCache()` fade overlay below judge line: replaced colored lane-color fade (using LANE_COLORS per lane) with monochrome white-to-black gradient
+- Modified `_rebuildBackgroundCache()` side edges below judge line: changed stroke from lime (`rgba(170,255,0,0.04)`) to white (`rgba(255,255,255,0.04)`)
+- Added `_desaturateColor(hexColor, y)` helper method: smoothly blends a hex color toward luminance-weighted grayscale based on Y position below judge line (0% at judge → 85% desaturated at bottom)
+- Modified `_drawNotes()`: tap notes below judge line now use desaturated color
+- Modified `_drawHoldNote()`: missed hold notes falling below judge line use desaturated color; hold caps also desaturate when below judge line
+
+Stage Summary:
+- Below-judge area is now shorter (18% vs 43% of screen height)
+- Below-judge area has 3D converging perspective (lanes narrow toward bottom)
+- All colors removed from below-judge playfield: monochrome white→black gradient, no lime edges
+- Notes falling below judge line gradually desaturate to grayscale
+- No visual artifacts, dev server running clean
