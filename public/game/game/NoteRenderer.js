@@ -562,9 +562,9 @@ export default class NoteRenderer {
       const t = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
       return 0.3 + 0.7 * t;
     } else {
-      // Below judge line: converging perspective (floor receding into depth)
+      // Below judge line: widening perspective (floor expanding away from viewer)
       const t = Math.min(1, (y - judgeLineY) / (bottomY - judgeLineY));
-      return 1.0 - 0.3 * t;
+      return 1.0 + 0.3 * t;
     }
   }
 
@@ -726,9 +726,9 @@ export default class NoteRenderer {
       const t = Math.max(0, Math.min(1, (noteY - topY) / (judgeLineY - topY)));
       return 0.3 + 0.7 * t;
     } else {
-      // Below judge line: notes shrink with converging perspective
+      // Below judge line: notes widen with expanding perspective
       const t = Math.min(1, (noteY - judgeLineY) / (bottomY - judgeLineY));
-      return 1.0 - 0.3 * t;
+      return 1.0 + 0.3 * t;
     }
   }
 
