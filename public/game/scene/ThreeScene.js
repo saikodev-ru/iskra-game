@@ -47,6 +47,7 @@ export default class ThreeScene {
     this._videoMesh = null;      // mesh for the video plane
     this._videoMaterial = null;  // shader material for the video plane
     this._videoActive = false;   // whether video is currently playing as bg
+    this._videoPaused = false;   // true when game explicitly paused video (prevents auto-resume in update)
     this._audioEngineRef = null; // for syncing video to audio time
     this._videoLoadId = 0;      // generation counter to prevent stale video loads
     this._leadInOffset = 0;     // seconds to subtract from audio time for video sync (0 for preview, 1.0 in-game)
@@ -829,6 +830,7 @@ export default class ThreeScene {
   /** Clear the video background and release resources */
   _clearBackgroundVideo() {
     this._videoActive = false;
+    this._videoPaused = false;
     this._skipVideoFrame = false;
     if (this._videoMesh) {
       this.scene.remove(this._videoMesh);
@@ -856,6 +858,7 @@ export default class ThreeScene {
 
   /** Pause the video background (when game is paused) */
   pauseVideo() {
+    this._videoPaused = true;
     if (this._videoElement && !this._videoElement.paused) {
       this._videoElement.pause();
     }
@@ -863,6 +866,7 @@ export default class ThreeScene {
 
   /** Resume the video background (when game is resumed) */
   resumeVideo() {
+    this._videoPaused = false;
     if (this._videoElement && this._videoElement.paused && this._videoActive) {
       this._videoElement.play().catch(() => {});
     }
@@ -1080,7 +1084,8 @@ export default class ThreeScene {
         }
       }
       // Always ensure video is playing (not just when audio is syncing)
-      if (this._videoElement.paused && this._videoActive) {
+      // Respect the explicit pause flag — don't auto-resume if game is paused
+      if (this._videoElement.paused && this._videoActive && !this._videoPaused) {
         this._videoElement.play().catch(() => {});
       }
       // Update video texture every 2nd frame for performance

@@ -118,6 +118,7 @@ async function boot() {
   let _endingGame = false;  // guard against double-calling endGame()
   let _inCountdown = false; // true during 3-2-1 countdown (after resume)
   let _dying = false;       // true during death animation (HP depleted)
+  let _deadPause = false;    // true when pause menu is shown after death (no resume)
   let _deathTimeout = null; // timeout ID for death sequence → endGame
   let _skipResult = false;  // when true, endGame() rAF won't show result screen (restart)
   let _quitGame = false;    // when true, endGame() skips saving result to records
@@ -403,8 +404,22 @@ async function boot() {
           deathEl.style.width = dSa.w + 'px';
           deathEl.style.height = dSa.h + 'px';
           document.body.appendChild(deathEl);
-          // After music finishes slowing, show result
-          _deathTimeout = setTimeout(() => endGame(), 2800);
+          // After music finishes slowing, show pause menu (no continue button)
+          _deathTimeout = setTimeout(() => {
+            _deathTimeout = null;
+            // Reset death visual state before showing pause menu
+            _dying = false;
+            const deathOverlay = document.getElementById('death-overlay');
+            if (deathOverlay) deathOverlay.remove();
+            const gameCanvas = document.getElementById('game');
+            const threeCanvas = document.getElementById('three');
+            if (gameCanvas) gameCanvas.classList.remove('dying');
+            if (threeCanvas) threeCanvas.classList.remove('dying');
+            noteRenderer.scrollSpeed = 400;
+            // Show pause menu without Continue button (mark as quit so result not saved)
+            _quitGame = true;
+            pauseGame({ noResume: true });
+          }, 2800);
         }
       },
       render(delta) {
@@ -435,6 +450,7 @@ async function boot() {
     _endingGame = true;
     _inCountdown = false;
     _dying = false;
+    _deadPause = false;
     _quickRestartHeld = false;
     _quickRestartKey = null;
     _removeQuickRestartOverlay();
@@ -493,7 +509,7 @@ async function boot() {
   let _pauseOverlay = null;
   let _pauseSettingsInstance = null;
 
-  const pauseGame = () => {
+  const pauseGame = (opts = {}) => {
     if (!gameActive) return;
     gameActive = false;
     audio.pause();
@@ -501,15 +517,16 @@ async function boot() {
     three.pauseVideo();
     hud.freeze(); // Stop score/combo animation while paused
 
+    const { noResume = false } = opts;
     const sa = calcSafeArea();
     const overlay = document.createElement('div');
     overlay.id = 'pause-overlay';
     overlay.style.cssText = `position:fixed;left:${sa.x}px;top:${sa.y}px;width:${sa.w}px;height:${sa.h}px;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:50;animation:pause-fade-in 0.2s ease-out forwards;`;
     overlay.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;gap:24px;animation:pause-panel-in 0.3s cubic-bezier(0.22,1,0.36,1) forwards;">
-        <div style="font-family:var(--zzz-font);font-weight:900;font-size:14px;color:var(--zzz-muted);letter-spacing:0.3em;text-transform:uppercase;">PAUSED</div>
+        <div style="font-family:var(--zzz-font);font-weight:900;font-size:14px;color:var(--zzz-muted);letter-spacing:0.3em;text-transform:uppercase;">${noResume ? 'GAME OVER' : 'PAUSED'}</div>
         <div style="display:flex;flex-direction:column;gap:12px;min-width:240px;">
-          <button class="zzz-btn zzz-btn--primary" id="resume-btn" style="width:100%;font-size:15px;padding:14px 32px;">▶ RESUME</button>
+          ${noResume ? '' : '<button class="zzz-btn zzz-btn--primary" id="resume-btn" style="width:100%;font-size:15px;padding:14px 32px;">▶ RESUME</button>'}
           <button class="zzz-btn" id="restart-btn" style="width:100%;border-color:var(--zzz-lime);color:var(--zzz-lime);">↻ RESTART</button>
           <button class="zzz-btn" id="settings-btn" style="width:100%;">⚙ SETTINGS</button>
           <div style="height:1px;background:var(--zzz-graphite);margin:4px 0;"></div>
@@ -519,9 +536,12 @@ async function boot() {
     `;
     document.body.appendChild(overlay);
     _pauseOverlay = overlay;
+    _deadPause = noResume;
 
-    document.getElementById('resume-btn').addEventListener('click', () => { _closePause(); resumeGame(); });
-    document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; endGame(); startGame(currentMapData); });
+    if (!noResume) {
+      document.getElementById('resume-btn').addEventListener('click', () => { _closePause(); resumeGame(); });
+    }
+    document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); startGame(currentMapData); });
     document.getElementById('settings-btn').addEventListener('click', () => { _openPauseSettings(); });
     document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); screens.show('song-select'); });
     EventBus.emit('game:pause');
@@ -530,6 +550,7 @@ async function boot() {
   const _closePause = () => {
     if (_pauseSettingsInstance) { _pauseSettingsInstance.destroy(); _pauseSettingsInstance = null; }
     if (_pauseOverlay) { _pauseOverlay.remove(); _pauseOverlay = null; }
+    _deadPause = false;
   };
 
   const _openPauseSettings = () => {
@@ -851,16 +872,23 @@ async function boot() {
     if (e.code === 'Escape') {
       e.preventDefault();
       if (_pauseSettingsInstance) { _pauseSettingsInstance._closeOverlay(); return; }
-      if (_pauseOverlay) { _closePause(); resumeGame(); return; }
+      if (_pauseOverlay) {
+        if (_deadPause) {
+          // Game over menu — ESC does nothing (must use buttons)
+          return;
+        }
+        _closePause();
+        resumeGame();
+        return;
+      }
       if (_inCountdown) {
-        // During countdown after resume — re-pause
+        // During countdown after resume — cancel countdown and show pause menu
         const cd = document.getElementById('countdown-overlay');
         if (cd) cd.remove();
         _inCountdown = false;
-        gameActive = false;
-        audio.pause();
+        // Stop the game loop (it was running for the countdown)
         if (gameLoop) gameLoop.stop();
-        three.pauseVideo();
+        // Now gameActive is still true from resumeGame(), so pauseGame() will work
         pauseGame();
         return;
       }

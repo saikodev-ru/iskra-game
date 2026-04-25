@@ -1476,3 +1476,32 @@ Stage Summary:
 - Input no longer breaks on tab switch (auto-pause + state cleanup on focus)
 - No phantom judgements during countdown after resume
 
+---
+Task ID: 1
+Agent: main
+Task: Fix video pause, countdown ESC, and death → game over menu
+
+Work Log:
+- Fixed video not pausing: added _videoPaused flag to ThreeScene
+  - pauseVideo() now sets _videoPaused = true before pausing video element
+  - resumeVideo() clears _videoPaused flag
+  - update() loop no longer auto-resumes video when _videoPaused is true
+  - _clearBackgroundVideo() resets _videoPaused to false
+- Fixed ESC during countdown breaking the game:
+  - Root cause: handler set gameActive=false THEN called pauseGame() which checks !gameActive and returns
+  - Fix: removed premature gameActive/audio/three state changes, just remove countdown overlay and stop gameLoop
+  - gameActive stays true from resumeGame() so pauseGame() works correctly
+- Fixed death → game over pause menu:
+  - Death timeout now shows pauseGame({ noResume: true }) instead of endGame()
+  - pauseGame() accepts opts parameter: noResume hides Continue button, shows GAME OVER title
+  - Added _deadPause flag to track game-over state
+  - ESC handler ignores presses when _deadPause is true
+  - _quitGame = true set before pause so result is never saved
+  - Restart/Quit from game-over menu still work normally
+
+Stage Summary:
+- Video pauses/resumes correctly with game pause/resume
+- ESC during 3-2-1 countdown correctly returns to pause menu
+- Death shows GAME OVER menu with Restart/Settings/Quit (no Continue)
+- Result is never saved when dying
+
