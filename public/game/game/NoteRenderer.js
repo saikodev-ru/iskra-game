@@ -733,31 +733,82 @@ export default class NoteRenderer {
     //  Layer 3: Border glow — simple edge highlight + soft bloom
     // ════════════════════════════════════════════════════════
     this._kiaiBorderGlow += (pulse - this._kiaiBorderGlow) * Math.min(1, delta * 16);
-    const borderAlpha = intensity * 0.25 + this._kiaiBorderGlow * 0.45;
+    const borderAlpha = intensity * 0.45 + this._kiaiBorderGlow * 0.55;
     if (borderAlpha > 0.02) {
       ctx.save();
 
-      // Edge highlight — single stroke
+      // Inner bright edge highlight
       pfPath();
       const edgeGrad = ctx.createLinearGradient(0, topY, 0, bottomY);
-      edgeGrad.addColorStop(0, `rgba(255,255,255,${borderAlpha * 0.5})`);
-      edgeGrad.addColorStop(0.35, `rgba(${acR},${acG},${acB},${borderAlpha * 0.7})`);
-      edgeGrad.addColorStop(0.65, `rgba(255,255,255,${borderAlpha * 0.8})`);
-      edgeGrad.addColorStop(1, `rgba(${acR},${acG},${acB},${borderAlpha * 0.4})`);
-      ctx.lineWidth = 2 + this._kiaiBorderGlow * 1.5;
+      edgeGrad.addColorStop(0, `rgba(255,255,255,${borderAlpha * 0.7})`);
+      edgeGrad.addColorStop(0.3, `rgba(${acR},${acG},${acB},${borderAlpha * 0.9})`);
+      edgeGrad.addColorStop(0.6, `rgba(255,255,255,${borderAlpha * 1.0})`);
+      edgeGrad.addColorStop(1, `rgba(${acR},${acG},${acB},${borderAlpha * 0.5})`);
+      ctx.lineWidth = 2 + this._kiaiBorderGlow * 2.5;
       ctx.strokeStyle = edgeGrad;
       ctx.stroke();
 
-      // Outer bloom — single pass
+      // Mid bloom layer
       ctx.globalCompositeOperation = 'lighter';
       pfPath();
-      ctx.lineWidth = 10 + this._kiaiBorderGlow * 6;
-      ctx.globalAlpha = borderAlpha * 0.06;
+      ctx.lineWidth = 12 + this._kiaiBorderGlow * 10;
+      ctx.globalAlpha = borderAlpha * 0.12;
       ctx.strokeStyle = `rgba(${acR},${acG},${acB},1)`;
       ctx.stroke();
+
+      // Outer wide bloom — soft ambient glow bleeding out
+      pfPath();
+      ctx.lineWidth = 28 + this._kiaiBorderGlow * 18;
+      ctx.globalAlpha = borderAlpha * 0.05;
+      ctx.strokeStyle = `rgba(${acR},${acG},${acB},1)`;
+      ctx.stroke();
+
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
 
+      ctx.restore();
+    }
+
+    // ════════════════════════════════════════════════════════
+    //  Layer 3b: Wall glow — bright accent light bleeding outward from left/right edges
+    // ════════════════════════════════════════════════════════
+    if (borderAlpha > 0.02) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const wallGlowW = 20 + this._kiaiBorderGlow * 14;
+
+      // Left wall glow — vertical gradient bar bleeding left
+      const lGrad = ctx.createLinearGradient(lxJ - wallGlowW, 0, lxJ, 0);
+      lGrad.addColorStop(0, `rgba(${acR},${acG},${acB},0)`);
+      lGrad.addColorStop(0.5, `rgba(${acR},${acG},${acB},${borderAlpha * 0.06})`);
+      lGrad.addColorStop(1, `rgba(255,255,255,${borderAlpha * 0.12})`);
+      ctx.fillStyle = lGrad;
+      ctx.fillRect(lxT - wallGlowW, topY, (lxJ - lxT) + wallGlowW, judgeLineY - topY);
+
+      // Right wall glow — vertical gradient bar bleeding right
+      const rGrad = ctx.createLinearGradient(rxJ, 0, rxJ + wallGlowW, 0);
+      rGrad.addColorStop(0, `rgba(255,255,255,${borderAlpha * 0.12})`);
+      rGrad.addColorStop(0.5, `rgba(${acR},${acG},${acB},${borderAlpha * 0.06})`);
+      rGrad.addColorStop(1, `rgba(${acR},${acG},${acB},0)`);
+      ctx.fillStyle = rGrad;
+      ctx.fillRect(rxJ, topY, (rxJ - rxT) + wallGlowW, judgeLineY - topY);
+
+      // Below-judge mirror (fainter, tapering down)
+      const bWallW = 12 + this._kiaiBorderGlow * 6;
+      const lGradB = ctx.createLinearGradient(lxJ - bWallW, 0, lxJ, 0);
+      lGradB.addColorStop(0, `rgba(${acR},${acG},${acB},0)`);
+      lGradB.addColorStop(1, `rgba(${acR},${acG},${acB},${borderAlpha * 0.04})`);
+      ctx.fillStyle = lGradB;
+      ctx.fillRect(lxJ - bWallW, judgeLineY, (lxB - lxJ) + bWallW, bottomY - judgeLineY);
+
+      const rGradB = ctx.createLinearGradient(rxJ, 0, rxJ + bWallW, 0);
+      rGradB.addColorStop(0, `rgba(${acR},${acG},${acB},${borderAlpha * 0.04})`);
+      rGradB.addColorStop(1, `rgba(${acR},${acG},${acB},0)`);
+      ctx.fillStyle = rGradB;
+      ctx.fillRect(rxJ, judgeLineY, (rxB - rxJ) + bWallW, bottomY - judgeLineY);
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
       ctx.restore();
     }
 
