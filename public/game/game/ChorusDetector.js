@@ -1,22 +1,23 @@
 /**
  * ChorusDetector — automatic chorus detection for rhythm game songs.
  *
- * Strategy: note-density-first approach.
- *   1. Compute note density in sliding windows (primary signal)
- *   2. Optionally: compute RMS energy from audio buffer (secondary signal)
- *   3. Combine with adaptive weighting
- *   4. Extract sustained high-intensity regions
- *   5. Filter intro/outro, apply repetition heuristic
+ * Core insight: rhythm game maps have UNIFORM note density throughout.
+ * So note-density thresholds are useless. Instead, use audio energy LOCAL CONTRAST:
+ * a chorus is louder than the verse immediately before/after it.
  *
- * Key insight: in rhythm games, choruses always have the highest note density.
- * Even if audio energy analysis fails, note density alone is reliable.
+ * Algorithm:
+ *  1. Compute RMS energy in short windows (no smoothing — preserve dynamics)
+ *  2. For each window, compute ratio to the average energy in a ±20s surrounding window
+ *  3. Regions where ratio > threshold for sustained periods are chorus candidates
+ *  4. Filter by minimum duration, intro/outro position
+ *  5. Repetition heuristic: choruses repeat with similar duration
  */
 export default class ChorusDetector {
 
   /**
-   * Detect chorus sections from notes (and optionally audio).
+   * Detect chorus sections from audio buffer (and optionally notes).
    *
-   * @param {AudioBuffer|null} audioBuffer - Audio buffer for energy analysis (optional)
+   * @param {AudioBuffer|null} audioBuffer - Audio buffer for energy analysis
    * @param {Array}       notes       - [{ time, lane, type, duration }, ...]
    * @returns {Array<{startTime: number, endTime: number}>}
    */
@@ -24,252 +25,218 @@ export default class ChorusDetector {
     console.log('[ChorusDetector] Starting detection...');
     console.log(`[ChorusDetector] Notes: ${notes?.length || 0}, AudioBuffer: ${audioBuffer ? audioBuffer.duration.toFixed(1) + 's' : 'null'}`);
 
-    if (!notes || notes.length < 10) {
-      console.log('[ChorusDetector] Not enough notes (< 10), skipping');
+    if (!audioBuffer || audioBuffer.duration < 20) {
+      console.log('[ChorusDetector] No audio buffer or song too short, skipping');
       return [];
     }
 
-    // Determine song duration from audio buffer or from notes
-    const dur = audioBuffer ? audioBuffer.duration : (notes[notes.length - 1].time + 3);
-    console.log(`[ChorusDetector] Song duration: ${dur.toFixed(1)}s`);
+    const sr  = audioBuffer.sampleRate;
+    const len = audioBuffer.length;
+    const nch = audioBuffer.numberOfChannels;
+    const dur = audioBuffer.duration;
 
-    if (dur < 20) {
-      console.log('[ChorusDetector] Song too short (< 20s), skipping');
+    // ── 1. Mix down to mono ──
+    const mono = new Float32Array(len);
+    for (let ch = 0; ch < nch; ch++) {
+      const d = new Float32Array(len);
+      audioBuffer.copyFromChannel(d, ch);
+      for (let i = 0; i < len; i++) mono[i] += d[i] / nch;
+    }
+
+    // ── 2. Compute RMS energy in short windows ──
+    // Short windows (0.25s) with small hop (0.1s) to preserve dynamics
+    const WIN_SMP = Math.floor(0.25 * sr);
+    const HOP_SMP = Math.floor(0.1 * sr);
+    const HT = 0.1; // hop time in seconds
+    const N = Math.floor((len - WIN_SMP) / HOP_SMP);
+
+    if (N < 50) {
+      console.log('[ChorusDetector] Too few analysis windows, skipping');
       return [];
     }
 
-    // ── Parameters ──
-    const WIN  = 1.0;   // analysis window (s)
-    const HOP  = 0.5;   // hop (s)
-    const SM   = 4;     // smoothing window (s)
-    const N    = Math.floor((dur - WIN) / HOP);
-
-    if (N < 20) {
-      console.log(`[ChorusDetector] Too few windows (${N}), skipping`);
-      return [];
+    const energy = new Float32Array(N);
+    for (let w = 0; w < N; w++) {
+      const s0 = w * HOP_SMP;
+      const s1 = Math.min(s0 + WIN_SMP, len);
+      let sum = 0;
+      for (let i = s0; i < s1; i++) sum += mono[i] * mono[i];
+      energy[w] = sum / (s1 - s0); // raw power (not sqrt — better dynamic range)
     }
 
-    const smHalf = Math.floor(SM / HOP / 2);
-
-    // ── 1. Note density envelope ──
-    const rawNd = new Float32Array(N);
-    for (const note of notes) {
-      const t0 = note.time;
-      const t1 = note.time + Math.max(note.duration || 0, 0.15);
-      const w0 = Math.max(0, Math.floor(t0 / HOP));
-      const w1 = Math.min(N - 1, Math.floor(t1 / HOP));
-      for (let w = w0; w <= w1; w++) rawNd[w] += 1;
-    }
-
-    // Normalize 0-1
-    let maxNd = 0;
-    for (let w = 0; w < N; w++) if (rawNd[w] > maxNd) maxNd = rawNd[w];
-    if (maxNd <= 0) {
-      console.log('[ChorusDetector] Note density is zero everywhere');
-      return [];
-    }
-    for (let w = 0; w < N; w++) rawNd[w] /= maxNd;
-
-    // Smooth
+    // ── 3. Note density (secondary signal — used to reject quiet instrumental sections) ──
+    let hasNotes = false;
     const noteDensity = new Float32Array(N);
+    if (notes && notes.length > 0) {
+      hasNotes = true;
+      for (const note of notes) {
+        const t0 = note.time;
+        const t1 = note.time + Math.max(note.duration || 0, 0.1);
+        const w0 = Math.max(0, Math.floor(t0 / HT));
+        const w1 = Math.min(N - 1, Math.floor(t1 / HT));
+        for (let w = w0; w <= w1; w++) noteDensity[w] += 1;
+      }
+      // Normalize to 0-1
+      let maxNd = 0;
+      for (let w = 0; w < N; w++) if (noteDensity[w] > maxNd) maxNd = noteDensity[w];
+      if (maxNd > 0) for (let w = 0; w < N; w++) noteDensity[w] /= maxNd;
+    }
+
+    // ── 4. Local contrast: energy relative to surrounding ±20s ──
+    // This is the KEY idea: we find parts that are louder than their immediate context.
+    const RADIUS = Math.floor(20 / HT); // ±20s worth of windows
+    const contrast = new Float32Array(N);
+
+    for (let w = 0; w < N; w++) {
+      const lo = Math.max(0, w - RADIUS);
+      const hi = Math.min(N - 1, w + RADIUS);
+      let localSum = 0, localCnt = 0;
+      for (let s = lo; s <= hi; s++) {
+        localSum += energy[s];
+        localCnt++;
+      }
+      const localAvg = localSum / localCnt;
+      contrast[w] = localAvg > 0 ? energy[w] / localAvg : 0;
+    }
+
+    // ── 5. Smooth the contrast signal slightly (2s rolling average) ──
+    const SM_HALF = Math.floor(2 / HT); // ±2s
+    const smooth = new Float32Array(N);
     for (let w = 0; w < N; w++) {
       let sum = 0, cnt = 0;
-      const lo = Math.max(0, w - smHalf);
-      const hi = Math.min(N - 1, w + smHalf);
-      for (let s = lo; s <= hi; s++) { sum += rawNd[s]; cnt++; }
-      noteDensity[w] = sum / cnt;
+      const lo = Math.max(0, w - SM_HALF);
+      const hi = Math.min(N - 1, w + SM_HALF);
+      for (let s = lo; s <= hi; s++) { sum += contrast[s]; cnt++; }
+      smooth[w] = sum / cnt;
     }
 
-    // ── 2. Audio energy envelope (optional, secondary signal) ──
-    let energy = null;
-    let hasEnergy = false;
+    // ── 6. Adaptive threshold based on contrast distribution ──
+    // We want the top ~25% of contrast values
+    const allContrast = [];
+    for (let w = 0; w < N; w++) allContrast.push(smooth[w]);
+    allContrast.sort((a, b) => a - b);
 
-    if (audioBuffer && audioBuffer.duration >= 10) {
-      try {
-        const sr  = audioBuffer.sampleRate;
-        const len = audioBuffer.length;
-        const nch = audioBuffer.numberOfChannels;
+    const p60 = allContrast[Math.floor(allContrast.length * 0.60)];
+    const p75 = allContrast[Math.floor(allContrast.length * 0.75)];
+    const p90 = allContrast[Math.floor(allContrast.length * 0.90)];
 
-        // Mix down to mono
-        const mono = new Float32Array(len);
-        for (let ch = 0; ch < nch; ch++) {
-          const d = new Float32Array(len);
-          audioBuffer.copyFromChannel(d, ch);
-          for (let i = 0; i < len; i++) mono[i] += d[i] / nch;
-        }
+    // Threshold: must be above p60 AND at least 70% of the way from p60 to p90
+    const dynamicRange = p90 - p60;
+    const threshold = p60 + dynamicRange * 0.3;
 
-        const hopSmp = Math.floor(HOP * sr);
-        const winSmp = Math.floor(WIN * sr);
+    console.log(`[ChorusDetector] Contrast percentiles: p60=${p60.toFixed(3)}, p75=${p75.toFixed(3)}, p90=${p90.toFixed(3)}, range=${dynamicRange.toFixed(3)}, threshold=${threshold.toFixed(3)}`);
 
-        const rawE = new Float32Array(N);
-        for (let w = 0; w < N; w++) {
-          const s0 = w * hopSmp;
-          const s1 = Math.min(s0 + winSmp, len);
-          if (s1 <= s0) continue;
-          let sum = 0;
-          for (let i = s0; i < s1; i++) sum += mono[i] * mono[i];
-          rawE[w] = Math.sqrt(sum / (s1 - s0));
-        }
+    // If dynamic range is too small (uniform energy), lower threshold
+    // This handles songs that are consistently loud
+    const effectiveThreshold = dynamicRange < 0.05
+      ? p75  // very uniform — use 75th percentile
+      : threshold;
 
-        let maxE = 0;
-        for (let w = 0; w < N; w++) if (rawE[w] > maxE) maxE = rawE[w];
-        if (maxE > 0) {
-          for (let w = 0; w < N; w++) rawE[w] /= maxE;
-          energy = new Float32Array(N);
-          for (let w = 0; w < N; w++) {
-            let sum = 0, cnt = 0;
-            const lo = Math.max(0, w - smHalf);
-            const hi = Math.min(N - 1, w + smHalf);
-            for (let s = lo; s <= hi; s++) { sum += rawE[s]; cnt++; }
-            energy[w] = sum / cnt;
-          }
-          hasEnergy = true;
-        }
-      } catch (err) {
-        console.warn('[ChorusDetector] Audio energy analysis failed:', err);
-      }
+    console.log(`[ChorusDetector] Effective threshold: ${effectiveThreshold.toFixed(3)} (dynamicRange=${dynamicRange.toFixed(3)})`);
+
+    // ── 7. Compute note density threshold ──
+    // Choruses should have at least some notes (not instrumental breaks)
+    let ndThreshold = 0;
+    if (hasNotes) {
+      // Median note density — chorus should be at or above this
+      const sortedNd = [...noteDensity].sort((a, b) => a - b);
+      ndThreshold = sortedNd[Math.floor(sortedNd.length * 0.3)] * 0.5;
+      console.log(`[ChorusDetector] Note density threshold: ${ndThreshold.toFixed(3)}`);
     }
 
-    console.log(`[ChorusDetector] Note density: computed, Audio energy: ${hasEnergy ? 'computed' : 'skipped'}`);
-
-    // ── 3. Combine signals ──
-    const score = new Float32Array(N);
-    if (hasEnergy) {
-      // If note density variance is high, trust it more. If uniform, rely on energy.
-      let ndMean = 0;
-      for (let w = 0; w < N; w++) ndMean += noteDensity[w];
-      ndMean /= N;
-      let ndVar = 0;
-      for (let w = 0; w < N; w++) ndVar += (noteDensity[w] - ndMean) ** 2;
-      ndVar /= N;
-
-      // Higher ndVar = note density is discriminative = trust it more
-      const nW = Math.max(0.4, Math.min(0.8, ndVar * 10 + 0.4));
-      const eW = 1 - nW;
-      console.log(`[ChorusDetector] Weights: note=${nW.toFixed(2)}, energy=${eW.toFixed(2)} (ndVar=${ndVar.toFixed(4)})`);
-
-      for (let w = 0; w < N; w++) score[w] = nW * noteDensity[w] + eW * energy[w];
-    } else {
-      // No audio energy — use note density alone (still very reliable for rhythm games)
-      console.log('[ChorusDetector] Using note density only (no audio energy)');
-      for (let w = 0; w < N; w++) score[w] = noteDensity[w];
-    }
-
-    // ── 4. Adaptive threshold ──
-    // Use middle 70% of the song (skip intro and outro)
-    const m0 = Math.floor(N * 0.12);
-    const m1 = Math.floor(N * 0.88);
-    const mid = [];
-    for (let w = m0; w < m1; w++) mid.push(score[w]);
-    mid.sort((a, b) => a - b);
-
-    const p50 = mid[Math.floor(mid.length * 0.50)] || 0.3;
-    const p75 = mid[Math.floor(mid.length * 0.75)] || 0.5;
-    const p90 = mid[Math.floor(mid.length * 0.90)] || 0.7;
-
-    // Threshold: must exceed the median AND be at least 55% of the 90th percentile
-    // This is more lenient than the previous version (was 60th + 65% of 85th)
-    const threshold = Math.max(p50 * 1.15, p90 * 0.55);
-    console.log(`[ChorusDetector] Percentiles: p50=${p50.toFixed(3)}, p75=${p75.toFixed(3)}, p90=${p90.toFixed(3)}, threshold=${threshold.toFixed(3)}`);
-
-    // ── 5. Extract contiguous high-score regions ──
-    const MIN_DUR   = 5;    // minimum chorus duration (s) — was 6, reduced for shorter choruses
-    const MAX_DUR   = 60;
-    const MERGE_GAP = 3;    // merge small dips (s)
+    // ── 8. Extract sustained high-contrast regions ──
+    const MIN_DUR = 5;    // minimum 5 seconds
+    const MAX_DUR = 65;   // maximum 65 seconds
+    const MERGE_GAP = 3;  // merge dips shorter than 3s
 
     const raw = [];
     let active = false, secStart = 0, secSum = 0, secCnt = 0;
 
     for (let w = 0; w < N; w++) {
-      const t = w * HOP;
-      if (score[w] >= threshold) {
+      const t = w * HT;
+      const isChorus = smooth[w] >= effectiveThreshold &&
+        (!hasNotes || noteDensity[w] >= ndThreshold);
+
+      if (isChorus) {
         if (!active) { active = true; secStart = t; secSum = 0; secCnt = 0; }
-        secSum += score[w]; secCnt++;
+        secSum += smooth[w];
+        secCnt++;
       } else if (active) {
-        const gap = t - (secStart + (secCnt - 1) * HOP);
+        const gap = t - (secStart + (secCnt - 1) * HT);
         if (gap < MERGE_GAP) {
-          // Small dip — keep section alive
-          secCnt++; secSum += score[w] * 0.3;
+          // Small dip — keep section alive (reduced weight)
+          secCnt++;
+          secSum += smooth[w] * 0.3;
         } else {
           active = false;
-          raw.push({ startTime: secStart, endTime: secStart + secCnt * HOP, avg: secSum / secCnt });
+          raw.push({
+            startTime: secStart,
+            endTime: secStart + secCnt * HT,
+            avg: secSum / secCnt
+          });
         }
       }
     }
-    if (active) raw.push({ startTime: secStart, endTime: secStart + secCnt * HOP, avg: secSum / secCnt });
+    if (active) {
+      raw.push({
+        startTime: secStart,
+        endTime: secStart + secCnt * HT,
+        avg: secSum / secCnt
+      });
+    }
 
-    console.log(`[ChorusDetector] Raw sections before filtering: ${raw.length}`);
+    console.log(`[ChorusDetector] Raw sections: ${raw.length} (${raw.map(s => (s.endTime - s.startTime).toFixed(1) + 's').join(', ')})`);
 
-    // ── 6. Filter by duration & position ──
+    // ── 9. Filter by duration & position ──
     const introCut = dur * 0.08;
     let sections = raw.filter(s => {
       const d = s.endTime - s.startTime;
       return d >= MIN_DUR && d <= MAX_DUR && s.startTime > introCut;
     });
-    console.log(`[ChorusDetector] After duration filter (>${MIN_DUR}s, <${MAX_DUR}s, after ${introCut.toFixed(1)}s): ${sections.length}`);
+    console.log(`[ChorusDetector] After duration filter: ${sections.length}`);
 
-    // Fallback: if no sections found with current threshold, try a much lower threshold
+    // ── 10. Fallback: if no sections, try much lower threshold ──
     if (sections.length === 0) {
-      console.log('[ChorusDetector] No sections found — trying relaxed threshold');
-      const relaxedThreshold = Math.max(p50 * 0.85, p75 * 0.5);
-      console.log(`[ChorusDetector] Relaxed threshold: ${relaxedThreshold.toFixed(3)} (was ${threshold.toFixed(3)})`);
+      console.log('[ChorusDetector] No sections — trying lower threshold');
+      const lowThreshold = p60 * 1.02; // barely above median
 
       const raw2 = [];
       active = false; secStart = 0; secSum = 0; secCnt = 0;
       for (let w = 0; w < N; w++) {
-        const t = w * HOP;
-        if (score[w] >= relaxedThreshold) {
+        const t = w * HT;
+        const isChorus = smooth[w] >= lowThreshold &&
+          (!hasNotes || noteDensity[w] >= ndThreshold * 0.3);
+
+        if (isChorus) {
           if (!active) { active = true; secStart = t; secSum = 0; secCnt = 0; }
-          secSum += score[w]; secCnt++;
+          secSum += smooth[w]; secCnt++;
         } else if (active) {
-          const gap = t - (secStart + (secCnt - 1) * HOP);
-          if (gap < MERGE_GAP) {
-            secCnt++; secSum += score[w] * 0.3;
+          const gap = t - (secStart + (secCnt - 1) * HT);
+          if (gap < MERGE_GAP * 1.5) {
+            secCnt++; secSum += smooth[w] * 0.2;
           } else {
             active = false;
-            raw2.push({ startTime: secStart, endTime: secStart + secCnt * HOP, avg: secSum / secCnt });
+            raw2.push({ startTime: secStart, endTime: secStart + secCnt * HT, avg: secSum / secCnt });
           }
         }
       }
-      if (active) raw2.push({ startTime: secStart, endTime: secStart + secCnt * HOP, avg: secSum / secCnt });
+      if (active) raw2.push({ startTime: secStart, endTime: secStart + secCnt * HT, avg: secSum / secCnt });
 
       sections = raw2.filter(s => {
         const d = s.endTime - s.startTime;
         return d >= MIN_DUR && d <= MAX_DUR && s.startTime > introCut;
       });
-      console.log(`[ChorusDetector] After relaxed filter: ${sections.length} sections`);
-    }
+      console.log(`[ChorusDetector] Fallback sections: ${sections.length}`);
 
-    // Second fallback: just find the highest density peaks even with very low threshold
-    if (sections.length === 0) {
-      console.log('[ChorusDetector] Still no sections — finding density peaks as absolute fallback');
-      const MIN_DUR_FB = 4; // even shorter
-      const minThreshold = p50 * 0.7;
-
-      const raw3 = [];
-      active = false; secStart = 0; secSum = 0; secCnt = 0;
-      for (let w = 0; w < N; w++) {
-        const t = w * HOP;
-        if (score[w] >= minThreshold) {
-          if (!active) { active = true; secStart = t; secSum = 0; secCnt = 0; }
-          secSum += score[w]; secCnt++;
-        } else if (active) {
-          const gap = t - (secStart + (secCnt - 1) * HOP);
-          if (gap < MERGE_GAP) {
-            secCnt++; secSum += score[w] * 0.2;
-          } else {
-            active = false;
-            raw3.push({ startTime: secStart, endTime: secStart + secCnt * HOP, avg: secSum / secCnt });
-          }
+      // If still nothing, take the longest raw section regardless of threshold
+      if (sections.length === 0 && raw2.length > 0) {
+        raw2.sort((a, b) => (b.endTime - b.startTime) - (a.endTime - a.startTime));
+        const best = raw2[0];
+        if (best.endTime - best.startTime >= 3) {
+          sections = [best];
+          console.log(`[ChorusDetector] Using longest section as fallback: ${(best.endTime - best.startTime).toFixed(1)}s`);
         }
       }
-      if (active) raw3.push({ startTime: secStart, endTime: secStart + secCnt * HOP, avg: secSum / secCnt });
-
-      sections = raw3.filter(s => {
-        const d = s.endTime - s.startTime;
-        return d >= MIN_DUR_FB && d <= MAX_DUR && s.startTime > introCut;
-      });
-      console.log(`[ChorusDetector] Absolute fallback: ${sections.length} sections`);
     }
 
     if (sections.length === 0) {
@@ -277,20 +244,19 @@ export default class ChorusDetector {
       return [];
     }
 
-    // Keep top candidates by average score
+    // ── 11. Keep top candidates by contrast score ──
     sections.sort((a, b) => b.avg - a.avg);
     if (sections.length > 6) sections = sections.slice(0, 6);
 
-    // ── 7. Repetition heuristic ──
+    // ── 12. Repetition heuristic ──
     if (sections.length >= 2) {
       const avgDur = sections.reduce((s, sec) => s + (sec.endTime - sec.startTime), 0) / sections.length;
-      // Filter sections whose duration is within 30-250% of average
       const before = sections.length;
       sections = sections.filter(s => {
         const d = s.endTime - s.startTime;
         return d >= avgDur * 0.3 && d <= avgDur * 2.5;
       });
-      console.log(`[ChorusDetector] Repetition filter: ${before} → ${sections.length} (avgDur=${avgDur.toFixed(1)}s)`);
+      console.log(`[ChorusDetector] Repetition filter: ${before} → ${sections.length}`);
     }
 
     if (sections.length === 0) {
@@ -298,7 +264,7 @@ export default class ChorusDetector {
       return [];
     }
 
-    // Final sort by time, add small padding
+    // Final sort by time, add padding
     sections.sort((a, b) => a.startTime - b.startTime);
     const PAD = 0.5;
 
