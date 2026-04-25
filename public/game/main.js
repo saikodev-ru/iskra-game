@@ -333,14 +333,15 @@ async function boot() {
           hud.setProgress(Math.min(1, ct / audioDuration));
         }
 
-        // End map when audio finishes (or health depleted)
+        // End map when audio finishes
         const songFinished = !audio.isPlaying || (audioDuration > 0 && ct >= audioDuration - 0.1);
         if (songFinished) {
           // Don't end if audio hasn't actually started yet
           if (ct > 0.5) endGame();
+          return; // Prevent death check from running in same frame after endGame()
         }
         // Death: HP depleted — start death sequence (once only)
-        if (stats.health <= 0 && !_dying) {
+        if (gameActive && stats.health <= 0 && !_dying) {
           _dying = true;
           currentJudgement._died = true; // Force D rank
           if (hitSounds) hitSounds.fail();
@@ -437,6 +438,8 @@ async function boot() {
       if (_skipResult) { _skipResult = false; return; }
       screens.show('result', { stats, map: currentMapData });
     });
+    // Safety: ensure death timeout is always cleared (belt-and-suspenders)
+    if (_deathTimeout) { clearTimeout(_deathTimeout); _deathTimeout = null; }
   };
 
   let _pauseOverlay = null;
