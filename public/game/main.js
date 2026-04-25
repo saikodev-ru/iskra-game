@@ -175,6 +175,7 @@ async function boot() {
     if (gameActive) { _skipResult = true; endGame(); }
     _dying = false;
     if (_deathTimeout) { clearTimeout(_deathTimeout); _deathTimeout = null; }
+    GameCursor.hide(); // Hide cursor during gameplay
     initAudio();
 
     // Restore HUD and judgement container opacity (hidden during song-select transition)
@@ -212,6 +213,10 @@ async function boot() {
     const scrollSpeed = parseInt(localStorage.getItem('rhythm-os-scroll-speed') || '400');
     noteRenderer.scrollSpeed = scrollSpeed;
     noteRenderer.resize();
+
+    // Hide screen container during gameplay — prevents stale menu overlays from showing
+    const screenContainer = document.getElementById('screen');
+    if (screenContainer) { screenContainer.style.opacity = '0'; screenContainer.style.visibility = 'hidden'; }
 
     // Clear previous background state
     noteRenderer.clearBackground();
@@ -509,6 +514,9 @@ async function boot() {
       } catch (_) {}
     }
     _quitGame = false; // Reset flag
+    // Restore screen container for menus
+    const screenEl = document.getElementById('screen');
+    if (screenEl) { screenEl.style.opacity = ''; screenEl.style.visibility = ''; }
     GameCursor.show(); // Show custom cursor back on menus
     EventBus.emit('game:over', stats);
     // Use a small delay to ensure ScreenManager transition completes
@@ -554,6 +562,7 @@ async function boot() {
     document.body.appendChild(overlay);
     _pauseOverlay = overlay;
     _deadPause = noResume;
+    GameCursor.show(); // Show cursor to interact with pause buttons
 
     if (!noResume) {
       document.getElementById('resume-btn').addEventListener('click', () => { _closePause(); resumeGame(); });
@@ -630,8 +639,9 @@ async function boot() {
   };
 
   EventBus.on('settings:open-overlay', () => {
+    // Don't open main-menu context settings overlay during gameplay or pause
+    if (gameActive || _pauseOverlay) return;
     const settings = new Settings({ audio, input, screens, overlayMode: true });
-    // No _onClose — Settings._closeOverlay will use screens._closeOverlay (main menu context)
     screens._showOverlay(settings);
   });
 

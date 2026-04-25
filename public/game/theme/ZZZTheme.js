@@ -144,69 +144,75 @@ body.zzz-active::before {
 
 .zzz-btn--sm { padding: 8px 20px; font-size: 12px; }
 
-/* JUDGEMENT — ultra bold, stylish */
+/* JUDGEMENT — gradient text with subtle behind-glow and perspective tilt */
 .judgement-text {
   font-family: var(--zzz-font);
   font-weight: 900;
   font-size: 52px;
   text-transform: uppercase;
   letter-spacing: 0.22em;
-  text-shadow:
-    0 0 20px currentColor,
-    0 0 40px currentColor,
-    0 3px 0 #000,
-    0 6px 0 #000,
-    -2px -2px 0 #000,
-    2px -2px 0 #000,
-    -2px 2px 0 #000,
-    2px 2px 0 #000;
+  text-shadow: none;
   pointer-events: none; user-select: none;
   position: absolute;
   left: 50%; top: 45%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) perspective(800px) rotateX(-4deg);
   white-space: nowrap;
-  -webkit-text-stroke: 1.5px rgba(255,255,255,0.15);
+  -webkit-text-stroke: 1px rgba(255,255,255,0.08);
   paint-order: stroke fill;
 }
 
 .judgement--perfect {
   color: transparent;
   -webkit-text-fill-color: transparent;
-  background: var(--gg-grad, linear-gradient(180deg, #FDA4AF, #67E8F9));
+  background: linear-gradient(135deg, #FF6B9D 0%, #FDA4AF 20%, #E0B0FF 40%, #A5B4FC 60%, #67E8F9 80%, #A5F3FC 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  text-shadow: none;
-  -webkit-text-stroke: 2px rgba(253,164,175,0.25);
+  -webkit-text-stroke: 1.5px rgba(253,164,175,0.15);
   filter:
-    drop-shadow(0 0 6px rgba(253,164,175,0.8))
-    drop-shadow(0 0 18px rgba(103,232,249,0.5))
-    drop-shadow(0 2px 0 rgba(0,0,0,0.9))
-    drop-shadow(0 5px 0 rgba(0,0,0,0.5));
+    drop-shadow(0 0 10px rgba(253,164,175,0.55))
+    drop-shadow(0 0 25px rgba(103,232,249,0.35))
+    drop-shadow(0 0 50px rgba(165,180,252,0.15));
 }
 .judgement--great   {
-  color: #00E5FF;
-  text-shadow: 0 0 12px rgba(0,229,255,0.5), 0 0 30px rgba(0,229,255,0.2), 0 3px 0 #000, 0 6px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: linear-gradient(135deg, #00E5FF 0%, #7AFFFF 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 8px rgba(0,229,255,0.35)) drop-shadow(0 0 20px rgba(0,229,255,0.15));
 }
 .judgement--good    {
-  color: #F5C518;
-  text-shadow: 0 0 10px rgba(245,197,24,0.4), 0 0 24px rgba(245,197,24,0.15), 0 3px 0 #000, 0 6px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: linear-gradient(135deg, #F5C518 0%, #FFE066 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 6px rgba(245,197,24,0.3)) drop-shadow(0 0 16px rgba(245,197,24,0.12));
 }
 .judgement--bad     {
-  color: #FF8C00;
-  text-shadow: 0 0 8px rgba(255,140,0,0.4), 0 3px 0 #000, 0 6px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: linear-gradient(135deg, #FF8C00 0%, #FFB86C 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 5px rgba(255,140,0,0.3)) drop-shadow(0 0 14px rgba(255,140,0,0.1));
 }
 .judgement--miss    {
-  color: #FF3D3D;
-  text-shadow: 0 0 12px rgba(255,61,61,0.5), 0 0 28px rgba(255,61,61,0.2), 0 3px 0 #000, 0 6px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: linear-gradient(135deg, #FF3D3D 0%, #FF8080 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 6px rgba(255,61,61,0.35)) drop-shadow(0 0 18px rgba(255,61,61,0.12));
 }
 
 @keyframes judge-in  { 
-  from { transform: translate(-50%, -50%) scale(1.8); opacity:0; } 
-  to   { transform: translate(-50%, -50%) scale(1); opacity:1; } 
+  from { transform: translate(-50%, -50%) perspective(800px) rotateX(-4deg) scale(1.8); opacity:0; } 
+  to   { transform: translate(-50%, -50%) perspective(800px) rotateX(-4deg) scale(1); opacity:1; } 
 }
 @keyframes judge-out { 
-  from { opacity:1; transform: translate(-50%, -50%) scale(1); } 
-  to   { opacity:0; transform: translate(-50%, -50%) translateY(-20px) scale(0.9); } 
+  from { opacity:1; transform: translate(-50%, -50%) perspective(800px) rotateX(-4deg) scale(1); } 
+  to   { opacity:0; transform: translate(-50%, -50%) perspective(800px) rotateX(-4deg) translateY(-20px) scale(0.9); } 
 }
 .judgement--in  { animation: judge-in  0.06s cubic-bezier(0.22,1,0.36,1) forwards; }
 .judgement--out { animation: judge-out 0.22s ease-in forwards; }

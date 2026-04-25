@@ -821,7 +821,9 @@ export default class NoteRenderer {
     const flamePulse = pulse * 16;
     const flameH = (flameBase + flamePulse) * intensity;
 
-    // 2 flame layers instead of 3
+    // 2 flame layers — clipped to playfield shape for perspective-correct rendering
+    ctx.save();
+    pfPath(); ctx.clip();
     for (let layer = 0; layer < 2; layer++) {
       const layerPhase = this._kiaiFlamePhase * (4 + layer * 3) + layer * 2.1;
       const layerNoise = Math.sin(layerPhase) * 0.3 + 0.5;
@@ -857,7 +859,7 @@ export default class NoteRenderer {
       ctx.restore();
     }
 
-    // Judge line hot glow — compact
+    // Judge line hot glow — clipped to playfield
     const hotH = 5 + pulse * 8;
     const hotA = intensity * 0.5 + pulse * 0.25;
     const hotGrad = ctx.createLinearGradient(judgeCX, judgeLineY - hotH, judgeCX, judgeLineY + hotH);
@@ -870,6 +872,7 @@ export default class NoteRenderer {
     ctx.fillStyle = hotGrad;
     ctx.fillRect(lxJ - 6, judgeLineY - hotH, judgeWidth + 12, hotH * 2);
     ctx.restore();
+    ctx.restore(); // end pfPath clip
   }
 
   /* ── Beat Lines — horizontal timing markers per beat ── */
