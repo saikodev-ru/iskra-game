@@ -854,18 +854,17 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 
 .result-screen {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  height: 100%; gap: 16px; padding: 20px; overflow-y: auto;
+  height: 100%; gap: 14px; padding: 16px 20px; overflow-y: auto;
 }
 .result-screen > * {
   opacity: 0; animation: result-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 .result-screen > *:nth-child(1) { animation-delay: 0.05s; }
-.result-screen > *:nth-child(2) { animation-delay: 0.12s; }
-.result-screen > *:nth-child(3) { animation-delay: 0.2s; }
-.result-screen > *:nth-child(4) { animation-delay: 0.28s; }
-.result-screen > *:nth-child(5) { animation-delay: 0.36s; }
-.result-screen > *:nth-child(6) { animation-delay: 0.44s; }
-.result-screen > *:nth-child(7) { animation-delay: 0.52s; }
+.result-screen > *:nth-child(2) { animation-delay: 0.15s; }
+.result-screen > *:nth-child(3) { animation-delay: 0.25s; }
+.result-screen > *:nth-child(4) { animation-delay: 0.32s; }
+.result-screen > *:nth-child(5) { animation-delay: 0.4s; }
+.result-screen > *:nth-child(6) { animation-delay: 0.48s; }
 
 /* Death result — red tint, glitched entrance */
 .result-screen--death > * {
@@ -895,18 +894,18 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   background: linear-gradient(90deg, transparent, rgba(255,61,61,0.2), transparent);
 }
 
-.result-grade {
-  font-family: var(--zzz-font); font-weight: 900; font-size: 140px;
-  line-height: 1; letter-spacing: 0.08em;
-  transform: rotate(-25deg);
-}
-
+/* ── SONG INFO ── */
 .result-song-info {
-  text-align: center; margin-bottom: -4px;
+  text-align: center;
 }
 .result-song-title {
   font-family: var(--zzz-font); font-weight: 900; font-size: 15px;
   color: var(--zzz-text); text-transform: uppercase; letter-spacing: 0.06em;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+}
+.result-song-artist {
+  font-family: var(--zzz-font); font-weight: 500; font-size: 11px;
+  color: rgba(255,255,255,0.35); letter-spacing: 0.04em; margin-top: 1px;
   text-shadow: 0 2px 8px rgba(0,0,0,0.8);
 }
 .result-song-diff {
@@ -915,9 +914,79 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   margin-top: 2px;
 }
 
+/* ── RANK CARDS (horizontal, X → D) ── */
+.rc-rank-cards {
+  display: flex; gap: 8px; justify-content: center; align-items: stretch;
+}
+.rc-rank-card {
+  flex: 1; max-width: 100px; min-width: 52px;
+  background: rgba(17, 17, 17, 0.5);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 16px;
+  padding: 14px 4px 12px;
+  text-align: center;
+  position: relative; overflow: hidden;
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  animation: rc-rank-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--rc-rank-delay, 0s);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
+}
+.rc-rank-card:hover {
+  transform: translateY(-3px);
+}
+@keyframes rc-rank-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Active rank card — highlighted, scaled up, glowing */
+.rc-rank-card--active {
+  background: rgba(25, 25, 25, 0.85);
+  border-color: var(--rc-rank-solid, #fff);
+  box-shadow:
+    0 0 20px var(--rc-rank-glow, rgba(255,255,255,0.2)),
+    0 0 40px var(--rc-rank-glow, rgba(255,255,255,0.1)),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+  transform: scale(1.08) translateY(-2px);
+  z-index: 2;
+}
+.rc-rank-card--active::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--rc-rank-bg, #fff);
+  opacity: 0.8;
+}
+.rc-rank-card--active::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(180deg, var(--rc-rank-solid, #fff) 0%, transparent 40%);
+  opacity: 0.06; pointer-events: none;
+}
+.rc-rank-card-letter {
+  font-family: var(--zzz-font); font-weight: 900; font-size: 36px;
+  line-height: 1; letter-spacing: 0.04em;
+  filter: drop-shadow(0 0 6px var(--rc-rank-glow, rgba(255,255,255,0.3)));
+}
+.rc-rank-card--active .rc-rank-card-letter {
+  font-size: 44px;
+  filter: drop-shadow(0 0 12px var(--rc-rank-glow, rgba(255,255,255,0.5)));
+}
+/* Inactive rank card — muted */
+.rc-rank-card:not(.rc-rank-card--active) {
+  opacity: 0; /* overridden by animation */
+}
+.rc-rank-card:not(.rc-rank-card--active) .rc-rank-card-letter {
+  opacity: 0.25;
+  filter: grayscale(0.6) brightness(0.6);
+  font-size: 32px;
+}
+
+/* ── SCORE PANELS ── */
+.result-main-stats {
+  display: flex; gap: 12px; width: 100%; max-width: 480px; justify-content: center;
+}
 .result-score-panel {
+  flex: 1;
   background: rgba(17, 17, 17, 0.7); border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 20px; padding: 20px 48px; text-align: center;
+  border-radius: 20px; padding: 16px 24px; text-align: center;
   backdrop-filter: blur(16px); position: relative; overflow: hidden;
 }
 .result-score-panel::before {
@@ -925,50 +994,47 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
 }
 .result-score-label {
-  font-family: var(--zzz-font); font-weight: 600; font-size: 10px;
+  font-family: var(--zzz-font); font-weight: 600; font-size: 9px;
   color: var(--zzz-muted); letter-spacing: 0.2em; text-transform: uppercase;
   margin-bottom: 4px;
 }
 .result-score-value {
-  font-family: var(--zzz-font); font-weight: 900; font-size: 42px;
+  font-family: var(--zzz-font); font-weight: 900; font-size: 36px;
   color: #ffffff; font-variant-numeric: tabular-nums; line-height: 1.1;
   text-shadow: 0 0 30px rgba(255,255,255,0.12), 0 2px 12px rgba(0,0,0,0.9);
 }
 
-.result-stats-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-  width: 100%; max-width: 480px;
+/* ── SECONDARY STATS (pills) ── */
+.result-secondary-stats {
+  display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
 }
-.result-stat-card {
-  background: rgba(17, 17, 17, 0.6); border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 16px; padding: 14px 12px; text-align: center;
-  backdrop-filter: blur(12px); position: relative; overflow: hidden;
+.result-stat-pill {
+  background: rgba(17, 17, 17, 0.5);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 9999px; padding: 8px 20px;
+  text-align: center; backdrop-filter: blur(8px);
 }
-.result-stat-card::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+.result-stat-pill-label {
+  font-family: var(--zzz-font); font-weight: 700; font-size: 8px;
+  color: var(--zzz-muted); letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 2px;
 }
-.result-stat-label {
-  font-family: var(--zzz-font); font-weight: 700; font-size: 9px;
-  color: var(--zzz-muted); letter-spacing: 0.15em; text-transform: uppercase;
-  margin-bottom: 6px;
-}
-.result-stat-value {
-  font-family: var(--zzz-font); font-weight: 800; font-size: 22px;
-  font-variant-numeric: tabular-nums; line-height: 1;
+.result-stat-pill-value {
+  font-family: var(--zzz-font); font-weight: 900; font-size: 18px;
+  font-variant-numeric: tabular-nums; line-height: 1; color: var(--zzz-text);
 }
 
 /* ── JUDGMENT CARDS (horizontal layout, best → worst) ── */
 .rc-judge-cards {
-  display: flex; gap: 8px; width: 100%; max-width: 560px;
+  display: flex; gap: 6px; width: 100%; max-width: 560px;
   justify-content: center; flex-wrap: wrap;
 }
 .rc-judge-card {
-  flex: 1; min-width: 70px; max-width: 110px;
+  flex: 1; min-width: 60px; max-width: 100px;
   background: rgba(17, 17, 17, 0.6);
   border: 1px solid rgba(255,255,255,0.05);
   border-radius: 14px;
-  padding: 12px 8px 10px;
+  padding: 10px 6px 8px;
   text-align: center;
   position: relative; overflow: hidden;
   backdrop-filter: blur(12px);
@@ -991,24 +1057,24 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   opacity: 0.03; pointer-events: none;
 }
 .rc-judge-card-label {
-  font-family: var(--zzz-font); font-weight: 700; font-size: 8px;
+  font-family: var(--zzz-font); font-weight: 700; font-size: 7px;
   color: var(--zzz-muted); letter-spacing: 0.1em; text-transform: uppercase;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 .rc-judge-card-value {
-  font-family: var(--zzz-font); font-weight: 900; font-size: 22px;
+  font-family: var(--zzz-font); font-weight: 900; font-size: 20px;
   color: var(--rc-jc-color, #fff); line-height: 1;
   font-variant-numeric: tabular-nums;
   text-shadow: 0 0 10px var(--rc-jc-color, #fff);
 }
 .rc-judge-card-pct {
-  font-family: var(--zzz-mono); font-weight: 600; font-size: 9px;
-  color: rgba(255,255,255,0.3); margin-top: 2px;
+  font-family: var(--zzz-mono); font-weight: 600; font-size: 8px;
+  color: rgba(255,255,255,0.3); margin-top: 1px;
 }
 .rc-judge-card-bar-track {
   height: 3px; border-radius: 2px; overflow: hidden;
   background: rgba(255,255,255,0.04);
-  margin-top: 8px;
+  margin-top: 6px;
 }
 .rc-judge-card-bar-fill {
   height: 100%; border-radius: 2px; width: 0%;
@@ -1017,24 +1083,14 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
   box-shadow: 0 0 6px var(--rc-jc-color, #fff);
 }
-.rc-judge-card-bar-fill--sb {
-  background: repeating-linear-gradient(90deg, #FF8C00, #FF8C00 4px, transparent 4px, transparent 8px);
-  box-shadow: none;
-  opacity: 0.5;
-}
-.rc-judge-card--sb {
-  border-color: rgba(255,140,0,0.1);
-}
-.rc-judge-card--sb::before {
-  background: #FF8C00; opacity: 0.3;
-}
 
+/* ── BUTTONS ── */
 .result-buttons {
   display: flex; gap: 12px; margin-top: 4px;
 }
 .result-btn {
   font-family: var(--zzz-font); font-weight: 800; text-transform: uppercase;
-  letter-spacing: 0.06em; padding: 14px 36px; border-radius: 9999px;
+  letter-spacing: 0.06em; padding: 12px 32px; border-radius: 9999px;
   cursor: pointer; font-size: 13px; transition: all 0.2s;
   border: 2px solid var(--zzz-graphite); background: rgba(17,17,17,0.8);
   color: var(--zzz-text); backdrop-filter: blur(8px);
@@ -1059,19 +1115,22 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   box-shadow: 0 4px 24px rgba(170,255,0,0.4);
 }
 
+/* ── RESPONSIVE ── */
 @media (max-width: 768px) {
-  .result-grade { font-size: 100px; }
-  .result-score-value { font-size: 32px; }
-  .result-score-panel { padding: 16px 28px; }
-  .result-stats-grid { gap: 8px; }
-  .result-stat-card { padding: 10px 8px; }
-  .result-stat-value { font-size: 18px; }
-  .rc-judge-cards { gap: 6px; max-width: 100%; }
-  .rc-judge-card { min-width: 56px; max-width: 80px; padding: 10px 6px 8px; border-radius: 12px; }
-  .rc-judge-card-value { font-size: 18px; }
-  .rc-judge-card-label { font-size: 7px; }
+  .result-score-value { font-size: 28px; }
+  .result-score-panel { padding: 12px 16px; border-radius: 16px; }
+  .rc-rank-cards { gap: 5px; }
+  .rc-rank-card { min-width: 40px; max-width: 72px; padding: 10px 2px 8px; border-radius: 12px; }
+  .rc-rank-card-letter { font-size: 28px; }
+  .rc-rank-card--active .rc-rank-card-letter { font-size: 34px; }
+  .rc-judge-cards { gap: 4px; max-width: 100%; }
+  .rc-judge-card { min-width: 48px; max-width: 72px; padding: 8px 4px 6px; border-radius: 10px; }
+  .rc-judge-card-value { font-size: 16px; }
+  .rc-judge-card-label { font-size: 6px; }
+  .result-stat-pill { padding: 6px 14px; }
+  .result-stat-pill-value { font-size: 15px; }
   .result-buttons { gap: 8px; }
-  .result-btn { padding: 12px 24px; font-size: 12px; }
+  .result-btn { padding: 10px 20px; font-size: 12px; }
 }
 
 /* ── GRADE GRADIENT (two-element approach) ──── */

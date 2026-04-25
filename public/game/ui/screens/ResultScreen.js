@@ -1,11 +1,13 @@
 const GRADE_GRADIENTS = {
-  X:  { bg: 'linear-gradient(180deg, #FFD700 0%, #FFA500 100%)', glow: 'rgba(255,215,0,0.5)', stroke: 'rgba(0,0,0,0.8)' },
-  S:  { bg: 'linear-gradient(180deg, #FDE68A 0%, #F97316 100%)', glow: 'rgba(253,230,138,0.4)', stroke: 'rgba(0,0,0,0.75)' },
-  A:  { bg: 'linear-gradient(180deg, #86EFAC 0%, #22D3EE 100%)', glow: 'rgba(134,239,172,0.35)', stroke: 'rgba(0,0,0,0.75)' },
-  B:  { bg: 'linear-gradient(180deg, #60A5FA 0%, #A855F7 100%)', glow: 'rgba(96,165,250,0.35)', stroke: 'rgba(0,0,0,0.75)' },
-  C:  { bg: 'linear-gradient(180deg, #C4B5FD 0%, #991B1B 100%)', glow: 'rgba(196,181,253,0.3)', stroke: 'rgba(0,0,0,0.8)' },
-  D:  { bg: 'linear-gradient(180deg, #EF4444 0%, #7F1D1D 100%)', glow: 'rgba(239,68,68,0.35)', stroke: 'rgba(0,0,0,0.85)' },
+  X:  { bg: 'linear-gradient(180deg, #FFD700 0%, #FFA500 100%)', glow: 'rgba(255,215,0,0.5)', stroke: 'rgba(0,0,0,0.8)', bgSolid: '#FFA500' },
+  S:  { bg: 'linear-gradient(180deg, #FDE68A 0%, #F97316 100%)', glow: 'rgba(253,230,138,0.4)', stroke: 'rgba(0,0,0,0.75)', bgSolid: '#F97316' },
+  A:  { bg: 'linear-gradient(180deg, #86EFAC 0%, #22D3EE 100%)', glow: 'rgba(134,239,172,0.35)', stroke: 'rgba(0,0,0,0.75)', bgSolid: '#22D3EE' },
+  B:  { bg: 'linear-gradient(180deg, #60A5FA 0%, #A855F7 100%)', glow: 'rgba(96,165,250,0.35)', stroke: 'rgba(0,0,0,0.75)', bgSolid: '#A855F7' },
+  C:  { bg: 'linear-gradient(180deg, #C4B5FD 0%, #991B1B 100%)', glow: 'rgba(196,181,253,0.3)', stroke: 'rgba(0,0,0,0.8)', bgSolid: '#991B1B' },
+  D:  { bg: 'linear-gradient(180deg, #EF4444 0%, #7F1D1D 100%)', glow: 'rgba(239,68,68,0.35)', stroke: 'rgba(0,0,0,0.85)', bgSolid: '#EF4444' },
 };
+
+const RANK_ORDER = ['X', 'S', 'A', 'B', 'C', 'D'];
 
 const JUDGE_CARDS = [
   { key: 'perfect', label: 'PERFECT', color: '#AAFF00' },
@@ -25,13 +27,24 @@ export default class ResultScreen {
     const grade = GRADE_GRADIENTS[s.rank] || GRADE_GRADIENTS.D;
     const isDeath = !!s.died;
 
-    // Song info
     const songTitle = meta.title || 'Unknown';
     const songArtist = meta.artist || '';
     const songDiff = meta.version || meta.difficulty || '';
-
-    // Judgment counts
     const total = s.totalNotes || Math.max(1, Object.values(s.hitCounts).reduce((a, b) => a + b, 0));
+
+    // Build horizontal rank cards (X → D, best to worst)
+    const rankCardsHTML = RANK_ORDER.map((rank, idx) => {
+      const rg = GRADE_GRADIENTS[rank];
+      const isActive = rank === s.rank;
+      return `
+        <div class="rc-rank-card ${isActive ? 'rc-rank-card--active' : ''}"
+             style="--rc-rank-bg: ${rg.bg}; --rc-rank-glow: ${rg.glow}; --rc-rank-solid: ${rg.bgSolid}; --rc-rank-delay: ${idx * 0.07}s;">
+          <div class="rc-rank-card-letter grade-gradient" style="--gg-grad: ${rg.bg}; --gg-stroke: ${isActive ? '3px rgba(0,0,0,0.6)' : '2px rgba(0,0,0,0.4)'};">
+            ${rank}<span class="gg-fill">${rank}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
 
     // Build horizontal judgment cards (best to worst)
     const judgeCardsHTML = JUDGE_CARDS.map((jc, idx) => {
@@ -50,12 +63,8 @@ export default class ResultScreen {
       `;
     }).join('');
 
-    // Death-specific header
-    const deathHeader = isDeath ? `
-      <div class="rc-death-label">FAILED</div>
-    ` : '';
+    const deathHeader = isDeath ? `<div class="rc-death-label">FAILED</div>` : '';
 
-    // SB card if any slider breaks
     const sbCard = s.sliderBreaks > 0 ? `
       <div class="rc-judge-card rc-judge-card--sb" style="--rc-jc-color: #FF8C00; --rc-jc-delay: ${JUDGE_CARDS.length * 0.08}s;">
         <div class="rc-judge-card-label">SB</div>
@@ -74,42 +83,48 @@ export default class ResultScreen {
         <div class="result-song-info">
           ${deathHeader}
           <div class="result-song-title">${songTitle}</div>
-          ${songArtist ? `<div style="font-family:var(--zzz-font);font-weight:500;font-size:11px;color:rgba(255,255,255,0.35);letter-spacing:0.04em;margin-top:1px;text-shadow:0 2px 8px rgba(0,0,0,0.8);">${songArtist}</div>` : ''}
+          ${songArtist ? `<div class="result-song-artist">${songArtist}</div>` : ''}
           ${songDiff ? `<div class="result-song-diff">${songDiff}</div>` : ''}
         </div>
 
-        <!-- Grade letter -->
-        <div class="result-grade grade-gradient"
-             style="--gg-grad: ${grade.bg}; --gg-stroke: 4px rgba(0,0,0,0.55);transform:rotate(-25deg);">
-          ${s.rank}<span class="gg-fill">${s.rank}</span>
+        <!-- Horizontal rank cards (X → D) -->
+        <div class="rc-rank-cards">
+          ${rankCardsHTML}
         </div>
 
-        <!-- Score -->
-        <div class="result-score-panel ${isDeath ? 'result-score-panel--death' : ''}">
-          <div class="result-score-label">SCORE</div>
-          <div class="result-score-value">${s.score.toLocaleString()}</div>
+        <!-- Score + Accuracy row -->
+        <div class="result-main-stats">
+          <div class="result-score-panel ${isDeath ? 'result-score-panel--death' : ''}">
+            <div class="result-score-label">SCORE</div>
+            <div class="result-score-value">${s.score.toLocaleString()}</div>
+          </div>
+          <div class="result-score-panel ${isDeath ? 'result-score-panel--death' : ''}">
+            <div class="result-score-label">ACCURACY</div>
+            <div class="result-score-value" style="color:${isDeath ? '#FF3D3D' : 'var(--zzz-lime)'}; font-size:32px;">${s.accuracy.toFixed(2)}%</div>
+          </div>
         </div>
 
-        <!-- Stats grid -->
-        <div class="result-stats-grid">
-          <div class="result-stat-card">
-            <div class="result-stat-label">ACCURACY</div>
-            <div class="result-stat-value" style="color:${isDeath ? '#FF3D3D' : 'var(--zzz-lime)'};">${s.accuracy.toFixed(2)}%</div>
+        <!-- Combo + Notes row -->
+        <div class="result-secondary-stats">
+          <div class="result-stat-pill">
+            <div class="result-stat-pill-label">MAX COMBO</div>
+            <div class="result-stat-pill-value" style="color:var(--zzz-yellow);">${s.maxCombo}<span style="font-size:12px;opacity:0.6;">x</span></div>
           </div>
-          <div class="result-stat-card">
-            <div class="result-stat-label">MAX COMBO</div>
-            <div class="result-stat-value" style="color:var(--zzz-yellow);">${s.maxCombo}<span style="font-size:14px;opacity:0.6;">x</span></div>
+          <div class="result-stat-pill">
+            <div class="result-stat-pill-label">NOTES</div>
+            <div class="result-stat-pill-value">${total}</div>
           </div>
-          <div class="result-stat-card">
-            <div class="result-stat-label">NOTES</div>
-            <div class="result-stat-value" style="color:var(--zzz-text);">${total}</div>
-          </div>
+          ${s.sliderBreaks > 0 ? `
+            <div class="result-stat-pill">
+              <div class="result-stat-pill-label">SLIDER BREAKS</div>
+              <div class="result-stat-pill-value" style="color:#FF8C00;">${s.sliderBreaks}</div>
+            </div>
+          ` : ''}
         </div>
 
         <!-- Judgment cards — horizontal, best to worst -->
         <div class="rc-judge-cards">
           ${judgeCardsHTML}
-          ${sbCard}
         </div>
 
         <!-- Buttons -->
@@ -125,7 +140,6 @@ export default class ResultScreen {
     if (data && data.stats) this._stats = data.stats;
     if (data && data.map) this._lastMap = data.map;
 
-    // Animate judgment card bars
     requestAnimationFrame(() => {
       setTimeout(() => {
         document.querySelectorAll('.rc-judge-card-bar-fill[data-width]').forEach(bar => {

@@ -9,7 +9,7 @@ export default class NoteRenderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.scrollSpeed = 400;
-    this.noteHeight = 26;
+    this.noteHeight = 32;
     this._resScale = 1.0;
     this._effectsPool = new Array(64);
     for (let i = 0; i < 64; i++) {
@@ -669,15 +669,15 @@ export default class NoteRenderer {
     // Glow via pre-rendered sprite (reduced intensity)
     const glowSprite = this._getGlowSprite(color);
     if (glowSprite) {
-      const gs = Math.max(w, h) * 1.8 * scale;
-      ctx.globalAlpha = alpha * 0.18;
+      const gs = Math.max(w, h) * 1.2 * scale;
+      ctx.globalAlpha = alpha * 0.08;
       ctx.drawImage(glowSprite, x + w / 2 - gs / 2, noteY - gs / 2, gs, gs);
       ctx.globalAlpha = alpha;
     }
     const grad = ctx.createLinearGradient(x, noteY - h / 2, x, noteY + h / 2);
-    grad.addColorStop(0, 'rgba(255,255,255,0.4)');
+    grad.addColorStop(0, 'rgba(255,255,255,0.35)');
     grad.addColorStop(0.3, 'rgba(255,255,255,0.05)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.25)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.2)');
     ctx.fillStyle = grad;
     this._roundRect(ctx, x, noteY - h / 2, w, h, r);
     ctx.fill();
@@ -689,7 +689,7 @@ export default class NoteRenderer {
   _drawHoldNote(note, currentTime, laneCount, judgeLineY, topY) {
     const headTime = note.time;
     const tailTime = note.time + note.duration;
-    const color = LANE_COLORS[note.lane % LANE_COLORS.length];
+    const color = NoteRenderer.LANE_COLORS[note.lane % NoteRenderer.LANE_COLORS.length];
 
     const isHolding = note.hit && note.judgement !== 'miss' && !note.released;
     const isMissed = note.judgement === 'miss';
@@ -824,15 +824,15 @@ export default class NoteRenderer {
     // Glow via pre-rendered sprite (reduced intensity)
     const glowSprite = this._getGlowSprite(color);
     if (glowSprite) {
-      const gs = Math.max(w, h) * 1.8 * scale;
-      ctx.globalAlpha = alpha * 0.15;
+      const gs = Math.max(w, h) * 1.2 * scale;
+      ctx.globalAlpha = alpha * 0.06;
       ctx.drawImage(glowSprite, x + w / 2 - gs / 2, y - gs / 2, gs, gs);
       ctx.globalAlpha = alpha;
     }
     const grad = ctx.createLinearGradient(x, y - h / 2, x, y + h / 2);
-    grad.addColorStop(0, 'rgba(255,255,255,0.4)');
+    grad.addColorStop(0, 'rgba(255,255,255,0.35)');
     grad.addColorStop(0.35, 'rgba(255,255,255,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.2)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.15)');
     ctx.fillStyle = grad;
     this._roundRect(ctx, x, y - h / 2, w, h, r);
     ctx.fill();
