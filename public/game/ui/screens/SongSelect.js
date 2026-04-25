@@ -992,14 +992,9 @@ export default class SongSelect {
       this.audio.fadeTo(previewVolume, 0.4);
       // Sync video to preview time if video is playing
       // Note: video may not be ready yet (async load), ThreeScene.update() handles sync once it's ready
-      if (this.three && set.videoUrl && this.three._videoActive && this.three._videoElement) {
-        try {
-          this.three._videoElement.currentTime = Math.max(0, previewTime);
-          this.three._videoElement.play().catch(() => {});
-        } catch (_) { /* video not seekable yet */ }
-      }
+      this._syncVideoPreview(set, previewTime);
 
-      // Repeat preview when it ends
+      // Repeat preview when it ends + ensure video stays synced
       this._previewInterval = setInterval(() => {
         if (set !== this.beatmapSets[this.selectedIndex]) {
           clearInterval(this._previewInterval);
@@ -1008,16 +1003,29 @@ export default class SongSelect {
         }
         if (!this.audio.isPlaying) {
           this.audio.play(set.audioBuffer, Math.max(0, previewTime));
-          // Also loop video
-          if (this.three && set.videoUrl && this.three._videoActive && this.three._videoElement) {
-            try {
-              this.three._videoElement.currentTime = Math.max(0, previewTime);
-              this.three._videoElement.play().catch(() => {});
-            } catch (_) {}
-          }
+          this._syncVideoPreview(set, previewTime);
+        } else {
+          // Even while audio is playing, periodically ensure video is synced
+          // (handles cases where video loaded late or drifted)
+          this._syncVideoPreview(set, previewTime);
         }
       }, 500);
     }, 250);
+  }
+
+  /** Sync the video background to the preview time */
+  _syncVideoPreview(set, previewTime) {
+    if (!this.three || !set.videoUrl || !this.three._videoActive || !this.three._videoElement) return;
+    try {
+      const video = this.three._videoElement;
+      const drift = Math.abs(video.currentTime - previewTime);
+      if (drift > 1.0) {
+        video.currentTime = Math.max(0, previewTime);
+      }
+      if (video.paused) {
+        video.play().catch(() => {});
+      }
+    } catch (_) { /* video not seekable yet */ }
   }
 
   _stopPreview() {

@@ -1045,3 +1045,35 @@ Work Log:
 
 Stage Summary:
 - No more duplicate cards after game — each play shows exactly one card
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix video preview not starting in song select
+
+Work Log:
+- Investigated ThreeScene.js video system (Three.js VideoTexture pipeline already restored)
+- Identified multiple issues causing video preview to not start:
+  1. `video.loop = false` — video stops after playing once, doesn't restart between preview loops
+  2. No `ended` event handler — no fallback for video restart
+  3. `video.play()` errors silently caught — autoplay rejection not retried
+  4. Only `loadeddata` event listened — some formats fire `canplay` instead
+  5. Video sync only checked when `!audio.isPlaying` — video could drift or stop between audio loops
+  6. `update()` only kept video playing inside audio sync block — not when audio paused
+
+- Fixed ThreeScene.js `setBackgroundVideo()`:
+  - Changed `video.loop = false` → `video.loop = true`
+  - Added retry logic for `video.play()` rejection (autoplay policy)
+  - Added `ended` event listener as fallback to restart video
+  - Added `canplay` event listener alongside `loadeddata` (deduplicated via `videoInitialized` flag)
+  - Moved "ensure video playing" check outside audio sync block in `update()`
+
+- Fixed SongSelect.js `_playPreview()`:
+  - Extracted video sync into `_syncVideoPreview()` helper method
+  - Preview interval now also syncs video while audio IS playing (not just when restarting)
+  - Both branches (audio stopped + audio playing) call `_syncVideoPreview()`
+
+Stage Summary:
+- Video preview should now reliably start and stay synced in song select
+- Video loops continuously, auto-restarts on ended, retries on play rejection
+- Multiple event listeners ensure video initializes regardless of format
+- Periodic sync keeps video aligned with audio preview time

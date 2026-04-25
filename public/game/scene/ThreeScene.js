@@ -573,14 +573,17 @@ export default class ThreeScene {
     video.muted = true;
     video.playsInline = true;
     video.preload = 'auto';
-    video.loop = false;
+    video.loop = true;  // Loop in song-select preview mode
     video.style.display = 'none';
     document.body.appendChild(video);
 
     // Store as pending video (don't set _videoElement yet — old one stays visible)
     const pendingVideo = video;
+    let videoInitialized = false;
 
-    video.addEventListener('loadeddata', () => {
+    const initVideo = () => {
+      if (videoInitialized) return;
+      videoInitialized = true;
       // Stale load — discard
       if (this._disposed || loadId !== this._videoLoadId) {
         pendingVideo.pause();
@@ -748,9 +751,34 @@ export default class ThreeScene {
 
       // Start playing at offset 0 (will be synced in update loop)
       video.currentTime = 0;
-      video.play().catch(() => {});
-      this._videoActive = true;
-    });
+      video.play().then(() => {
+        this._videoActive = true;
+      }).catch((err) => {
+        // Autoplay may be blocked — retry once after a short delay
+        console.warn('[ThreeScene] video.play() rejected, retrying...', err.message);
+        setTimeout(() => {
+          if (this._videoElement === video && !video.paused) return;
+          video.play().then(() => {
+            this._videoActive = true;
+          }).catch(() => {
+            console.warn('[ThreeScene] video.play() retry failed');
+            this._videoActive = true; // still mark active so sync can try later
+          });
+        }, 300);
+        this._videoActive = true;
+      });
+
+      // Fallback: if video reaches end without loop support, restart it
+      video.addEventListener('ended', () => {
+        if (this._videoElement !== video || !this._videoActive) return;
+        video.currentTime = 0;
+        video.play().catch(() => {});
+      });
+    };
+
+    // Use both loadeddata and canplay as triggers (some formats fire one but not the other)
+    video.addEventListener('loadeddata', initVideo);
+    video.addEventListener('canplay', initVideo);
 
     video.addEventListener('error', () => {
       if (loadId !== this._videoLoadId) return; // stale
@@ -1023,10 +1051,10 @@ export default class ThreeScene {
           // In sync: normal playback
           this._videoElement.playbackRate = 1.0;
         }
-        // Ensure playing
-        if (this._videoElement.paused) {
-          this._videoElement.play().catch(() => {});
-        }
+      }
+      // Always ensure video is playing (not just when audio is syncing)
+      if (this._videoElement.paused && this._videoActive) {
+        this._videoElement.play().catch(() => {});
       }
       // Update video texture every 2nd frame for performance
       if (this._videoTexture && !this._skipVideoFrame) {
