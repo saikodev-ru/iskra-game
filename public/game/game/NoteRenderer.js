@@ -395,19 +395,19 @@ export default class NoteRenderer {
     };
 
     if (this._bgImage) {
-      // Draw opaque dark base under playfield (blocks Three.js background)
+      // Draw semi-transparent dark base under playfield (soft block of Three.js background)
       cctx.save();
       pfFullPath();
-      cctx.fillStyle = 'rgba(6,6,8,1)';
+      cctx.fillStyle = 'rgba(6,6,8,0.88)';
       cctx.fill();
       cctx.restore();
 
-      // Draw blurred background through the playfield shape (frosted glass base)
+      // Draw blurred background through the playfield shape (frosted glass effect)
       cctx.save();
       pfFullPath();
       cctx.clip();
-      cctx.globalAlpha = 0.18;
-      cctx.filter = 'blur(24px) brightness(0.7) saturate(1.2)';
+      cctx.globalAlpha = 0.35;
+      cctx.filter = 'blur(20px) brightness(0.65) saturate(1.3)';
       const ia = this._bgImage.width / this._bgImage.height;
       const ca = this.w / this.h;
       let dw, dh, dx, dy;
@@ -421,7 +421,7 @@ export default class NoteRenderer {
       // No background image — draw opaque dark base under playfield
       cctx.save();
       pfFullPath();
-      cctx.fillStyle = 'rgba(6,6,8,1)';
+      cctx.fillStyle = 'rgba(6,6,8,0.88)';
       cctx.fill();
       cctx.restore();
     }
@@ -448,7 +448,7 @@ export default class NoteRenderer {
       cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
       cctx.lineTo(judgeGeom.x, judgeLineY);
       cctx.closePath();
-      cctx.fillStyle = i % 2 === 0 ? 'rgba(10,10,12,0.75)' : 'rgba(14,14,16,0.75)';
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(10,10,12,0.38)' : 'rgba(14,14,16,0.38)';
       cctx.fill();
 
       // Subtle glass highlight at 30% height
@@ -476,7 +476,7 @@ export default class NoteRenderer {
       cctx.lineTo(bottomGeom.x + bottomGeom.width, bottomY);
       cctx.lineTo(bottomGeom.x, bottomY);
       cctx.closePath();
-      cctx.fillStyle = i % 2 === 0 ? 'rgba(8,8,10,0.75)' : 'rgba(12,12,14,0.75)';
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(8,8,10,0.38)' : 'rgba(12,12,14,0.38)';
       cctx.fill();
 
       // Subtle fade-to-black at the very bottom edge for smooth edge blending
@@ -582,12 +582,12 @@ export default class NoteRenderer {
       cctx.restore();
     }
 
-    // ── Depth fog at top (stronger to compensate for transparent lanes) ──
-    const fogGrad = cctx.createLinearGradient(0, topY, 0, topY + (judgeLineY - topY) * 0.25);
-    fogGrad.addColorStop(0, 'rgba(0,0,0,0.55)');
+    // ── Depth fog at top (subtle perspective depth) ──
+    const fogGrad = cctx.createLinearGradient(0, topY, 0, topY + (judgeLineY - topY) * 0.18);
+    fogGrad.addColorStop(0, 'rgba(0,0,0,0.30)');
     fogGrad.addColorStop(1, 'rgba(0,0,0,0)');
     cctx.fillStyle = fogGrad;
-    cctx.fillRect(leftTop.x - 8, topY, rightTop.x - leftTop.x + 16, (judgeLineY - topY) * 0.25);
+    cctx.fillRect(leftTop.x - 8, topY, rightTop.x - leftTop.x + 16, (judgeLineY - topY) * 0.18);
 
     // ── White glow strip at judge line ──
     const glowH = 40;
@@ -602,26 +602,7 @@ export default class NoteRenderer {
     cctx.fillRect(leftJudge.x - 4, judgeLineY - glowH / 2, rightJudge.x - leftJudge.x + 8, glowH);
     cctx.restore();
 
-    // ── Glass reflection: vertical shine sweep ──
-    cctx.save();
-    // Clip to playfield shape
-    cctx.beginPath();
-    cctx.moveTo(leftTop.x, topY);
-    cctx.lineTo(rightTop.x, topY);
-    cctx.lineTo(rightJudge.x, judgeLineY);
-    cctx.lineTo(leftJudge.x, judgeLineY);
-    cctx.closePath();
-    cctx.clip();
-    // Diagonal shine
-    const shineX = cx - fullPw * 0.15;
-    const shineW = fullPw * 0.08;
-    const shineGrad = cctx.createLinearGradient(shineX, 0, shineX + shineW, 0);
-    shineGrad.addColorStop(0, 'rgba(255,255,255,0)');
-    shineGrad.addColorStop(0.5, 'rgba(255,255,255,0.025)');
-    shineGrad.addColorStop(1, 'rgba(255,255,255,0)');
-    cctx.fillStyle = shineGrad;
-    cctx.fillRect(shineX, topY, shineW, judgeLineY - topY);
-    cctx.restore();
+    // (Glass reflection stripe removed — was causing a visible smeared vertical band)
 
     // Update cache metadata
     this._bgCacheLaneCount = laneCount;
@@ -871,7 +852,7 @@ export default class NoteRenderer {
       if (isWholeBeat) {
         // Whole beat — subtle white line
         const fadeIn = this._fadeIn(y, judgeLineY);
-        const alpha = fadeIn * 0.10;
+        const alpha = fadeIn * 0.14;
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
@@ -882,7 +863,7 @@ export default class NoteRenderer {
       } else {
         // Half beat — very faint
         const fadeIn = this._fadeIn(y, judgeLineY);
-        const alpha = fadeIn * 0.035;
+        const alpha = fadeIn * 0.05;
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 0.5;
