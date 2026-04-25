@@ -5,6 +5,7 @@ export default class BeatMap {
     this.backgroundUrl = parsedMap.backgroundUrl;
     this.videoUrl = parsedMap.videoUrl;
     this.bpmChanges = parsedMap.bpmChanges;
+    this.kiaiSections = parsedMap.kiaiSections || [];
     this.notes = parsedMap.notes;
     this.laneCount = parsedMap.laneCount || 4;
     
@@ -71,6 +72,35 @@ export default class BeatMap {
       else break;
     }
     return bpm;
+  }
+
+  /** Check if a given time falls within any kiai section */
+  isKiai(time) {
+    for (const section of this.kiaiSections) {
+      if (time >= section.startTime && time < section.endTime) return true;
+    }
+    return false;
+  }
+
+  /** Get the kiai intensity at a given time (0 = no kiai, 1 = full kiai).
+   *  Smoothly transitions in/out over 0.3s at section boundaries. */
+  getKiaiIntensity(time) {
+    const FADE = 0.3; // fade in/out duration in seconds
+    for (const section of this.kiaiSections) {
+      const sectionEnd = section.endTime;
+      if (time >= section.startTime && time < sectionEnd) {
+        // Fade in at start
+        if (time < section.startTime + FADE) {
+          return (time - section.startTime) / FADE;
+        }
+        // Fade out at end
+        if (time > sectionEnd - FADE) {
+          return (sectionEnd - time) / FADE;
+        }
+        return 1.0;
+      }
+    }
+    return 0;
   }
 
   get totalNotes() { return this.notes.length; }

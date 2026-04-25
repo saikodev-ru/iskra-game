@@ -53,6 +53,11 @@ export default class NoteRenderer {
     this._missFlashPool = [];
     this._missFlashCount = 0;
 
+    // Kiai time state — pulsing beat-synced glow on the playfield
+    this._kiaiIntensity = 0;       // 0–1, set each frame from BeatMap.getKiaiIntensity()
+    this._kiaiBeatPulse = 0;       // 0–1, spikes to 1.0 on each beat during kiai, decays
+    this._kiaiSmoothPulse = 0;     // smoothed version for smooth pulsing
+
     this.resize();
   }
 
@@ -252,6 +257,16 @@ export default class NoteRenderer {
 
   flashLane() { /* no-op */ }
 
+  /** Set kiai intensity (0–1), called each frame from the game loop */
+  setKiaiIntensity(intensity) {
+    this._kiaiIntensity = Math.max(0, Math.min(1, intensity));
+  }
+
+  /** Trigger a beat pulse during kiai time (called from beat:pulse handler) */
+  triggerKiaiBeatPulse(intensity) {
+    this._kiaiBeatPulse = Math.max(this._kiaiBeatPulse, intensity);
+  }
+
   getLaneHitPosition(lane, laneCount) {
     const sa = this.safeArea;
     const judgeLineY = this._getJudgeLineY();
@@ -301,6 +316,7 @@ export default class NoteRenderer {
     }
 
     this._drawBackgroundCached(laneCount);
+    this._drawKiaiEffect(laneCount);
     this._drawBeatLines(currentTime, laneCount);
     this._drawMissFlashes(delta);
     this._drawEffects();
@@ -588,6 +604,131 @@ export default class NoteRenderer {
   setBackgroundDim(value) {
     this._bgDim = value;
     this.invalidateBackgroundCache();
+  }
+
+  /* ── Kiai Time Effect ─────────────────────────────────────────────── */
+  /**
+   * Draw a pulsing warm glow over the playfield during kiai time.
+   * The glow pulses brighter on each beat (driven by _kiaiBeatPulse)
+   * and has a smooth ambient layer driven by _kiaiIntensity.
+   * Performance: uses pre-rendered sprite for the glow, no shadowBlur.
+   */
+  _drawKiaiEffect(laneCount) {
+    if (this._kiaiIntensity < 0.01) {
+      this._kiaiBeatPulse = 0;
+      this._kiaiSmoothPulse = 0;
+      return;
+    }
+
+    const ctx = this.ctx;
+    const gfx = this._gfx();
+    if (gfx <= 0) return; // disabled on low graphics
+
+    const delta = this._frameDelta || 0.016;
+    const sa = this.safeArea;
+    const topY = this._getTopY();
+    const judgeLineY = this._getJudgeLineY();
+    const bottomY = this._getBottomY();
+
+    // Decay beat pulse exponentially (sharp attack, smooth release ~250ms)
+    this._kiaiBeatPulse *= Math.max(0, 1 - delta * 12);
+
+    // Smooth pulse follows the beat pulse with slight lag for organic feel
+    this._kiaiSmoothPulse += (this._kiaiBeatPulse - this._kiaiSmoothPulse) * Math.min(1, delta * 20);
+
+    // Combined intensity: ambient base + beat pulse spike
+    const baseAlpha = this._kiaiIntensity * 0.08 * gfx;    // subtle constant glow
+    const pulseAlpha = this._kiaiSmoothPulse * 0.18 * gfx;  // beat-synced flash
+    const totalAlpha = baseAlpha + pulseAlpha;
+
+    if (totalAlpha < 0.005) return;
+
+    // Playfield geometry at key Y positions
+    const leftTop = this._getLaneGeometry(0, topY, laneCount);
+    const rightTop = this._getLaneGeometry(laneCount, topY, laneCount);
+    const leftJudge = this._getLaneGeometry(0, judgeLineY, laneCount);
+    const rightJudge = this._getLaneGeometry(laneCount, judgeLineY, laneCount);
+    const leftBottom = this._getLaneGeometry(0, bottomY, laneCount);
+    const rightBottom = this._getLaneGeometry(laneCount, bottomY, laneCount);
+
+    // ── Layer 1: Warm amber/white fill over the playfield area ──
+    ctx.save();
+
+    // Build playfield path (trapezoid: top → judge → bottom)
+    ctx.beginPath();
+    ctx.moveTo(leftTop.x, topY);
+    ctx.lineTo(rightTop.x, topY);
+    ctx.lineTo(rightJudge.x, judgeLineY);
+    ctx.lineTo(rightBottom.x, bottomY);
+    ctx.lineTo(leftBottom.x, bottomY);
+    ctx.lineTo(leftJudge.x, judgeLineY);
+    ctx.closePath();
+    ctx.clip();
+
+    // Gradient: warm tint centered on judge line, fading up and down
+    const gradH = judgeLineY - topY;
+    const grad = ctx.createRadialGradient(
+      sa.x + sa.w / 2, judgeLineY, 0,
+      sa.x + sa.w / 2, judgeLineY, gradH * 1.2
+    );
+    // Warm amber/white glow
+    grad.addColorStop(0, `rgba(255,220,130,${totalAlpha * 1.2})`);
+    grad.addColorStop(0.3, `rgba(255,200,100,${totalAlpha * 0.8})`);
+    grad.addColorStop(0.6, `rgba(255,180,80,${totalAlpha * 0.4})`);
+    grad.addColorStop(1, `rgba(255,160,60,0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(leftTop.x - 20, topY - 20, rightTop.x - leftTop.x + 40, bottomY - topY + 40);
+
+    // ── Layer 2: Bright white flash at judge line on beat ──
+    if (this._kiaiSmoothPulse > 0.05) {
+      const flashAlpha = this._kiaiSmoothPulse * 0.12 * gfx;
+      const flashGrad = ctx.createRadialGradient(
+        sa.x + sa.w / 2, judgeLineY, 0,
+        sa.x + sa.w / 2, judgeLineY, sa.w * 0.35
+      );
+      flashGrad.addColorStop(0, `rgba(255,255,255,${flashAlpha})`);
+      flashGrad.addColorStop(0.4, `rgba(255,240,200,${flashAlpha * 0.5})`);
+      flashGrad.addColorStop(1, 'rgba(255,200,100,0)');
+      ctx.fillStyle = flashGrad;
+      ctx.fillRect(sa.x, judgeLineY - sa.h * 0.3, sa.w, sa.h * 0.6);
+    }
+
+    // ── Layer 3: Subtle colored bloom at the edges of the playfield ──
+    if (this._kiaiIntensity > 0.3) {
+      const edgeAlpha = (this._kiaiIntensity - 0.3) * 0.06 * gfx;
+      // Left edge bloom
+      const leftGrad = ctx.createLinearGradient(leftTop.x - 30, 0, leftTop.x + 30, 0);
+      leftGrad.addColorStop(0, 'rgba(255,180,80,0)');
+      leftGrad.addColorStop(0.5, `rgba(255,180,80,${edgeAlpha})`);
+      leftGrad.addColorStop(1, 'rgba(255,180,80,0)');
+      ctx.fillStyle = leftGrad;
+      ctx.fillRect(leftTop.x - 30, topY, 60, bottomY - topY);
+      // Right edge bloom
+      const rightGrad = ctx.createLinearGradient(rightTop.x - 30, 0, rightTop.x + 30, 0);
+      rightGrad.addColorStop(0, 'rgba(255,180,80,0)');
+      rightGrad.addColorStop(0.5, `rgba(255,180,80,${edgeAlpha})`);
+      rightGrad.addColorStop(1, 'rgba(255,180,80,0)');
+      ctx.fillStyle = rightGrad;
+      ctx.fillRect(rightTop.x - 30, topY, 60, bottomY - topY);
+    }
+
+    ctx.restore();
+
+    // ── Layer 4: Enhanced judge line glow during kiai ──
+    if (this._kiaiIntensity > 0.1) {
+      ctx.save();
+      const jlGlowAlpha = totalAlpha * 0.8;
+      const jlGlowH = 50 + this._kiaiSmoothPulse * 30;
+      const jlGrad = ctx.createLinearGradient(0, judgeLineY - jlGlowH / 2, 0, judgeLineY + jlGlowH / 2);
+      jlGrad.addColorStop(0, 'rgba(255,220,130,0)');
+      jlGrad.addColorStop(0.35, `rgba(255,220,130,${jlGlowAlpha * 0.3})`);
+      jlGrad.addColorStop(0.5, `rgba(255,240,200,${jlGlowAlpha})`);
+      jlGrad.addColorStop(0.65, `rgba(255,220,130,${jlGlowAlpha * 0.3})`);
+      jlGrad.addColorStop(1, 'rgba(255,220,130,0)');
+      ctx.fillStyle = jlGrad;
+      ctx.fillRect(leftJudge.x - 4, judgeLineY - jlGlowH / 2, rightJudge.x - leftJudge.x + 8, jlGlowH);
+      ctx.restore();
+    }
   }
 
   /* ── Beat Lines — horizontal timing markers per beat ── */

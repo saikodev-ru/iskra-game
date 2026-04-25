@@ -450,6 +450,31 @@ export default class OszLoader {
         bpm: 60000 / tp.msPerBeat,
       }));
 
+    // ── Extract kiai time sections ──
+    // Kiai is a per-timing-point flag; collect contiguous kiai regions.
+    // Use ALL timing points (including inherited) since kiai toggles independently.
+    const kiaiSections = [];
+    const allTimingPoints = parsed.timingPoints
+      .map(tp => ({ time: tp.offset / 1000, kiai: !!tp.kiai }))
+      .sort((a, b) => a.time - b.time);
+    // Build kiai on/off regions
+    let kiaiActive = false;
+    let kiaiStart = 0;
+    for (const tp of allTimingPoints) {
+      if (tp.kiai && !kiaiActive) {
+        kiaiActive = true;
+        kiaiStart = tp.time;
+      } else if (!tp.kiai && kiaiActive) {
+        kiaiActive = false;
+        kiaiSections.push({ startTime: kiaiStart, endTime: tp.time });
+      }
+    }
+    // If kiai is still active at the end, extend to the last note
+    if (kiaiActive && notes.length > 0) {
+      const lastNote = notes[notes.length - 1];
+      kiaiSections.push({ startTime: kiaiStart, endTime: lastNote.time + lastNote.duration + 1 });
+    }
+
     const primaryBpm = bpmChanges.length > 0 ? bpmChanges[0].bpm : 120;
 
     const sortedNotes = [...notes].sort((a, b) => a.time - b.time);
@@ -477,6 +502,7 @@ export default class OszLoader {
       laneCount,
       notes,
       bpmChanges,
+      kiaiSections,
       metadata: {
         bpm: Math.round(primaryBpm),
         duration: Math.round(mapDuration),
@@ -689,7 +715,10 @@ export default class OszLoader {
           const msPerBeat = parseFloat(parts[1]);
           const meter = parts.length > 2 ? parseInt(parts[2], 10) : 4;
           const inherited = msPerBeat < 0;
-          result.timingPoints.push({ offset, msPerBeat, meter, inherited });
+          // effects field (index 7): bitmask where bit 0 = kiai time
+          const effects = parts.length > 7 ? parseInt(parts[7], 10) || 0 : 0;
+          const kiai = (effects & 1) !== 0;
+          result.timingPoints.push({ offset, msPerBeat, meter, inherited, kiai });
         }
       }
       else if (section === 'HitObjects') {

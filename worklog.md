@@ -1242,3 +1242,38 @@ Stage Summary:
 - HUD text lowered to 55% from top, sides brought closer (5% each)
 - All screen transitions now use 3D perspective with subtle rotation, blur, and brightness shifts
 - Lint passes clean
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Implement kiai time support — parse from beatmap, add beat-synced pulsing glow effect on playfield
+
+Work Log:
+- OszLoader.js: Extended TimingPoints parser to read `effects` field (column 7, bitmask where bit 0 = kiai). Each timing point now has a `kiai: boolean` property.
+- OszLoader.js: Added kiai section extraction in `_buildDifficulty()` — scans all timing points (including inherited) to build `[{ startTime, endTime }]` arrays representing contiguous kiai regions. Handles kiai active at end of map.
+- OszLoader.js: Added `kiaiSections` to the returned difficulty map object.
+- BeatMap.js: Added `this.kiaiSections` property, `isKiai(time)` method, and `getKiaiIntensity(time)` method with 0.3s smooth fade-in/out at section boundaries.
+- main.js: Added `kiaiSections` to the shifted map (all times shifted by LEAD_IN for sync).
+- main.js: Added `noteRenderer.setKiaiIntensity(kiaiIntensity)` call in game loop render function.
+- main.js: Added `kiaiBeatHandler` that listens for `beat:pulse` events and triggers `noteRenderer.triggerKiaiBeatPulse(kiaiIntensity)` during kiai sections.
+- main.js: Registered/unregistered beat:pulse handler in game start/cleanup.
+- main.js: Reset kiai state on game end (setKiaiIntensity(0), _kiaiBeatPulse = 0).
+- NoteRenderer.js: Added `_kiaiIntensity`, `_kiaiBeatPulse`, `_kiaiSmoothPulse` state variables in constructor.
+- NoteRenderer.js: Added `setKiaiIntensity(intensity)` and `triggerKiaiBeatPulse(intensity)` public API methods.
+- NoteRenderer.js: Added `_drawKiaiEffect(laneCount)` rendering method with 4 visual layers:
+  - Layer 1: Warm amber radial gradient centered on judge line, clipped to playfield shape
+  - Layer 2: Bright white flash at judge line on each beat (beat-synced pulse)
+  - Layer 3: Subtle colored bloom at left/right playfield edges
+  - Layer 4: Enhanced judge line glow with warm tint that pulses wider on beats
+- NoteRenderer.js: Beat pulse decays exponentially (~250ms release), smoothed pulse follows with slight lag for organic feel.
+- NoteRenderer.js: Respects graphics preset (disabled on "low", half intensity on "standard", full on "disco").
+
+Stage Summary:
+- Kiai time is now parsed from .osu beatmap timing points (effects bitmask bit 0)
+- Kiai sections are stored as start/end time ranges, shifted by LEAD_IN for audio sync
+- During kiai, the playfield illuminates with a warm amber glow that pulses in sync with the beat
+- Beat pulses trigger via EventBus beat:pulse → NoteRenderer.triggerKiaiBeatPulse()
+- Smooth transitions: 0.3s fade in/out at kiai boundaries, exponential beat pulse decay
+- 4-layer visual effect: ambient glow + beat flash + edge bloom + enhanced judge line glow
+- Performance-safe: no shadowBlur, uses radial/linear gradients only, respects graphics preset
+- Lint passes clean

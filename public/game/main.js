@@ -188,7 +188,11 @@ async function boot() {
     const shiftedMap = {
       ...map,
       notes: map.notes.map(n => ({ ...n, time: n.time + LEAD_IN })),
-      bpmChanges: (map.bpmChanges || []).map(b => ({ ...b, time: b.time + LEAD_IN }))
+      bpmChanges: (map.bpmChanges || []).map(b => ({ ...b, time: b.time + LEAD_IN })),
+      kiaiSections: (map.kiaiSections || []).map(s => ({
+        startTime: s.startTime + LEAD_IN,
+        endTime: s.endTime + LEAD_IN
+      })),
     };
 
     // Create audio buffer with silence prepended — this is what makes note shifting work
@@ -292,6 +296,15 @@ async function boot() {
     };
     const comboBreakHandler = ({ combo }) => { judgementDisplay.showComboBreak(combo); };
 
+    // Kiai beat pulse: on each beat during kiai, trigger a visual pulse on the renderer
+    const kiaiBeatHandler = () => {
+      if (!gameActive || !currentBeatMap) return;
+      const kiaiIntensity = currentBeatMap.getKiaiIntensity(audio.currentTime);
+      if (kiaiIntensity > 0.05) {
+        noteRenderer.triggerKiaiBeatPulse(kiaiIntensity);
+      }
+    };
+
     const releaseHandler = ({ lane, releaseTime }) => {
       if (!gameActive) return;
       const result = currentJudgement.judgeRelease(lane, releaseTime);
@@ -318,6 +331,7 @@ async function boot() {
     EventBus.on('note:miss', missHandler);
     EventBus.on('note:sliderbreak', sliderBreakHandler);
     EventBus.on('combo:break', comboBreakHandler);
+    EventBus.on('beat:pulse', kiaiBeatHandler);
 
     hud.show();
     input.enable();
@@ -396,6 +410,9 @@ async function boot() {
       render(delta) {
         if (!gameActive) return;
         const ct = audio.currentTime;
+        // Compute kiai intensity for the renderer
+        const kiaiIntensity = currentBeatMap ? currentBeatMap.getKiaiIntensity(ct) : 0;
+        noteRenderer.setKiaiIntensity(kiaiIntensity);
         noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount, delta, bpm: currentBeatMap.metadata.bpm || 120, bpmChanges: currentBeatMap.bpmChanges });
         three.update(performance.now());
       }
@@ -409,6 +426,7 @@ async function boot() {
       EventBus.off('note:miss', missHandler);
       EventBus.off('note:sliderbreak', sliderBreakHandler);
       EventBus.off('combo:break', comboBreakHandler);
+      EventBus.off('beat:pulse', kiaiBeatHandler);
     };
   };
 
@@ -442,6 +460,8 @@ async function boot() {
     noteRenderer.clearBackground();
     noteRenderer.clear();
     noteRenderer.clearLaneGlows();
+    noteRenderer.setKiaiIntensity(0);
+    noteRenderer._kiaiBeatPulse = 0;
     three._clearBackgroundImage();
     three._clearBackgroundVideo();
     three._leadInOffset = 0; // Reset lead-in offset for preview mode
