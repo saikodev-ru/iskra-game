@@ -939,12 +939,17 @@ export default class NoteRenderer {
       // Simple mode: constant BPM, first beat at the first note's aligned time
       const bpm = this._currentBpm;
       const beatInterval = 60 / bpm;
-      const firstBeatTime = Math.ceil((currentTime - visibleTime) / beatInterval) * beatInterval;
-      const beatCount = Math.ceil(visibleTime / beatInterval) * 2 + 2;
+      // Beats visible above judge line are currentTime to currentTime + visibleTime
+      // Start a bit before judge line for smooth entry, extend past top for margin
+      const windowStart = currentTime - 0.5;
+      const windowEnd = currentTime + visibleTime + 1.0;
+      const firstBeatTime = Math.floor(windowStart / beatInterval) * beatInterval;
+      const beatCount = Math.ceil((windowEnd - windowStart) / beatInterval) * 2 + 4;
 
       for (let i = 0; i < beatCount; i++) {
         const t = firstBeatTime + i * beatInterval / 2;
-        if (t > currentTime + 0.1) break;
+        if (t > windowEnd) break;
+        if (t < windowStart) continue;
         beats.push({ time: t, isWholeBeat: Math.abs((t / beatInterval) - Math.round(t / beatInterval)) < 0.01 });
       }
       return beats;
@@ -966,28 +971,21 @@ export default class NoteRenderer {
     const firstSegment = segments[0];
     if (!firstSegment) return beats;
 
-    // Window of visible times (slightly extended for half-beats)
-    const windowStart = currentTime - visibleTime - 1.0;
-    const windowEnd = currentTime + 0.2;
+    // Window of visible times — beats above judge line are in the future
+    // Extend past top of screen for smooth entry
+    const windowStart = currentTime - 0.5;
+    const windowEnd = currentTime + visibleTime + 1.0;
 
     // For each segment, compute beats that fall in the visible window
     for (const seg of segments) {
       if (seg.endTime < windowStart) continue; // Segment is entirely before visible window
       if (seg.startTime > windowEnd) break; // Segment is entirely after visible window
 
-      // First beat in this segment = startTime
-      // Subsequent beats at startTime + n * beatInterval
-      const effStart = Math.max(seg.startTime, windowStart - seg.beatInterval);
+      // Extrapolate beats before seg.startTime to cover full visible range
       const effEnd = Math.min(seg.endTime, windowEnd);
 
-      // Find the first beat at or after effStart
-      // beatN = (effStart - seg.startTime) / beatInterval
-      let firstN;
-      if (effStart <= seg.startTime) {
-        firstN = 0;
-      } else {
-        firstN = Math.ceil((effStart - seg.startTime) / seg.beatInterval);
-      }
+      // Allow negative N to generate beats before seg.startTime
+      const firstN = Math.ceil((windowStart - seg.startTime) / seg.beatInterval);
 
       const lastN = Math.floor((effEnd - seg.startTime) / seg.beatInterval);
 
@@ -1345,19 +1343,18 @@ export default class NoteRenderer {
       ctx.globalAlpha = alpha * 0.08;
       ctx.drawImage(glowSprite, corners.centerX - gs / 2, noteY - gs / 2, gs, gs);
 
-      // Kiai glow — larger, brighter colored halo pulsing with beat
+      // Kiai glow — soft volumetric color halo, pulsing gently
       if (kiai > 0.01) {
-        const kiaiPulse = 0.7 + this._kiaiSmoothPulse * 0.3;
-        const kiaiGlowSize = gs * (1.8 + kiai * 1.2) * kiaiPulse;
-        ctx.globalAlpha = alpha * (0.12 + kiai * 0.30) * kiaiPulse;
-        ctx.drawImage(glowSprite, corners.centerX - kiaiGlowSize / 2, noteY - kiaiGlowSize / 2, kiaiGlowSize, kiaiGlowSize);
-
-        // Additive bloom ring around note during kiai
-        ctx.globalCompositeOperation = 'lighter';
-        const bloomSize = gs * (2.2 + kiai * 1.5) * kiaiPulse;
-        ctx.globalAlpha = alpha * (0.04 + kiai * 0.10) * kiaiPulse;
+        const kiaiPulse = 0.85 + this._kiaiSmoothPulse * 0.15;
+        // Outer volumetric bloom — wide, soft, colored
+        const bloomSize = gs * (2.5 + kiai * 0.8) * kiaiPulse;
+        ctx.globalAlpha = alpha * 0.06 * kiai * kiaiPulse;
         ctx.drawImage(glowSprite, corners.centerX - bloomSize / 2, noteY - bloomSize / 2, bloomSize, bloomSize);
-        ctx.globalCompositeOperation = 'source-over';
+
+        // Mid glow — slightly brighter core
+        const midSize = gs * (1.6 + kiai * 0.4) * kiaiPulse;
+        ctx.globalAlpha = alpha * 0.10 * kiai * kiaiPulse;
+        ctx.drawImage(glowSprite, corners.centerX - midSize / 2, noteY - midSize / 2, midSize, midSize);
       }
       ctx.globalAlpha = alpha;
     }
@@ -1526,17 +1523,16 @@ export default class NoteRenderer {
       ctx.globalAlpha = alpha * 0.06;
       ctx.drawImage(glowSprite, corners.centerX - gs / 2, y - gs / 2, gs, gs);
 
-      // Kiai glow on hold caps
+      // Kiai glow on hold caps — soft volumetric color halo
       if (kiai > 0.01) {
-        const kiaiPulse = 0.7 + this._kiaiSmoothPulse * 0.3;
-        const kiaiGlowSize = gs * (1.6 + kiai * 1.0) * kiaiPulse;
-        ctx.globalAlpha = alpha * (0.10 + kiai * 0.25) * kiaiPulse;
-        ctx.drawImage(glowSprite, corners.centerX - kiaiGlowSize / 2, y - kiaiGlowSize / 2, kiaiGlowSize, kiaiGlowSize);
-        ctx.globalCompositeOperation = 'lighter';
-        const bloomSize = gs * (2.0 + kiai * 1.3) * kiaiPulse;
-        ctx.globalAlpha = alpha * (0.03 + kiai * 0.08) * kiaiPulse;
+        const kiaiPulse = 0.85 + this._kiaiSmoothPulse * 0.15;
+        const bloomSize = gs * (2.3 + kiai * 0.7) * kiaiPulse;
+        ctx.globalAlpha = alpha * 0.05 * kiai * kiaiPulse;
         ctx.drawImage(glowSprite, corners.centerX - bloomSize / 2, y - bloomSize / 2, bloomSize, bloomSize);
-        ctx.globalCompositeOperation = 'source-over';
+
+        const midSize = gs * (1.5 + kiai * 0.3) * kiaiPulse;
+        ctx.globalAlpha = alpha * 0.08 * kiai * kiaiPulse;
+        ctx.drawImage(glowSprite, corners.centerX - midSize / 2, y - midSize / 2, midSize, midSize);
       }
       ctx.globalAlpha = alpha;
     }
@@ -1556,31 +1552,34 @@ export default class NoteRenderer {
     const pad = 4;
     const x = geom.x + pad;
     const w = geom.width - pad * 2;
-    const gfx = this._gfx();
 
-    const columnH = 140;
+    // Cycling pulse: gentle breathing animation
+    const now = performance.now() * 0.001;
+    const pulse = 0.7 + 0.3 * Math.sin(now * 4.0); // cycles at ~0.64Hz
+    const columnH = 110 * pulse;
+
     ctx.save();
     const grad = ctx.createLinearGradient(0, judgeLineY - columnH, 0, judgeLineY);
     grad.addColorStop(0, 'transparent');
-    grad.addColorStop(0.4, this._withAlpha(color, 0.12));
-    grad.addColorStop(1, this._withAlpha(color, 0.45));
+    grad.addColorStop(0.4, this._withAlpha(color, 0.08 * pulse));
+    grad.addColorStop(1, this._withAlpha(color, 0.30 * pulse));
     ctx.fillStyle = grad;
     ctx.fillRect(x - 3, judgeLineY - columnH, w + 6, columnH);
 
-    // Glow via pre-rendered sprite instead of shadowBlur
+    // Glow via pre-rendered sprite
     const holdGlowSprite = this._getGlowSprite(color);
     if (holdGlowSprite) {
-      const gs = Math.max(w, columnH) * 1.5;
-      ctx.globalAlpha = 0.25;
+      const gs = Math.max(w, columnH) * 1.2 * pulse;
+      ctx.globalAlpha = 0.15 * pulse;
       ctx.drawImage(holdGlowSprite, x + w / 2 - gs / 2, judgeLineY - gs / 3, gs, gs);
     }
 
-    const barH = 10;
-    ctx.globalAlpha = 0.95;
+    const barH = 8;
+    ctx.globalAlpha = 0.85 * pulse;
     ctx.fillStyle = color;
     ctx.fillRect(x, judgeLineY - barH / 2, w, barH);
 
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = 0.55 * pulse;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 2, judgeLineY - 1.5, w - 4, 3);
     ctx.restore();
