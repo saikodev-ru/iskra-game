@@ -614,7 +614,8 @@ export default class SongSelect {
     if (this.three) {
       // Trigger glitch transition when switching to a different song
       if (isSongChange) {
-        this.three.triggerGlitch(0.8);
+        // Immediate glitch on old content (works great for images, and CSS canvas glitch)
+        this.three.triggerGlitch(0.5);
         ZZZTheme.glitchTransition(this.three.canvas);
         ZZZTheme.playSwitchSound();
       }

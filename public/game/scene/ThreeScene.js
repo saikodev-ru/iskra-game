@@ -560,7 +560,6 @@ export default class ThreeScene {
     // Increment generation counter to invalidate any pending loads
     const loadId = ++this._videoLoadId;
 
-    // Don't clear old video yet — keep it visible until new one is ready
     this._clearBackgroundImage(); // remove any image bg
     if (!url) { this._clearBackgroundVideo(); return; }
 
@@ -577,7 +576,6 @@ export default class ThreeScene {
     video.style.display = 'none';
     document.body.appendChild(video);
 
-    // Store as pending video (don't set _videoElement yet — old one stays visible)
     const pendingVideo = video;
     let videoInitialized = false;
 
@@ -596,9 +594,17 @@ export default class ThreeScene {
       video.muted = true;
       video.playbackRate = 1.0;
 
-      // Now clear the old video (after new one is ready)
-      this._clearBackgroundVideo();
+      // Save reference to OLD video mesh — keep it visible during fade-in
+      const oldVideoMesh = this._videoMesh;
+      const oldVideoMaterial = this._videoMaterial;
+      const oldVideoTexture = this._videoTexture;
+      const oldVideoElement = this._videoElement;
 
+      // Clear old video RESOURCES (elements, textures) but NOT the mesh yet
+      // We'll remove the old mesh after the new one has faded in
+      this._videoMesh = null;
+      this._videoMaterial = null;
+      this._videoTexture = null;
       this._videoElement = pendingVideo;
 
       // Create VideoTexture
@@ -735,8 +741,8 @@ export default class ThreeScene {
       this._videoMesh.position.set(planeGeom.cx, planeGeom.cy, -4);
       this.scene.add(this._videoMesh);
 
-      // Fade in
-      const fadeDuration = 350;
+      // Fade in — old video stays visible behind during transition
+      const fadeDuration = 300;
       const startTime = performance.now();
       const animateFadeIn = () => {
         if (this._disposed) return;
@@ -745,9 +751,30 @@ export default class ThreeScene {
         if (this._videoMaterial?.uniforms) {
           this._videoMaterial.uniforms.uOpacity.value = 1 - Math.pow(1 - t, 3);
         }
-        if (t < 1) requestAnimationFrame(animateFadeIn);
+        if (t < 1) {
+          requestAnimationFrame(animateFadeIn);
+        } else {
+          // Fade complete — now safely remove old video mesh and resources
+          if (oldVideoMesh) {
+            this.scene.remove(oldVideoMesh);
+            oldVideoMesh.geometry.dispose();
+          }
+          if (oldVideoMaterial) oldVideoMaterial.dispose();
+          if (oldVideoTexture) oldVideoTexture.dispose();
+          if (oldVideoElement) {
+            oldVideoElement.pause();
+            oldVideoElement.src = '';
+            oldVideoElement.load();
+            if (oldVideoElement.parentNode) oldVideoElement.parentNode.removeChild(oldVideoElement);
+          }
+        }
       };
       requestAnimationFrame(animateFadeIn);
+
+      // Trigger glitch on the NEW video mesh right as it becomes visible
+      // The old mesh is still behind it, creating a seamless transition
+      this.triggerGlitch(0.6);
+      EventBus.emit('background:changed', { type: 'video' });
 
       // Start playing at offset 0 (will be synced in update loop)
       video.currentTime = 0;
