@@ -1416,3 +1416,22 @@ Stage Summary:
 - Kiai time parsing removed from .osu format (kiai sections only from auto-detection)
 - Import panel shows improved progress stages
 - Files modified: ChorusDetector.js, OszLoader.js, SongSelect.js
+---
+Task ID: 1
+Agent: main
+Task: Fix ChorusDetector and kiai effects
+
+Work Log:
+- Rewrote ChorusDetector.js with global energy approach instead of local contrast
+- New algorithm: compute smoothed RMS energy, normalize, use global percentiles (p75, p60, p65, p50)
+- Added repetition heuristic to prefer groups of similarly-sized sections
+- Added peak detection fallback for difficult songs
+- Strict max duration of 50s (no more 179s sections)
+- Fixed NoteRenderer._drawKiaiEffect to work on ALL graphics presets (removed _gfx() gate)
+- Increased kiai visual effect alpha values for better visibility
+
+Stage Summary:
+- ChorusDetector.js completely rewritten with v3 algorithm
+- NoteRenderer.js kiai effects now always render regardless of graphics preset
+- Visual effect intensity increased ~50%
+

@@ -622,8 +622,9 @@ export default class NoteRenderer {
     }
 
     const ctx = this.ctx;
-    const gfx = this._gfx();
-    if (gfx <= 0) return; // disabled on low graphics
+    // Kiai effects render on ALL presets (not gated by graphics setting)
+    //gfx = this._gfx(); // removed — kiai always active
+    const gfx = 1.0;
 
     const delta = this._frameDelta || 0.016;
     const sa = this.safeArea;
@@ -638,8 +639,8 @@ export default class NoteRenderer {
     this._kiaiSmoothPulse += (this._kiaiBeatPulse - this._kiaiSmoothPulse) * Math.min(1, delta * 20);
 
     // Combined intensity: ambient base + beat pulse spike
-    const baseAlpha = this._kiaiIntensity * 0.08 * gfx;    // subtle constant glow
-    const pulseAlpha = this._kiaiSmoothPulse * 0.18 * gfx;  // beat-synced flash
+    const baseAlpha = this._kiaiIntensity * 0.12 * gfx;    // warm constant glow
+    const pulseAlpha = this._kiaiSmoothPulse * 0.25 * gfx;  // beat-synced flash
     const totalAlpha = baseAlpha + pulseAlpha;
 
     if (totalAlpha < 0.005) return;
@@ -682,7 +683,7 @@ export default class NoteRenderer {
 
     // ── Layer 2: Bright white flash at judge line on beat ──
     if (this._kiaiSmoothPulse > 0.05) {
-      const flashAlpha = this._kiaiSmoothPulse * 0.12 * gfx;
+      const flashAlpha = this._kiaiSmoothPulse * 0.20 * gfx;
       const flashR = Math.max(1, sa.w * 0.35);
       const flashGrad = ctx.createRadialGradient(
         sa.x + sa.w / 2, judgeLineY, 0,
@@ -697,7 +698,7 @@ export default class NoteRenderer {
 
     // ── Layer 3: Subtle colored bloom at the edges of the playfield ──
     if (this._kiaiIntensity > 0.3) {
-      const edgeAlpha = (this._kiaiIntensity - 0.3) * 0.06 * gfx;
+      const edgeAlpha = (this._kiaiIntensity - 0.3) * 0.10 * gfx;
       // Left edge bloom
       const leftGrad = ctx.createLinearGradient(leftTop.x - 30, 0, leftTop.x + 30, 0);
       leftGrad.addColorStop(0, 'rgba(255,180,80,0)');
