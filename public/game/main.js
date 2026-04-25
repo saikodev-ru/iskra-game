@@ -748,7 +748,9 @@ async function boot() {
       e.stopPropagation();
       return;
     }
-    // ── osu!-style Volume Control (LAlt + Mouse Wheel) ──
+  });
+
+  // ── osu!-style Volume Control (LAlt + Mouse Wheel) ──
   let _volumeOverlay = null;
   let _volumeHideTimer = null;
 
