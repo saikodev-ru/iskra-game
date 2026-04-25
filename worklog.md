@@ -898,3 +898,41 @@ Stage Summary:
 - Notes: thicker (32px) with significantly reduced glow
 - Results screen: completely redesigned with horizontal rank cards, score/accuracy side by side, pill stats
 - All changes pass ESLint clean
+---
+Task ID: post-context-2
+Agent: Main Agent
+Task: Full play history system with scrollable cards, clickable records, delete support
+
+Work Log:
+- Created RecordStore.js — manages full play history in localStorage (up to 50 records per difficulty)
+  - getAll(), add(), getBest(), delete(), deleteAll(), deleteSet(), formatTimestamp()
+  - Key format: rhythm-history-{setId}-{diffVersion}
+  - Each record: score, accuracy, maxCombo, rank, died, hitCounts, totalNotes, sliderBreaks, timestamp
+  - Backward compatible: also updates legacy rhythm-record- key
+- Updated main.js: imported RecordStore, replaced old single-record save with RecordStore.add()
+- Updated main.js: result screen registration now supports historyRecord mode via setupHistory()
+- Rewrote SongSelect.js records section:
+  - Replaced old vertical records list (with × delete buttons) with horizontal scrollable grade cards
+  - Each card shows: stylized grade letter (gradient), score, relative timestamp
+  - Cards are clickable → opens ResultScreen with that record's full stats
+  - Scroll snap for smooth horizontal scrolling
+  - Listens for records:changed EventBus event to refresh after deletion
+  - Uses RecordStore instead of direct localStorage for all record operations
+- Updated ResultScreen.js:
+  - New setupHistory(setId, diffVersion, record, map) method for viewing historical records
+  - Shows DELETE button (red) and BACK button instead of RETRY/MENU when viewing history
+  - Delete action removes record from RecordStore and emits records:changed event
+  - Shows timestamp of when the play occurred
+- Added CSS in ZZZTheme.js:
+  - .rc-history-scroll: horizontal flex container with scroll snap, custom thin scrollbar
+  - .rc-history-card: 72px wide cards with gradient top bar, rank letter, score, time
+  - .rc-history-card:hover: lift effect with shadow
+  - .result-btn--danger: red delete button style
+  - .rc-timestamp: subtle timestamp display
+
+Stage Summary:
+- Full play history system operational — every play is saved with complete stats
+- Song select shows horizontally scrollable grade cards (snap scrolling)
+- Clicking a card opens the full result screen for that play
+- Records can be deleted from the result screen, which auto-refreshes song select
+- All changes pass ESLint clean

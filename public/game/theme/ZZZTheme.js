@@ -1133,6 +1133,91 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   .result-btn { padding: 10px 20px; font-size: 12px; }
 }
 
+/* ── HISTORY SCROLL (horizontal record cards) ── */
+.rc-history-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 8px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.rc-history-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+.rc-history-scroll::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.03);
+  border-radius: 2px;
+}
+.rc-history-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12);
+  border-radius: 2px;
+}
+.rc-history-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.rc-history-card {
+  flex-shrink: 0;
+  width: 72px;
+  background: rgba(17, 17, 17, 0.7);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 10px 4px 8px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  scroll-snap-align: start;
+  opacity: 0;
+  animation: rc-history-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--rc-hc-delay, 0s);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
+  cursor: pointer;
+}
+.rc-history-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+@keyframes rc-history-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.rc-history-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--rc-hc-bg, #555);
+  opacity: 0.5;
+}
+.rc-history-card-rank {
+  font-family: var(--zzz-font); font-weight: 900; font-size: 28px;
+  line-height: 1; letter-spacing: 0.02em;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.2));
+}
+.rc-history-card-score {
+  font-family: var(--zzz-font); font-weight: 800; font-size: 10px;
+  color: rgba(255,255,255,0.7); margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.rc-history-card-time {
+  font-family: var(--zzz-font); font-weight: 600; font-size: 8px;
+  color: rgba(255,255,255,0.25); margin-top: 3px;
+  letter-spacing: 0.05em;
+}
+
+/* ── RESULT SCREEN: timestamp + delete button ── */
+.rc-timestamp {
+  font-family: var(--zzz-font); font-weight: 600; font-size: 9px;
+  color: rgba(255,255,255,0.25); letter-spacing: 0.1em;
+}
+.result-btn--danger {
+  border-color: rgba(239,68,68,0.5); color: #EF4444;
+}
+.result-btn--danger:hover {
+  background: rgba(239,68,68,0.15); border-color: #EF4444;
+  box-shadow: 0 4px 16px rgba(239,68,68,0.2);
+}
+
 /* ── GRADE GRADIENT (two-element approach) ──── */
 .grade-gradient {
   position: relative;

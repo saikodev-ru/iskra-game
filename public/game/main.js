@@ -9,6 +9,7 @@ import BeatMap       from './game/BeatMap.js';
 import JudgementSystem from './game/JudgementSystem.js';
 import NoteRenderer  from './game/NoteRenderer.js';
 import ColorExtractor from './game/ColorExtractor.js';
+import RecordStore   from './game/RecordStore.js';
 import JudgementDisplay from './ui/JudgementDisplay.js';
 import HUD           from './ui/HUD.js';
 import ScreenManager from './ui/ScreenManager.js';
@@ -418,16 +419,12 @@ async function boot() {
     three.showBgMesh(); // Restore dark gradient bg mesh for menus
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
-    // Save local record
+    // Save full play history using RecordStore
     if (currentMapData && stats) {
       try {
         const setId = currentMapData.metadata?.setId || currentMapData.metadata?.title || '';
         const diffVersion = currentMapData.metadata?.version || '';
-        const key = `rhythm-record-${setId}-${diffVersion.replace(/[^a-zA-Z0-9]/g, '_')}`;
-        const existing = JSON.parse(localStorage.getItem(key) || 'null');
-        if (!existing || stats.score > existing.score) {
-          localStorage.setItem(key, JSON.stringify({ score: stats.score, rank: stats.rank }));
-        }
+        RecordStore.add(setId, diffVersion, stats);
       } catch (_) {}
     }
     EventBus.emit('game:over', stats);
@@ -620,7 +617,16 @@ async function boot() {
   screens.register('main-menu', () => new MainMenu({ audio, screens }));
   screens.register('song-select', () => new SongSelect({ audio, three, screens }));
   screens.register('settings', () => new Settings({ audio, input, screens, overlayMode: true }));
-  screens.register('result', (data) => { const rs = new ResultScreen({ screens }); if (data && data.stats) rs.setStats(data.stats, data.map); return rs; });
+  screens.register('result', (data) => {
+    const rs = new ResultScreen({ screens });
+    if (data && data.historyRecord) {
+      // Viewing a historical record from song select
+      rs.setupHistory(data.setId, data.diffVersion, data.historyRecord, data.map);
+    } else if (data && data.stats) {
+      rs.setStats(data.stats, data.map);
+    }
+    return rs;
+  });
   screens.register('game', (data) => { if (data && data.map) startGame(data.map); return { build: () => '', init: () => {}, destroy: () => {} }; });
 
   screens.show('main-menu');

@@ -1,6 +1,7 @@
 import EventBus from '../../core/EventBus.js';
 import OszLoader from '../../game/OszLoader.js';
 import DifficultyAnalyzer from '../../game/DifficultyAnalyzer.js';
+import RecordStore from '../../game/RecordStore.js';
 import ZZZTheme from '../../theme/ZZZTheme.js';
 
 export default class SongSelect {
@@ -35,24 +36,14 @@ export default class SongSelect {
     this._leavingToGame = false;  // true when transitioning to game screen
   }
 
-  /** Get local record for a beatmap difficulty */
+  /** Get local best record for a beatmap difficulty (legacy compat) */
   _getRecord(setId, diffVersion) {
-    try {
-      const key = `rhythm-record-${setId}-${(diffVersion || '').replace(/[^a-zA-Z0-9]/g, '_')}`;
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : null;
-    } catch (_) { return null; }
+    return RecordStore.getBest(setId, diffVersion);
   }
 
-  /** Save local record for a beatmap difficulty */
-  static saveRecord(setId, diffVersion, score, rank) {
-    try {
-      const key = `rhythm-record-${setId}-${(diffVersion || '').replace(/[^a-zA-Z0-9]/g, '_')}`;
-      const existing = JSON.parse(localStorage.getItem(key) || 'null');
-      if (!existing || score > existing.score) {
-        localStorage.setItem(key, JSON.stringify({ score, rank }));
-      }
-    } catch (_) {}
+  /** Get all records for a beatmap difficulty */
+  _getAllRecords(setId, diffVersion) {
+    return RecordStore.getAll(setId, diffVersion);
   }
 
   build() {
@@ -222,6 +213,15 @@ export default class SongSelect {
     if (info) { ZZZTheme.addParallax(info, 5); this._parallaxEls.push(info); }
     if (playArea) { ZZZTheme.addParallax(playArea, 5); this._parallaxEls.push(playArea); }
     if (right) { ZZZTheme.addParallax(right, 2); this._parallaxEls.push(right); }
+
+    // Listen for record changes (deletion from result screen)
+    this._recordsChangedHandler = () => {
+      if (this.selectedIndex >= 0) {
+        this._renderSongInfo(this.beatmapSets[this.selectedIndex]);
+        this._renderSongList();
+      }
+    };
+    EventBus.on('records:changed', this._recordsChangedHandler);
   }
 
   /** Update fade mask based on scroll position */
@@ -539,12 +539,7 @@ export default class SongSelect {
   _resetScores(setIndex) {
     const set = this.beatmapSets[setIndex];
     if (!set) return;
-    set.difficulties.forEach(diff => {
-      try {
-        const key = `rhythm-record-${set.id}-${(diff.version || '').replace(/[^a-zA-Z0-9]/g, '_')}`;
-        localStorage.removeItem(key);
-      } catch (_) {}
-    });
+    RecordStore.deleteSet(set.id, set.difficulties.map(d => d.version));
     // Refresh display
     this._renderSongList();
     if (this.selectedIndex === setIndex) {
@@ -795,26 +790,37 @@ export default class SongSelect {
                       titleLen <= 28 ? 'clamp(24px, 4vw, 36px)' :
                       'clamp(18px, 3vw, 28px)';
 
-    // Build results list for all difficulties
+    // Build horizontal scrollable record cards for the selected difficulty
     let resultsHtml = '';
-    const resultsList = set.difficulties
-      .map(diff => {
-        const rec = this._getRecord(set.id, diff.version);
-        return { version: diff.version, record: rec };
-      })
-      .filter(r => r.record);
+    const currentRecords = this._getAllRecords(set.id, diff.version);
 
-    if (resultsList.length > 0) {
-      resultsHtml = `<div style="margin-top:10px;max-height:80px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;" class="zzz-scroll">
-        <div style="font-family:var(--zzz-font);font-weight:700;font-size:9px;color:var(--zzz-muted);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:2px;">RECORDS</div>
-        ${resultsList.map(r => `
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-family:var(--zzz-font);font-size:10px;color:rgba(255,255,255,0.5);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._escHtml(r.version)}</span>
-            <span style="font-family:var(--zzz-font);font-weight:900;font-size:11px;color:var(--zzz-lime);flex-shrink:0;">${r.record.rank || '?'}</span>
-            <button class="result-delete-btn" data-diff="${this._escHtml(r.version)}" style="width:16px;height:16px;border:none;background:rgba(255,61,61,0.1);color:var(--zzz-red);font-size:10px;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;opacity:0.4;transition:opacity 0.15s;">✕</button>
+    if (currentRecords.length > 0) {
+      const recordCards = currentRecords.map((rec, idx) => {
+        const grad = this._getGradeGradient(rec.rank) || 'linear-gradient(180deg, #555, #333)';
+        const timeStr = RecordStore.formatTimestamp(rec.timestamp);
+        return `
+          <div class="rc-history-card" data-rec-idx="${idx}" data-rec-ts="${rec.timestamp}" data-diff="${this._escHtml(diff.version || '')}"
+               style="--rc-hc-bg: ${grad}; --rc-hc-delay: ${idx * 0.05}s;">
+            <div class="rc-history-card-rank grade-gradient" style="--gg-grad: ${grad}; --gg-stroke: 1.5px rgba(0,0,0,0.5);">
+              ${rec.rank || '?'}<span class="gg-fill">${rec.rank || '?'}</span>
+            </div>
+            <div class="rc-history-card-score">${rec.score.toLocaleString()}</div>
+            <div class="rc-history-card-time">${timeStr}</div>
           </div>
-        `).join('')}
-      </div>`;
+        `;
+      }).join('');
+
+      resultsHtml = `
+        <div style="margin-top:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="font-family:var(--zzz-font);font-weight:700;font-size:9px;color:var(--zzz-muted);letter-spacing:0.15em;text-transform:uppercase;">PLAY HISTORY</div>
+            <div style="font-family:var(--zzz-font);font-weight:600;font-size:9px;color:rgba(255,255,255,0.2);letter-spacing:0.1em;">${currentRecords.length} PLAYS</div>
+          </div>
+          <div class="rc-history-scroll" id="rc-history-scroll">
+            ${recordCards}
+          </div>
+        </div>
+      `;
     }
 
     // Difficulty name & pattern type
@@ -878,20 +884,27 @@ export default class SongSelect {
       </div>
     `;
 
-    // Add delete button listeners for results
-    info.querySelectorAll('.result-delete-btn').forEach(btn => {
-      btn.addEventListener('mouseenter', () => { btn.style.opacity = '1'; });
-      btn.addEventListener('mouseleave', () => { btn.style.opacity = '0.4'; });
-      btn.addEventListener('click', (e) => {
+    // Add click listeners for history cards → open result screen
+    info.querySelectorAll('.rc-history-card').forEach(card => {
+      card.style.cursor = 'pointer';
+      card.addEventListener('mouseenter', () => { card.style.transform = 'translateY(-3px) scale(1.04)'; });
+      card.addEventListener('mouseleave', () => { card.style.transform = ''; });
+      card.addEventListener('click', (e) => {
         e.stopPropagation();
-        const diffName = btn.dataset.diff;
-        try {
-          const key = `rhythm-record-${set.id}-${(diffName || '').replace(/[^a-zA-Z0-9]/g, '_')}`;
-          localStorage.removeItem(key);
-        } catch (_) {}
-        // Re-render info to update list
-        this._renderSongInfo(set);
-        this._renderSongList();
+        const recIdx = parseInt(card.dataset.recIdx);
+        const records = this._getAllRecords(set.id, diff.version);
+        if (records[recIdx]) {
+          // Build a minimal map object for the result screen
+          const mapForResult = {
+            metadata: { ...diff.metadata, setId: set.id, title: set.title, artist: set.artist, version: diff.version, creator: set.creator },
+          };
+          this.screens.show('result', {
+            historyRecord: records[recIdx],
+            setId: set.id,
+            diffVersion: diff.version,
+            map: mapForResult,
+          });
+        }
       });
     });
 
@@ -1202,6 +1215,7 @@ export default class SongSelect {
     if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler);
     if (this._dragHandler) window.removeEventListener('mousemove', this._dragHandler);
     if (this._dragUpHandler) window.removeEventListener('mouseup', this._dragUpHandler);
+    if (this._recordsChangedHandler) EventBus.off('records:changed', this._recordsChangedHandler);
 
     // Stop preview — but if we're leaving to game, DON'T call _stopPreview()
     // because it would schedule audio.stop() 200ms later, which would kill
