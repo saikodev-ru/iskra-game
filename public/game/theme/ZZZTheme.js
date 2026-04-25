@@ -1218,6 +1218,263 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   box-shadow: 0 4px 16px rgba(239,68,68,0.2);
 }
 
+/* ── RESULT CAROUSEL (horizontal scrollable result cards) ── */
+.result-screen--carousel {
+  gap: 12px;
+}
+.rs-scroll-hint {
+  font-family: var(--zzz-font); font-weight: 700; font-size: 9px;
+  color: rgba(255,255,255,0.2); letter-spacing: 0.2em;
+  animation: rs-scroll-pulse 2s ease-in-out infinite;
+}
+@keyframes rs-scroll-pulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.5; }
+}
+.rs-plays-count {
+  font-family: var(--zzz-font); font-weight: 700; font-size: 10px;
+  color: rgba(255,255,255,0.2); letter-spacing: 0.12em; margin-top: 4px;
+}
+.rs-carousel {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 24px 16px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+  mask-image: linear-gradient(to right, transparent 0px, black 32px, black calc(100% - 32px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0px, black 32px, black calc(100% - 32px), transparent 100%);
+}
+.rs-carousel::-webkit-scrollbar {
+  height: 4px;
+}
+.rs-carousel::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.03);
+  border-radius: 2px;
+}
+.rs-carousel::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+.rs-carousel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+/* Individual result card */
+.rs-card {
+  flex-shrink: 0;
+  width: 200px;
+  background: rgba(14, 14, 14, 0.8);
+  border: 1.5px solid rgba(255,255,255,0.06);
+  border-radius: 18px;
+  padding: 16px 14px 14px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+  scroll-snap-align: center;
+  cursor: pointer;
+  opacity: 0;
+  animation: rs-card-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--rs-delay, 0s);
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.3s ease,
+              box-shadow 0.3s ease,
+              opacity 0.3s ease;
+}
+@keyframes rs-card-enter {
+  from { opacity: 0; transform: translateY(20px) scale(0.92); }
+  to   { opacity: 0.5; transform: translateY(0) scale(1); }
+}
+.rs-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: rgba(255,255,255,0.12);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+/* Active card — highlighted, larger, glowing */
+.rs-card--active {
+  opacity: 1 !important;
+  border-color: var(--rs-grade-solid, rgba(255,255,255,0.3));
+  box-shadow:
+    0 0 24px var(--rs-grade-glow, rgba(255,255,255,0.15)),
+    0 0 48px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  transform: scale(1.04) translateY(-2px);
+  background: rgba(20, 20, 20, 0.92);
+}
+.rs-card--active:hover {
+  transform: scale(1.06) translateY(-4px);
+}
+
+/* Card glow overlay */
+.rs-card-glow {
+  position: absolute;
+  top: -40%; left: -20%; right: -20%; height: 80%;
+  background: var(--rs-grade-bg, linear-gradient(180deg, #555, #333));
+  opacity: 0;
+  filter: blur(40px);
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+.rs-card--active .rs-card-glow {
+  opacity: 0.08;
+}
+
+/* Top color bar */
+.rs-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--rs-grade-bg, #555);
+  opacity: 0.4;
+  transition: opacity 0.3s ease;
+}
+.rs-card--active::before {
+  opacity: 0.9;
+  height: 2.5px;
+}
+
+/* Death card tint */
+.rs-card[data-style*="--rs-death: 1"] .rs-card-glow,
+.rs-card:has(.rs-card-death-badge) .rs-card-glow {
+  background: linear-gradient(180deg, #EF4444, #7F1D1D) !important;
+}
+.rs-card:has(.rs-card-death-badge)::before {
+  background: linear-gradient(90deg, #EF4444, #7F1D1D) !important;
+}
+
+/* Card header: rank + time */
+.rs-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  position: relative;
+}
+.rs-card-rank {
+  font-family: var(--zzz-font); font-weight: 900; font-size: 34px;
+  line-height: 1; letter-spacing: 0.04em;
+  filter: drop-shadow(0 0 10px var(--rs-grade-glow, rgba(255,255,255,0.2)));
+}
+.rs-card--active .rs-card-rank {
+  font-size: 40px;
+  filter: drop-shadow(0 0 16px var(--rs-grade-glow, rgba(255,255,255,0.4)));
+}
+.rs-card-death-badge {
+  font-family: var(--zzz-font); font-weight: 800; font-size: 7px;
+  color: #FF3D3D; letter-spacing: 0.2em;
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.25);
+  border-radius: 6px; padding: 2px 6px;
+}
+.rs-card-time {
+  font-family: var(--zzz-font); font-weight: 600; font-size: 8px;
+  color: rgba(255,255,255,0.2); letter-spacing: 0.08em;
+  position: absolute; top: 0; right: 0;
+}
+
+/* Score */
+.rs-card-score {
+  font-family: var(--zzz-font); font-weight: 900; font-size: 20px;
+  color: #fff; font-variant-numeric: tabular-nums; line-height: 1.1;
+  text-shadow: 0 0 16px rgba(255,255,255,0.08), 0 2px 8px rgba(0,0,0,0.9);
+  margin-bottom: 2px;
+}
+.rs-card--active .rs-card-score {
+  font-size: 24px;
+  text-shadow: 0 0 24px rgba(255,255,255,0.12), 0 2px 10px rgba(0,0,0,0.9);
+}
+
+/* Accuracy */
+.rs-card-acc {
+  font-family: var(--zzz-font); font-weight: 800; font-size: 14px;
+  font-variant-numeric: tabular-nums; line-height: 1;
+  margin-bottom: 10px;
+  opacity: 0.7;
+}
+.rs-card--active .rs-card-acc {
+  font-size: 16px;
+  opacity: 1;
+}
+
+/* Stats row (combo, notes, breaks) */
+.rs-card-stats-row {
+  display: flex; gap: 6px; justify-content: center; margin-bottom: 10px;
+}
+.rs-card-stat {
+  flex: 1;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  padding: 5px 2px;
+}
+.rs-card-stat-val {
+  font-family: var(--zzz-font); font-weight: 900; font-size: 14px;
+  font-variant-numeric: tabular-nums; line-height: 1; color: var(--zzz-text);
+}
+.rs-card-stat-x {
+  font-size: 9px; opacity: 0.5;
+}
+.rs-card-stat-label {
+  font-family: var(--zzz-font); font-weight: 600; font-size: 7px;
+  color: rgba(255,255,255,0.2); letter-spacing: 0.08em; margin-top: 2px;
+}
+
+/* Judgment mini bars */
+.rs-card-judges {
+  display: flex; gap: 4px; align-items: flex-end; justify-content: center;
+  height: 48px; padding-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+.rs-card-judge {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  flex: 1; min-width: 0;
+}
+.rs-card-judge-bar {
+  width: 100%; max-width: 22px;
+  border-radius: 3px 3px 1px 1px;
+  transition: height 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 0.6;
+  min-height: 0;
+}
+.rs-card--active .rs-card-judge-bar {
+  opacity: 0.85;
+}
+.rs-card-judge-label {
+  font-family: var(--zzz-font); font-weight: 700; font-size: 7px;
+  color: rgba(255,255,255,0.2); letter-spacing: 0.04em;
+}
+.rs-card-judge-count {
+  font-family: var(--zzz-font); font-weight: 800; font-size: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .rs-card {
+    width: 170px;
+    padding: 12px 10px 10px;
+    border-radius: 14px;
+  }
+  .rs-card-rank { font-size: 28px; }
+  .rs-card--active .rs-card-rank { font-size: 34px; }
+  .rs-card-score { font-size: 17px; }
+  .rs-card--active .rs-card-score { font-size: 20px; }
+  .rs-card-acc { font-size: 12px; }
+  .rs-card-stat-val { font-size: 12px; }
+  .rs-carousel { gap: 10px; padding: 6px 16px 12px; }
+}
+@media (max-width: 480px) {
+  .rs-card {
+    width: 150px;
+    padding: 10px 8px 8px;
+  }
+  .rs-card-stats-row { gap: 4px; }
+  .rs-card-judges { height: 36px; }
+}
+
 /* ── GRADE GRADIENT (two-element approach) ──── */
 .grade-gradient {
   position: relative;

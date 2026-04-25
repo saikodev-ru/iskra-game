@@ -62,10 +62,10 @@ export default class SongSelect {
         <div style="position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.18) 72%, rgba(0,0,0,0.45) 100%);"></div>
 
         <!-- Song info (top-left) with parallax -->
-        <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:20px;left:20px;z-index:2;width:clamp(280px, 42%, 440px);"></div>
+        <div id="ss-song-info" class="parallax-layer" data-parallax="5" style="position:absolute;top:20px;left:20px;z-index:10;width:clamp(280px, 42%, 440px);pointer-events:auto;"></div>
 
         <!-- PLAY button (bottom-left) with parallax -->
-        <div id="ss-play-area" class="parallax-layer" data-parallax="5" style="position:absolute;bottom:28px;left:24px;z-index:3;pointer-events:auto;"></div>
+        <div id="ss-play-area" class="parallax-layer" data-parallax="5" style="position:absolute;bottom:28px;left:24px;z-index:10;pointer-events:auto;"></div>
 
         <!-- Right column: toolbar + search + list + actions -->
         <div id="ss-right-column" class="parallax-layer" data-parallax="2" style="flex:1;display:flex;justify-content:flex-end;overflow:hidden;padding:16px 24px 0 0;z-index:2;position:relative;">

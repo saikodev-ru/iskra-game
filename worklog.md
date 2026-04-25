@@ -936,3 +936,40 @@ Stage Summary:
 - Clicking a card opens the full result screen for that play
 - Records can be deleted from the result screen, which auto-refreshes song select
 - All changes pass ESLint clean
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix unclickable history cards + redesign result screen as horizontal carousel
+
+Work Log:
+- Diagnosed clickability issue: ss-song-info (z-index:2) overlapped by right-column (z-index:2, later in DOM), preventing clicks on history cards
+- Fixed SongSelect.js: Bumped ss-song-info and ss-play-area z-index from 2/3 to 10, added pointer-events:auto
+- Fixed missing EventBus import in ResultScreen.js (caused ReferenceError on delete)
+- Completely rewrote ResultScreen.js:
+  - Removed single-record layout (rank cards X→D, score panels, judgment cards)
+  - New layout: horizontal carousel of result cards, each showing rank, score, accuracy, combo, notes, slider breaks, judgment breakdown with animated bar charts
+  - Active card highlighted with glow, border, scale effect; inactive cards dimmed at 50% opacity
+  - Click any card to select/highlight it; arrow keys navigate between cards
+  - In history mode: DELETE removes selected record and re-renders; BACK returns to song select
+  - In fresh result mode: shows current play + all history; RETRY/MENU buttons
+  - Auto-scrolls to active card on load
+  - Delete re-renders in-place instead of navigating away
+- Added comprehensive CSS to ZZZTheme.js:
+  - .rs-carousel: horizontal scroll with snap, edge fade masks
+  - .rs-card: 200px wide glassmorphism cards with staggered entrance animation
+  - .rs-card--active: glowing border, larger scale, full opacity
+  - .rs-card-glow: blurred grade-color overlay on active card
+  - .rs-card-judge-bar: animated vertical bars for judgment breakdown
+  - .rs-scroll-hint: pulsing "← SCROLL →" indicator
+  - Responsive breakpoints for 768px and 480px
+  - Death card styling with red glow overlay
+
+Stage Summary:
+- History cards in song select are now clickable (z-index fix)
+- Result screen redesigned as horizontal scrollable card carousel
+- Each card shows full play details: rank, score, accuracy, combo, notes, breaks, judgment counts
+- Delete button works (EventBus import fixed)
+- Arrow key navigation between cards
+- Auto-scroll to active card on load
+- Lint passes clean
