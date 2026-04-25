@@ -1543,3 +1543,26 @@ Stage Summary:
 - Video element can no longer steal focus
 - #screen div no longer intercepts clicks during gameplay
 
+---
+Task ID: 3
+Agent: Main
+Task: Fix kiai effects not showing + redesign kiai visual effects
+
+Work Log:
+- Investigated full kiai pipeline: OszLoader → BeatMap → NoteRenderer
+- Found root cause: SongSelect.js line 1064 drops `kiaiSections` when constructing map object
+- Fixed SongSelect.js: added `kiaiSections: diff.kiaiSections` to map object
+- Completely redesigned kiai effects in NoteRenderer.js:
+  - Removed particle system (_drawKiaiParticles) entirely
+  - New Layer 1: Brighter playfield (subtle white tint overlay that pulses with intensity)
+  - New Layer 2: White beat flash (radial gradient flash from judge line, spikes on beat, fast decay)
+  - New Layer 3: Pulsing border glow (playfield outline glows in rhythm, 3-layer bloom on beat)
+  - New Layer 4: Burning judge line (3 wavy flame layers using 'lighter' composite, flame noise flickering, grows on beats)
+  - Added flame noise using layered sine waves for organic flickering
+  - Added _kiaiFlashAlpha, _kiaiBorderGlow, _kiaiFlamePhase state fields
+
+Stage Summary:
+- kiaiSections now properly passed from SongSelect to game (SongSelect.js fix)
+- Kiai effects completely redesigned: no particles, now has burning judge line + white flashes + pulsing borders + brighter playfield
+- All effects beat-synced via _kiaiBeatPulse / _kiaiSmoothPulse
+- Lint clean (0 errors, 1 pre-existing warning)

@@ -53,14 +53,13 @@ export default class NoteRenderer {
     this._missFlashPool = [];
     this._missFlashCount = 0;
 
-    // Kiai time state — pulsing beat-synced glow on the playfield
+    // Kiai time state — burning judge line + beat-synced effects
     this._kiaiIntensity = 0;       // 0–1, set each frame from BeatMap.getKiaiIntensity()
     this._kiaiBeatPulse = 0;       // 0–1, spikes to 1.0 on each beat during kiai, decays
     this._kiaiSmoothPulse = 0;     // smoothed version for smooth pulsing
-
-    // Kiai particle pool — rising sparks below the playfield
-    this._kiaiParticles = [];
-    this._kiaiParticleTimer = 0;
+    this._kiaiFlashAlpha = 0;      // white flash overlay alpha, spikes on beat, decays fast
+    this._kiaiBorderGlow = 0;      // border glow intensity, smoothed pulse
+    this._kiaiFlamePhase = 0;      // noise phase for flame flickering
 
     this.resize();
   }
@@ -321,8 +320,7 @@ export default class NoteRenderer {
     }
 
     this._drawBackgroundCached(laneCount);
-    this._drawKiaiParticles(delta, laneCount);
-    this._drawKiaiEffect(laneCount);
+    this._drawKiaiEffect(delta, laneCount);
     this._drawBeatLines(currentTime, laneCount);
     this._drawMissFlashes(delta);
     this._drawEffects();
@@ -612,88 +610,30 @@ export default class NoteRenderer {
     this.invalidateBackgroundCache();
   }
 
-  /* ── Kiai Particles ─────────────────────────────────────────────── */
-  _drawKiaiParticles(delta, laneCount) {
-    if (this._kiaiIntensity < 0.01) {
-      this._kiaiParticles.length = 0;
-      this._kiaiParticleTimer = 0;
-      return;
-    }
-
-    const ctx = this.ctx;
-    const sa = this.safeArea;
-    const judgeLineY = this._getJudgeLineY();
-    const bottomY = this._getBottomY();
-    const intensity = this._kiaiIntensity;
-
-    this._kiaiParticleTimer += delta;
-    const spawnRate = 0.02 - intensity * 0.012;
-    while (this._kiaiParticleTimer >= spawnRate && this._kiaiParticles.length < 120) {
-      this._kiaiParticleTimer -= spawnRate;
-
-      const leftBot = this._getLaneGeometry(0, bottomY, laneCount);
-      const rightBot = this._getLaneGeometry(laneCount, bottomY, laneCount);
-      const x = leftBot.x + Math.random() * (rightBot.x - leftBot.x);
-      const y = bottomY + Math.random() * 20;
-
-      const hue = 20 + Math.random() * 40;
-      const sat = 80 + Math.random() * 20;
-      const light = 55 + Math.random() * 25;
-
-      this._kiaiParticles.push({
-        x, y,
-        vx: (Math.random() - 0.5) * 15,
-        vy: -(40 + Math.random() * 60),
-        life: 1.0,
-        decay: 0.3 + Math.random() * 0.4,
-        size: 1.5 + Math.random() * 2.5,
-        hue, sat, light,
-      });
-    }
-
-    for (let i = this._kiaiParticles.length - 1; i >= 0; i--) {
-      const p = this._kiaiParticles[i];
-      p.life -= p.decay * delta;
-      if (p.life <= 0 || p.y < sa.y - 20) {
-        this._kiaiParticles.splice(i, 1);
-        continue;
-      }
-      p.x += p.vx * delta;
-      p.y += p.vy * delta;
-      p.vy *= 0.998;
-
-      const alpha = p.life * intensity * 0.6;
-      if (alpha < 0.01) continue;
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = `hsl(${p.hue}, ${p.sat}%, ${p.light}%)`;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  }
-
   /* ── Kiai Time Effect ─────────────────────────────────────────────── */
-  _drawKiaiEffect(laneCount) {
+  _drawKiaiEffect(delta, laneCount) {
     if (this._kiaiIntensity < 0.01) {
       this._kiaiBeatPulse = 0;
       this._kiaiSmoothPulse = 0;
+      this._kiaiFlashAlpha = 0;
+      this._kiaiBorderGlow = 0;
       return;
     }
 
     const ctx = this.ctx;
-    const delta = this._frameDelta || 0.016;
     const sa = this.safeArea;
     const topY = this._getTopY();
     const judgeLineY = this._getJudgeLineY();
     const bottomY = this._getBottomY();
 
+    // Decay beat pulse
     this._kiaiBeatPulse *= Math.max(0, 1 - delta * 12);
     this._kiaiSmoothPulse += (this._kiaiBeatPulse - this._kiaiSmoothPulse) * Math.min(1, delta * 20);
 
     const intensity = this._kiaiIntensity;
     const pulse = this._kiaiSmoothPulse;
 
+    // Geometry
     const leftTop = this._getLaneGeometry(0, topY, laneCount);
     const rightTop = this._getLaneGeometry(laneCount, topY, laneCount);
     const leftJudge = this._getLaneGeometry(0, judgeLineY, laneCount);
@@ -701,7 +641,11 @@ export default class NoteRenderer {
     const leftBottom = this._getLaneGeometry(0, bottomY, laneCount);
     const rightBottom = this._getLaneGeometry(laneCount, bottomY, laneCount);
 
-    // Layer 1: Color tint overlay on the playfield trapezoid
+    // Flame flicker noise
+    this._kiaiFlamePhase += delta * 15;
+    const noise = (Math.sin(this._kiaiFlamePhase * 3.7) * 0.3 + Math.sin(this._kiaiFlamePhase * 7.1) * 0.2 + Math.sin(this._kiaiFlamePhase * 13.3) * 0.15) * 0.65 + 0.5;
+
+    // ── Layer 1: Brighter playfield (subtle white tint overlay) ──
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(leftTop.x, topY);
@@ -713,115 +657,162 @@ export default class NoteRenderer {
     ctx.closePath();
     ctx.clip();
 
-    const baseTint = intensity * 0.08;
-    const beatTint = pulse * 0.12;
-    const totalTint = baseTint + beatTint;
-
-    const cx = sa.x + sa.w / 2;
-    const pfWidth = rightJudge.x - leftJudge.x;
-    const gradW = pfWidth * 0.7;
-    const hGrad = ctx.createLinearGradient(cx - gradW, 0, cx + gradW, 0);
-    hGrad.addColorStop(0, 'rgba(255,160,50,0)');
-    hGrad.addColorStop(0.3, `rgba(255,180,80,${totalTint * 0.6})`);
-    hGrad.addColorStop(0.5, `rgba(255,200,100,${totalTint})`);
-    hGrad.addColorStop(0.7, `rgba(255,180,80,${totalTint * 0.6})`);
-    hGrad.addColorStop(1, 'rgba(255,160,50,0)');
-    ctx.fillStyle = hGrad;
+    const brightnessBase = intensity * 0.06;
+    const brightnessPulse = pulse * 0.08;
+    ctx.fillStyle = `rgba(255,255,255,${brightnessBase + brightnessPulse})`;
     ctx.fillRect(leftTop.x - 20, topY - 20, rightTop.x - leftTop.x + 40, bottomY - topY + 40);
 
-    // Layer 2: Beat-pulsed horizontal band sweeping across playfield
-    if (pulse > 0.05) {
-      const bandH = 30 + pulse * 60;
-      const bandAlpha = pulse * 0.18 * intensity;
-      const bandGrad = ctx.createLinearGradient(0, judgeLineY - bandH, 0, judgeLineY + bandH);
-      bandGrad.addColorStop(0, 'rgba(255,255,255,0)');
-      bandGrad.addColorStop(0.35, `rgba(255,230,160,${bandAlpha * 0.5})`);
-      bandGrad.addColorStop(0.5, `rgba(255,255,240,${bandAlpha})`);
-      bandGrad.addColorStop(0.65, `rgba(255,230,160,${bandAlpha * 0.5})`);
-      bandGrad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = bandGrad;
-      ctx.fillRect(leftTop.x - 20, judgeLineY - bandH, rightTop.x - leftTop.x + 40, bandH * 2);
+    // ── Layer 2: White beat flash on playfield background ──
+    // Flash spikes on beat, decays fast
+    if (this._kiaiBeatPulse > 0.5) {
+      this._kiaiFlashAlpha = Math.min(1, this._kiaiFlashAlpha + this._kiaiBeatPulse * 0.5);
+    }
+    this._kiaiFlashAlpha *= Math.max(0, 1 - delta * 6);
+
+    if (this._kiaiFlashAlpha > 0.02) {
+      const flashA = this._kiaiFlashAlpha * intensity * 0.15;
+      const flashGrad = ctx.createRadialGradient(
+        (leftJudge.x + rightJudge.x) / 2, judgeLineY, 0,
+        (leftJudge.x + rightJudge.x) / 2, judgeLineY, (bottomY - topY) * 0.8
+      );
+      flashGrad.addColorStop(0, `rgba(255,255,255,${flashA})`);
+      flashGrad.addColorStop(0.4, `rgba(255,240,220,${flashA * 0.5})`);
+      flashGrad.addColorStop(1, 'rgba(255,220,180,0)');
+      ctx.fillStyle = flashGrad;
+      ctx.fillRect(leftTop.x - 20, topY - 20, rightTop.x - leftTop.x + 40, bottomY - topY + 40);
     }
 
     ctx.restore();
 
-    // Layer 3: Glowing side rails (playfield edges)
-    const railAlpha = intensity * 0.4 + pulse * 0.3;
-    if (railAlpha > 0.01) {
+    // ── Layer 3: Pulsing border glow on playfield edges ──
+    this._kiaiBorderGlow += (pulse - this._kiaiBorderGlow) * Math.min(1, delta * 16);
+    const borderAlpha = intensity * 0.3 + this._kiaiBorderGlow * 0.5;
+    if (borderAlpha > 0.02) {
       ctx.save();
-      ctx.lineWidth = 2.5;
       ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-      const lGrad = ctx.createLinearGradient(0, topY, 0, bottomY);
-      lGrad.addColorStop(0, `rgba(255,180,80,${railAlpha * 0.3})`);
-      lGrad.addColorStop(0.5, `rgba(255,220,120,${railAlpha})`);
-      lGrad.addColorStop(0.8, `rgba(255,180,80,${railAlpha * 0.7})`);
-      lGrad.addColorStop(1, 'rgba(255,140,50,0)');
-      ctx.strokeStyle = lGrad;
+      // Main border lines
+      const borderGrad = ctx.createLinearGradient(0, topY, 0, bottomY);
+      borderGrad.addColorStop(0, `rgba(255,220,140,${borderAlpha * 0.4})`);
+      borderGrad.addColorStop(0.4, `rgba(255,200,100,${borderAlpha})`);
+      borderGrad.addColorStop(0.7, `rgba(255,200,100,${borderAlpha * 0.8})`);
+      borderGrad.addColorStop(1, `rgba(255,160,60,${borderAlpha * 0.3})`);
+      ctx.strokeStyle = borderGrad;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(leftTop.x, topY);
       ctx.lineTo(leftJudge.x, judgeLineY);
       ctx.lineTo(leftBottom.x, bottomY);
+      ctx.lineTo(rightBottom.x, bottomY);
+      ctx.lineTo(rightJudge.x, judgeLineY);
+      ctx.lineTo(rightTop.x, topY);
+      ctx.closePath();
       ctx.stroke();
 
-      const rGrad = ctx.createLinearGradient(0, topY, 0, bottomY);
-      rGrad.addColorStop(0, `rgba(255,180,80,${railAlpha * 0.3})`);
-      rGrad.addColorStop(0.5, `rgba(255,220,120,${railAlpha})`);
-      rGrad.addColorStop(0.8, `rgba(255,180,80,${railAlpha * 0.7})`);
-      rGrad.addColorStop(1, 'rgba(255,140,50,0)');
-      ctx.strokeStyle = rGrad;
-      ctx.beginPath();
-      ctx.moveTo(rightTop.x, topY);
-      ctx.lineTo(rightJudge.x, judgeLineY);
-      ctx.lineTo(rightBottom.x, bottomY);
+      // Outer glow (thicker, softer)
+      ctx.lineWidth = 10;
+      ctx.globalAlpha = 0.25 + this._kiaiBorderGlow * 0.15;
+      ctx.strokeStyle = `rgba(255,200,100,${borderAlpha})`;
       ctx.stroke();
 
-      // Glow layer on rails (thicker, transparent)
-      ctx.lineWidth = 8;
-      ctx.globalAlpha = 0.3;
-      ctx.strokeStyle = `rgba(255,200,100,${railAlpha})`;
-      ctx.beginPath();
-      ctx.moveTo(leftTop.x, topY);
-      ctx.lineTo(leftJudge.x, judgeLineY);
-      ctx.lineTo(leftBottom.x, bottomY);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(rightTop.x, topY);
-      ctx.lineTo(rightJudge.x, judgeLineY);
-      ctx.lineTo(rightBottom.x, bottomY);
-      ctx.stroke();
+      // Extra bloom on beat
+      if (this._kiaiBorderGlow > 0.2) {
+        ctx.lineWidth = 20;
+        ctx.globalAlpha = this._kiaiBorderGlow * 0.12;
+        ctx.strokeStyle = `rgba(255,180,80,${borderAlpha})`;
+        ctx.stroke();
+      }
 
       ctx.globalAlpha = 1;
       ctx.restore();
     }
 
-    // Layer 4: Enhanced judge line glow
-    if (intensity > 0.1) {
+    // ── Layer 4: Burning judge line ──
+    const judgeWidth = rightJudge.x - leftJudge.x;
+    const judgeCX = (leftJudge.x + rightJudge.x) / 2;
+
+    // Flame base height — flickers constantly, grows on beats
+    const flameBase = 18 + noise * 14;
+    const flamePulse = pulse * 20;
+    const flameH = (flameBase + flamePulse) * intensity;
+
+    // Multiple flame layers for depth
+    for (let layer = 0; layer < 3; layer++) {
+      const layerPhase = this._kiaiFlamePhase * (4 + layer * 2.3) + layer * 2.1;
+      const layerNoise = (Math.sin(layerPhase) * 0.35 + Math.sin(layerPhase * 2.7) * 0.2 + 0.5);
+      const h = flameH * (1 - layer * 0.25) * (0.6 + layerNoise * 0.5);
+      const w = judgeWidth * (0.85 + layer * 0.1);
+      const alpha = intensity * (0.4 - layer * 0.1);
+
+      // Flames go upward from judge line
+      const flameGrad = ctx.createLinearGradient(judgeCX, judgeLineY - h, judgeCX, judgeLineY + 4);
+      const coreAlpha = alpha * (0.7 + noise * 0.3);
+      const midAlpha = alpha * (0.5 + layerNoise * 0.3);
+      flameGrad.addColorStop(0, `rgba(255,${80 + layer * 40},${20 + layer * 20},0)`);
+      flameGrad.addColorStop(0.15, `rgba(255,${120 + layer * 30},${30 + layer * 15},${midAlpha * 0.5})`);
+      flameGrad.addColorStop(0.4, `rgba(255,${180 + layer * 20},${60 + layer * 20},${coreAlpha})`);
+      flameGrad.addColorStop(0.7, `rgba(255,${220 + layer * 15},${120 + layer * 30},${coreAlpha * 1.2})`);
+      flameGrad.addColorStop(0.9, `rgba(255,240,180,${coreAlpha * 0.8})`);
+      flameGrad.addColorStop(1, 'rgba(255,255,220,0)');
+
       ctx.save();
-      const jlAlpha = intensity * 0.5 + pulse * 0.4;
-      const jlGlowH = 4 + pulse * 8;
-      const jlGrad = ctx.createLinearGradient(0, judgeLineY - jlGlowH / 2, 0, judgeLineY + jlGlowH / 2);
-      jlGrad.addColorStop(0, 'rgba(255,220,130,0)');
-      jlGrad.addColorStop(0.3, `rgba(255,240,180,${jlAlpha * 0.4})`);
-      jlGrad.addColorStop(0.5, `rgba(255,255,230,${jlAlpha})`);
-      jlGrad.addColorStop(0.7, `rgba(255,240,180,${jlAlpha * 0.4})`);
-      jlGrad.addColorStop(1, 'rgba(255,220,130,0)');
-      ctx.fillStyle = jlGrad;
-      ctx.fillRect(leftJudge.x - 6, judgeLineY - jlGlowH / 2, rightJudge.x - leftJudge.x + 12, jlGlowH);
-
-      // Broader subtle bloom around judge line
-      const bloomH = 40 + pulse * 40;
-      const bloomGrad = ctx.createLinearGradient(0, judgeLineY - bloomH, 0, judgeLineY + bloomH);
-      bloomGrad.addColorStop(0, 'rgba(255,200,100,0)');
-      bloomGrad.addColorStop(0.4, `rgba(255,200,100,${jlAlpha * 0.06})`);
-      bloomGrad.addColorStop(0.5, `rgba(255,220,140,${jlAlpha * 0.12})`);
-      bloomGrad.addColorStop(0.6, `rgba(255,200,100,${jlAlpha * 0.06})`);
-      bloomGrad.addColorStop(1, 'rgba(255,200,100,0)');
-      ctx.fillStyle = bloomGrad;
-      ctx.fillRect(leftJudge.x - 10, judgeLineY - bloomH, rightJudge.x - leftJudge.x + 20, bloomH * 2);
-
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = flameGrad;
+      // Wavy flame top using quadratic curves
+      const segments = 8;
+      const segW = w / segments;
+      ctx.beginPath();
+      // Bottom edge (straight at judge line)
+      ctx.moveTo(judgeCX - w / 2, judgeLineY + 2);
+      ctx.lineTo(judgeCX + w / 2, judgeLineY + 2);
+      // Top edge (wavy)
+      for (let i = segments; i >= 0; i--) {
+        const segX = judgeCX - w / 2 + i * segW;
+        const waveOffset = Math.sin(layerPhase + i * 0.8) * h * 0.2;
+        const py = judgeLineY - h + waveOffset;
+        if (i === segments) {
+          ctx.lineTo(segX, py);
+        } else {
+          const nextX = judgeCX - w / 2 + (i + 1) * segW;
+          const nextWave = Math.sin(layerPhase + (i + 1) * 0.8) * h * 0.2;
+          const nextPy = judgeLineY - h + nextWave;
+          ctx.quadraticCurveTo(segX, py, (segX + nextX) / 2, (py + nextPy) / 2);
+        }
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
       ctx.restore();
     }
+
+    // Judge line hot glow (bright core at judge line position)
+    const hotGlowH = 6 + pulse * 10;
+    const hotGlowA = intensity * (0.6 + noise * 0.2) + pulse * 0.3;
+    const hotGrad = ctx.createLinearGradient(judgeCX, judgeLineY - hotGlowH, judgeCX, judgeLineY + hotGlowH);
+    hotGrad.addColorStop(0, 'rgba(255,180,60,0)');
+    hotGrad.addColorStop(0.25, `rgba(255,200,80,${hotGlowA * 0.4})`);
+    hotGrad.addColorStop(0.45, `rgba(255,240,160,${hotGlowA})`);
+    hotGrad.addColorStop(0.5, `rgba(255,255,230,${hotGlowA * 1.1})`);
+    hotGrad.addColorStop(0.55, `rgba(255,240,160,${hotGlowA})`);
+    hotGrad.addColorStop(0.75, `rgba(255,200,80,${hotGlowA * 0.4})`);
+    hotGrad.addColorStop(1, 'rgba(255,180,60,0)');
+    ctx.save();
+    ctx.fillStyle = hotGrad;
+    ctx.fillRect(leftJudge.x - 8, judgeLineY - hotGlowH, judgeWidth + 16, hotGlowH * 2);
+
+    // Broad bloom around judge line
+    const bloomH = 50 + pulse * 50 + noise * 15;
+    const bloomA = intensity * 0.08 + pulse * 0.06;
+    const bloomGrad = ctx.createLinearGradient(judgeCX, judgeLineY - bloomH, judgeCX, judgeLineY + bloomH);
+    bloomGrad.addColorStop(0, 'rgba(255,180,80,0)');
+    bloomGrad.addColorStop(0.35, `rgba(255,180,80,${bloomA * 0.3})`);
+    bloomGrad.addColorStop(0.5, `rgba(255,220,140,${bloomA})`);
+    bloomGrad.addColorStop(0.65, `rgba(255,180,80,${bloomA * 0.3})`);
+    bloomGrad.addColorStop(1, 'rgba(255,180,80,0)');
+    ctx.fillStyle = bloomGrad;
+    ctx.fillRect(leftJudge.x - 10, judgeLineY - bloomH, judgeWidth + 20, bloomH * 2);
+    ctx.restore();
   }
 
   /* ── Beat Lines — horizontal timing markers per beat ── */
