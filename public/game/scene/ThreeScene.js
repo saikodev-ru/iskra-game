@@ -43,6 +43,7 @@ export default class ThreeScene {
     this._safeArea = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
     this._graphicsPreset = 'disco'; // 'low' | 'standard' | 'disco'
     this._missFlash = 0; // red overlay flash intensity on miss (0-1, decays)
+    this._particleFrame = 0;
 
     // Video background state
     this._videoElement = null;   // hidden HTML5 <video> element
@@ -1014,16 +1015,19 @@ export default class ThreeScene {
 
     // ── Particles — audio-reactive (only on disco + visible) ──
     if (this._particles && this._particlesVisible && this._graphicsPreset === 'disco') {
-      const pos = this._particles.geometry.attributes.position.array;
-      const rawBass = this._audioLevels.bass;
-      const drift = 0.001 + rawBass * 0.004;
-      for (let i = 0; i < pos.length; i += 3) {
-        pos[i + 1] += Math.sin(time * 0.0003 + i) * drift;
-        pos[i] += Math.cos(time * 0.0002 + i * 0.5) * drift * 0.5;
+      this._particleFrame++;
+      if (this._particleFrame % 2 === 0) { // Only update every 2nd frame
+        const pos = this._particles.geometry.attributes.position.array;
+        const rawBass = this._audioLevels.bass;
+        const drift = 0.001 + rawBass * 0.004;
+        for (let i = 0; i < pos.length; i += 3) {
+          pos[i + 1] += Math.sin(time * 0.0003 + i) * drift * 2; // *2 to compensate for half the updates
+          pos[i] += Math.cos(time * 0.0002 + i * 0.5) * drift;
+        }
+        this._particles.geometry.attributes.position.needsUpdate = true;
       }
-      this._particles.geometry.attributes.position.needsUpdate = true;
-      this._particles.material.opacity = 0.1 + rawBass * 0.2 + this._beatIntensity * 0.1;
-      this._particles.material.size = 0.04 + rawBass * 0.02;
+      this._particles.material.opacity = 0.1 + this._audioLevels.bass * 0.2 + this._beatIntensity * 0.1;
+      this._particles.material.size = 0.04 + this._audioLevels.bass * 0.02;
     }
 
     // ── Camera FOV — smooth audio-reactive (skip updateProjectionMatrix when barely changed) ──

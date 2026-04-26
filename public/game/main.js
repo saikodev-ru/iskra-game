@@ -818,6 +818,7 @@ async function boot() {
   let _volumeOverlay = null;
   let _volumeHideTimer = null;
   let _hoveredKnob = null;
+  let _volumeKnobEls = {};
 
   const KNOB_R = 40;
   const KNOB_CIRC = 2 * Math.PI * KNOB_R;
@@ -830,8 +831,14 @@ async function boot() {
     { id: 'music',  label: 'MUSIC',  color: '#FF6B9D', rgb: '255,107,157', key: 'rhythm-os-music-volume', def: 100 },
   ];
 
+  let _volTickLastTime = 0;
+
   const _playVolTick = (volumePercent) => {
     try {
+      const now = performance.now();
+      if (now - _volTickLastTime < 40) return; // throttle: max 25 ticks/sec
+      _volTickLastTime = now;
+
       const actx = audio.ctx;
       if (!actx || actx.state === 'suspended') return;
       const pct = Math.max(0, Math.min(100, volumePercent ?? 50));
@@ -917,6 +924,23 @@ async function boot() {
     });
     document.body.appendChild(wrap);
     _volumeOverlay = wrap;
+
+    // Cache knob element references for fast DOM access
+    _volumeKnobEls = {};
+    wrap.querySelectorAll('.vol-knob-wrap').forEach(el => {
+      const kid = el.dataset.knob;
+      _volumeKnobEls[kid] = {
+        wrap: el,
+        label: el.querySelector('.vk-inner-label'),
+        bg: el.querySelector('.vol-knob-bg'),
+        face: el.querySelector('.vk-face'),
+        vkLabel: el.querySelector('.vk-label'),
+        prog: el.querySelector('.vk-prog'),
+        ind: el.querySelector('.vk-ind'),
+        val: el.querySelector('.vk-val'),
+      };
+    });
+
     // Trigger slide-in animation on next frame
     requestAnimationFrame(() => {
       if (_volumeOverlay) {
@@ -929,41 +953,38 @@ async function boot() {
 
   const _hlKnob = (id) => {
     if (!_volumeOverlay) return;
-    _volumeOverlay.querySelectorAll('.vol-knob-wrap').forEach(el => {
-      const on = el.dataset.knob === id;
-      el.classList.toggle('vol-knob--active', on);
-      const k = KNOBS.find(x => x.id === el.dataset.knob);
-      const lbl = el.querySelector('.vk-inner-label');
-      const bg = el.querySelector('.vol-knob-bg');
-      const face = el.querySelector('.vk-face');
-      const vkLabel = el.querySelector('.vk-label');
-      if (lbl && k) lbl.setAttribute('fill', on ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.35)');
-      if (bg && k) {
+    for (const kid of Object.keys(_volumeKnobEls)) {
+      const cached = _volumeKnobEls[kid];
+      if (!cached) continue;
+      const on = kid === id;
+      cached.wrap.classList.toggle('vol-knob--active', on);
+      const k = KNOBS.find(x => x.id === kid);
+      if (cached.label && k) cached.label.setAttribute('fill', on ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.35)');
+      if (cached.bg && k) {
         const a = on ? 0.09 : 0.04;
         const gl = on ? 0.35 : 0.18;
-        bg.style.boxShadow = `0 4px 24px rgba(0,0,0,0.55),0 0 0 1px rgba(255,255,255,${a}),0 0 ${on ? 16 : 0}px rgba(${k.rgb},${gl}),inset 0 1px 0 rgba(255,255,255,0.04)`;
+        cached.bg.style.boxShadow = `0 4px 24px rgba(0,0,0,0.55),0 0 0 1px rgba(255,255,255,${a}),0 0 ${on ? 16 : 0}px rgba(${k.rgb},${gl}),inset 0 1px 0 rgba(255,255,255,0.04)`;
       }
-      if (face && k) face.setAttribute('stroke', `rgba(255,255,255,${on ? 0.12 : 0.06})`);
-      if (vkLabel && k) vkLabel.style.color = on ? k.color : 'rgba(255,255,255,0.4)';
-    });
+      if (cached.face && k) cached.face.setAttribute('stroke', `rgba(255,255,255,${on ? 0.12 : 0.06})`);
+      if (cached.vkLabel && k) cached.vkLabel.style.color = on ? k.color : 'rgba(255,255,255,0.4)';
+    }
   };
 
   const _updKnob = (id, v) => {
+    const cached = _volumeKnobEls[id];
+    if (!cached) return;
     const filled = KNOB_ARC * (v / 100);
     const ang = -135 + (v / 100) * 270;
-    const prog = _volumeOverlay?.querySelector(`.vk-prog[data-knob="${id}"]`);
-    if (prog) prog.style.strokeDasharray = `${filled} ${KNOB_CIRC}`;
-    const ind = _volumeOverlay?.querySelector(`.vk-ind[data-knob="${id}"]`);
-    if (ind) ind.setAttribute('transform', `rotate(${ang} 50 50)`);
-    const val = _volumeOverlay?.querySelector(`.vk-val[data-knob="${id}"]`);
-    if (val) val.textContent = v + '%';
+    if (cached.prog) cached.prog.style.strokeDasharray = `${filled} ${KNOB_CIRC}`;
+    if (cached.ind) cached.ind.setAttribute('transform', `rotate(${ang} 50 50)`);
+    if (cached.val) cached.val.textContent = v + '%';
   };
 
   const _hideVol = () => {
     if (_volumeOverlay) {
       _volumeOverlay.style.transform = 'translateY(-50%) translateX(100%)';
       _volumeOverlay.style.opacity = '0';
-      const ref = _volumeOverlay; _volumeOverlay = null; _hoveredKnob = null;
+      const ref = _volumeOverlay; _volumeOverlay = null; _hoveredKnob = null; _volumeKnobEls = {};
       setTimeout(() => { if (ref.parentNode) ref.remove(); }, 400);
     }
   };
@@ -985,20 +1006,43 @@ async function boot() {
     _updKnob(id, nv);
   };
 
-  // Hover on knob + scroll wheel = change that knob's volume
+  // Hover on knob + scroll wheel = change that knob's volume (batched via rAF)
+  let _wheelBatch = null;
+  let _wheelRAF = null;
+
+  const _processWheelBatch = () => {
+    if (!_wheelBatch) return;
+    const { id, delta } = _wheelBatch;
+    _wheelBatch = null;
+    _wheelRAF = null;
+    _adjKnob(id, delta);
+  };
+
   window.addEventListener('wheel', (e) => {
     // Alt + scroll anywhere = Master Volume
     if (e.altKey) {
       e.preventDefault(); e.stopPropagation();
       const d = e.deltaY > 0 ? -3 : 3;
-      _adjKnob('master', d);
+      if (!_wheelBatch || _wheelBatch.id !== 'master') {
+        _wheelBatch = { id: 'master', delta: d };
+      } else {
+        _wheelBatch.delta += d;
+        _wheelBatch.delta = Math.max(-9, Math.min(9, _wheelBatch.delta));
+      }
+      if (!_wheelRAF) _wheelRAF = requestAnimationFrame(_processWheelBatch);
       return;
     }
     // Hover on knob + scroll = that knob's volume
     if (_hoveredKnob && _volumeOverlay) {
       e.preventDefault(); e.stopPropagation();
       const d = e.deltaY > 0 ? -3 : 3;
-      _adjKnob(_hoveredKnob, d);
+      if (!_wheelBatch || _wheelBatch.id !== _hoveredKnob) {
+        _wheelBatch = { id: _hoveredKnob, delta: d };
+      } else {
+        _wheelBatch.delta += d;
+        _wheelBatch.delta = Math.max(-9, Math.min(9, _wheelBatch.delta));
+      }
+      if (!_wheelRAF) _wheelRAF = requestAnimationFrame(_processWheelBatch);
     }
   }, { passive: false });
 

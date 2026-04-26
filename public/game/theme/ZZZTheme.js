@@ -41,12 +41,20 @@ canvas, .zzz-btn, .zzz-panel, .song-card, .song-card *,
   --zzz-mono:      'JetBrains Mono', 'Fira Code', monospace;
 }
 
+/* GPU-composited canvases + layout containment */
+#three, #game {
+  will-change: contents;
+  transform: translateZ(0);
+  contain: layout style paint;
+}
+
 /* SCANLINES */
 body.zzz-active::after {
   content: '';
   position: fixed; inset: 0; z-index: 9999;
   background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
   pointer-events: none;
+  will-change: transform;
 }
 
 /* VIGNETTE — subtle, behind UI */
@@ -55,11 +63,12 @@ body.zzz-active::before {
   position: fixed; inset: 0; z-index: 9998;
   background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.3) 100%);
   pointer-events: none;
+  will-change: transform;
 }
 
 /* ── CRT OVERLAY FOR SONG SELECT ────────────────────── */
 .crt-overlay {
-  position: fixed; inset: 0; z-index: 1;
+  position: fixed; inset: 0; z-index: 0;
   pointer-events: none;
   background:
     repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px),
@@ -75,13 +84,9 @@ body.zzz-active::before {
 .crt-overlay::after {
   content: '';
   position: absolute; inset: 0;
-  animation: crt-flicker 0.15s infinite;
   opacity: 0.025;
   background: white;
-}
-@keyframes crt-flicker {
-  0%, 100% { opacity: 0.015; }
-  50% { opacity: 0.03; }
+  will-change: opacity;
 }
 
 /* ── GLITCH TRANSITION ────────────────────── */
