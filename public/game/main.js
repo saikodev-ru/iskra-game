@@ -10,6 +10,7 @@ import BeatMap       from './game/BeatMap.js';
 import JudgementSystem from './game/JudgementSystem.js';
 import NoteRenderer  from './game/NoteRenderer.js';
 import ColorExtractor from './game/ColorExtractor.js';
+import KickDrumDetector from './game/KickDrumDetector.js';
 import RecordStore   from './game/RecordStore.js';
 import JudgementDisplay from './ui/JudgementDisplay.js';
 import HUD           from './ui/HUD.js';
@@ -132,6 +133,8 @@ async function boot() {
   const QUICK_RESTART_HOLD_MS = 500; // hold duration to trigger restart
   let currentMapData = null;
   let currentLaneCount = 4;
+  // Kick-drum detected hit times for the current map (shifted by LEAD_IN)
+  let _kickTimes = [];
 
   const savedVolume = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
   const savedGameVolume = parseInt(localStorage.getItem('rhythm-os-game-volume') || '70') / 100;
@@ -218,6 +221,21 @@ async function boot() {
     currentBeatMap = new BeatMap(shiftedMap);
     currentJudgement = new JudgementSystem(currentBeatMap);
     currentJudgement.reset();
+
+    // ── Kick drum detection — analyze the ORIGINAL audio for kick hits ──
+    // Run offline analysis before the game starts. This gives us actual drum
+    // hit positions instead of BPM-based timing for more accurate pulsation.
+    _kickTimes = [];
+    if (map.audioBuffer) {
+      try {
+        const rawKicks = KickDrumDetector.detect(map.audioBuffer);
+        // Shift kick times by LEAD_IN to match the shifted note times
+        _kickTimes = rawKicks.map(t => t + LEAD_IN);
+        console.log(`[RHYMIX] 🥁 Detected ${_kickTimes.length} kick hits for beat pulsation`);
+      } catch (e) {
+        console.warn('[RHYMIX] Kick detection failed, falling back to BPM', e);
+      }
+    }
 
     input.setLaneCount(currentBeatMap.laneCount);
     currentLaneCount = currentBeatMap.laneCount;
@@ -323,17 +341,20 @@ async function boot() {
     const comboBreakHandler = ({ combo }) => { judgementDisplay.showComboBreak(combo); };
 
     // Kiai beat pulse: on each beat during kiai, trigger a visual pulse on the renderer
-    const kiaiBeatHandler = () => {
+    // Kick-based pulses are softer than BPM-based ones
+    const kiaiBeatHandler = ({ kickBased } = {}) => {
       if (!gameActive || !currentBeatMap) return;
       const kiaiIntensity = currentBeatMap.getKiaiIntensity(audio.currentTime);
+      // Kick-based pulses are gentler — don't pound as hard as BPM-based
+      const basePulse = kickBased ? 0.25 : 0.4;
       if (kiaiIntensity > 0.05) {
-        noteRenderer.triggerKiaiBeatPulse(kiaiIntensity);
-        three.triggerBeatPulse(kiaiIntensity);
+        noteRenderer.triggerKiaiBeatPulse(kiaiIntensity * (kickBased ? 0.6 : 1.0));
+        three.triggerBeatPulse(kiaiIntensity * basePulse);
         // Chorus-specific beat pulse for scene-level effects
-        three.triggerChorusBeatPulse(kiaiIntensity);
+        three.triggerChorusBeatPulse(kiaiIntensity * basePulse);
       } else {
         // Still pulse on every beat, even outside kiai — just softer
-        three.triggerBeatPulse(0.4);
+        three.triggerBeatPulse(kickBased ? 0.15 : 0.3);
       }
     };
 
@@ -381,7 +402,12 @@ async function boot() {
       audio.fadeTo(vol, 0.1);
     }
 
-    audio.startBeatScheduler(currentBeatMap.metadata.bpm);
+    // Use kick-drum detected beats if available, otherwise fall back to BPM
+    if (_kickTimes.length > 0) {
+      audio.startKickBeatScheduler(_kickTimes, currentBeatMap.metadata.bpm);
+    } else {
+      audio.startBeatScheduler(currentBeatMap.metadata.bpm);
+    }
 
     gameLoop = new GameLoop({
       update(delta) {

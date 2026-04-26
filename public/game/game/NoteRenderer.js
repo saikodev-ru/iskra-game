@@ -622,7 +622,19 @@ export default class NoteRenderer {
     this.invalidateBackgroundCache();
   }
 
-  /* ── Kiai Time Effect — Muse Dash Fever-inspired ─────────────────── */
+  /* ── Chorus Effect — "Aurora Edge" ─────────────────────────────────── */
+  /*  Beautiful, performant, non-distracting chorus visualization.
+   *  Design principles:
+   *    - Does NOT recolor the playfield or notes (keeps readability)
+   *    - Effects are concentrated on the EDGES (walls/borders) and judge line
+   *    - Minimal draw calls for maximum performance
+   *    - Impressive but subtle — enhances without overwhelming
+   *
+   *  Layers:
+   *    1. Aurora border — flowing gradient glow along the playfield walls
+   *    2. Judge line shimmer — gentle bright pulse at the judge line
+   *    3. Edge particles — tiny sparkle dots floating along the walls on beat
+   */
   _drawKiaiEffect(delta, laneCount) {
     if (this._kiaiIntensity < 0.01) {
       this._kiaiBeatPulse = 0;
@@ -644,6 +656,9 @@ export default class NoteRenderer {
     const intensity = this._kiaiIntensity;
     const pulse = this._kiaiSmoothPulse;
 
+    // Flame phase reused for noise (cheap pseudo-random)
+    this._kiaiFlamePhase += delta * 12;
+
     // Geometry — key edge points
     const lxT = this._getLaneGeometry(0, topY, laneCount).x;
     const rxT = this._getLaneGeometry(laneCount, topY, laneCount).x;
@@ -652,322 +667,189 @@ export default class NoteRenderer {
     const lxB = this._getLaneGeometry(0, bottomY, laneCount).x;
     const rxB = this._getLaneGeometry(laneCount, bottomY, laneCount).x;
 
-    // Perspective helpers
-    const perspX = (y) => {
-      if (y <= judgeLineY) {
-        const t = Math.max(0, Math.min(1, (y - topY) / (judgeLineY - topY)));
-        return { l: lxT + (lxJ - lxT) * t, r: rxT + (rxJ - rxT) * t };
-      }
-      const t = Math.max(0, Math.min(1, (y - judgeLineY) / (bottomY - judgeLineY)));
-      return { l: lxJ + (lxB - lxJ) * t, r: rxJ + (rxB - rxJ) * t };
-    };
-
-    const pfPath = () => {
-      ctx.beginPath();
-      ctx.moveTo(lxT, topY); ctx.lineTo(rxT, topY);
-      ctx.lineTo(rxJ, judgeLineY); ctx.lineTo(rxB, bottomY);
-      ctx.lineTo(lxB, bottomY); ctx.lineTo(lxJ, judgeLineY);
-      ctx.closePath();
-    };
-
-    // Flame flicker noise
-    this._kiaiFlamePhase += delta * 15;
-    const noise = (Math.sin(this._kiaiFlamePhase * 3.7) * 0.3 + Math.sin(this._kiaiFlamePhase * 7.1) * 0.2 + Math.sin(this._kiaiFlamePhase * 13.3) * 0.15) * 0.65 + 0.5;
-
-    // ── Get accent color from lane colors ──
+    // Get accent color
     const lcHex = NoteRenderer.LANE_COLORS[0] || '#AAFF00';
     const lc = this._hexToRgb(lcHex);
-    const acR = lc.r, acG = lc.g, acB = lc.b;
 
     // ════════════════════════════════════════════════════════════════
-    //  FEVER LAYER 1: Warm color overlay — hue-shifted atmosphere
-    //  During chorus, the playfield gets a warm golden tint (Muse Dash style)
+    //  AURORA LAYER 1: Flowing border glow along walls
+    //  Animated gradient that flows up/down along the playfield edges.
+    //  This is the main visual signature of the chorus — an aurora-like
+    //  shimmer along the borders that breathes with the beat.
     // ════════════════════════════════════════════════════════════════
-    const feverAlpha = intensity * 0.06 + pulse * 0.08;
-    if (feverAlpha > 0.005) {
+    this._kiaiBorderGlow += (pulse - this._kiaiBorderGlow) * Math.min(1, delta * 14);
+    const borderA = intensity * 0.6 + this._kiaiBorderGlow * 0.5;
+
+    if (borderA > 0.01) {
+      // Flowing phase for the aurora animation
+      const flowPhase = this._kiaiFlamePhase * 0.3;
+
+      // Left wall aurora
       ctx.save();
-      pfPath(); ctx.clip();
-      // Warm golden overlay — shifts the whole playfield toward gold
-      ctx.fillStyle = `rgba(255,200,50,${feverAlpha})`;
+      ctx.globalCompositeOperation = 'lighter';
+
+      // Create a vertical gradient that shifts over time (aurora flow)
+      const auroraShift = Math.sin(flowPhase) * 0.15 + 0.5;
+
+      // Left wall glow — wider, softer
+      const lwW = 20 + this._kiaiBorderGlow * 18;
+      const lGrad = ctx.createLinearGradient(lxJ - lwW, topY, lxJ, topY);
+      lGrad.addColorStop(0, `rgba(${lc.r},${lc.g},${lc.b},0)`);
+      lGrad.addColorStop(0.3, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.06})`);
+      lGrad.addColorStop(0.7, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.12})`);
+      lGrad.addColorStop(1, `rgba(255,255,255,${borderA * 0.08})`);
+      ctx.fillStyle = lGrad;
+
+      // Draw as a tapered strip (narrower at top, wider at judge line)
+      ctx.beginPath();
+      ctx.moveTo(lxT - lwW * 0.5, topY);
+      ctx.lineTo(lxT, topY);
+      ctx.lineTo(lxJ, judgeLineY);
+      ctx.lineTo(lxJ - lwW, judgeLineY);
+      ctx.closePath();
       ctx.fill();
+
+      // Left wall — bright edge line
+      const edgeGrad = ctx.createLinearGradient(0, topY, 0, judgeLineY);
+      edgeGrad.addColorStop(0, `rgba(255,255,255,${borderA * 0.05})`);
+      edgeGrad.addColorStop(auroraShift - 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.15})`);
+      edgeGrad.addColorStop(auroraShift, `rgba(255,255,255,${borderA * 0.5})`);
+      edgeGrad.addColorStop(auroraShift + 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.15})`);
+      edgeGrad.addColorStop(1, `rgba(255,255,255,${borderA * 0.05})`);
+      ctx.strokeStyle = edgeGrad;
+      ctx.lineWidth = 1.5 + this._kiaiBorderGlow * 2;
+      ctx.beginPath();
+      ctx.moveTo(lxT, topY);
+      ctx.lineTo(lxJ, judgeLineY);
+      ctx.stroke();
+
+      // Right wall aurora (mirror)
+      const rwW = 20 + this._kiaiBorderGlow * 18;
+      const rGrad = ctx.createLinearGradient(rxJ, topY, rxJ + rwW, topY);
+      rGrad.addColorStop(0, `rgba(255,255,255,${borderA * 0.08})`);
+      rGrad.addColorStop(0.3, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.12})`);
+      rGrad.addColorStop(0.7, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.06})`);
+      rGrad.addColorStop(1, `rgba(${lc.r},${lc.g},${lc.b},0)`);
+      ctx.fillStyle = rGrad;
+
+      ctx.beginPath();
+      ctx.moveTo(rxT, topY);
+      ctx.lineTo(rxT + rwW * 0.5, topY);
+      ctx.lineTo(rxJ + rwW, judgeLineY);
+      ctx.lineTo(rxJ, judgeLineY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Right wall — bright edge line (phase-shifted for asymmetry)
+      const rAuroraShift = Math.sin(flowPhase + 1.5) * 0.15 + 0.5;
+      const redgeGrad = ctx.createLinearGradient(0, topY, 0, judgeLineY);
+      redgeGrad.addColorStop(0, `rgba(255,255,255,${borderA * 0.05})`);
+      redgeGrad.addColorStop(rAuroraShift - 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.15})`);
+      redgeGrad.addColorStop(rAuroraShift, `rgba(255,255,255,${borderA * 0.5})`);
+      redgeGrad.addColorStop(rAuroraShift + 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.15})`);
+      redgeGrad.addColorStop(1, `rgba(255,255,255,${borderA * 0.05})`);
+      ctx.strokeStyle = redgeGrad;
+      ctx.lineWidth = 1.5 + this._kiaiBorderGlow * 2;
+      ctx.beginPath();
+      ctx.moveTo(rxT, topY);
+      ctx.lineTo(rxJ, judgeLineY);
+      ctx.stroke();
+
+      // Below-judge sections (fainter mirror)
+      const bwW = 14 + this._kiaiBorderGlow * 10;
+      // Left below
+      ctx.fillStyle = `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.04})`;
+      ctx.beginPath();
+      ctx.moveTo(lxJ - bwW, judgeLineY);
+      ctx.lineTo(lxJ, judgeLineY);
+      ctx.lineTo(lxB, bottomY);
+      ctx.lineTo(lxB - bwW * 0.5, bottomY);
+      ctx.closePath();
+      ctx.fill();
+      // Right below
+      ctx.beginPath();
+      ctx.moveTo(rxJ, judgeLineY);
+      ctx.lineTo(rxJ + bwW, judgeLineY);
+      ctx.lineTo(rxB + bwW * 0.5, bottomY);
+      ctx.lineTo(rxB, bottomY);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.globalCompositeOperation = 'source-over';
       ctx.restore();
     }
 
     // ════════════════════════════════════════════════════════════════
-    //  FEVER LAYER 2: Energy wave — radial ripple from judge line on beat
-    //  A bright ring that expands outward from the judge line on each beat
+    //  AURORA LAYER 2: Judge line shimmer
+    //  A clean, gentle white/accent glow at the judge line that pulses
+    //  with the beat. NOT a fire/inferno — just a clean breathing glow.
+    // ════════════════════════════════════════════════════════════════
+    {
+      const judgeWidth = rxJ - lxJ;
+      const judgeCX = (lxJ + rxJ) / 2;
+      const glowH = 10 + pulse * 14;
+      const glowA = intensity * 0.4 + pulse * 0.3;
+
+      const shimmerGrad = ctx.createLinearGradient(judgeCX, judgeLineY - glowH, judgeCX, judgeLineY + glowH);
+      shimmerGrad.addColorStop(0, `rgba(255,255,255,0)`);
+      shimmerGrad.addColorStop(0.3, `rgba(${lc.r},${lc.g},${lc.b},${glowA * 0.15})`);
+      shimmerGrad.addColorStop(0.45, `rgba(255,255,255,${glowA * 0.4})`);
+      shimmerGrad.addColorStop(0.5, `rgba(255,255,255,${glowA * 0.6})`);
+      shimmerGrad.addColorStop(0.55, `rgba(255,255,255,${glowA * 0.4})`);
+      shimmerGrad.addColorStop(0.7, `rgba(${lc.r},${lc.g},${lc.b},${glowA * 0.15})`);
+      shimmerGrad.addColorStop(1, `rgba(255,255,255,0)`);
+
+      ctx.save();
+      ctx.fillStyle = shimmerGrad;
+      ctx.fillRect(lxJ - 4, judgeLineY - glowH, judgeWidth + 8, glowH * 2);
+      ctx.restore();
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  AURORA LAYER 3: Edge sparkles on beat
+    //  Tiny diamond sparkles that appear along the walls on each beat.
+    //  Very few particles (max 4 per side) for performance.
     // ════════════════════════════════════════════════════════════════
     if (this._kiaiBeatPulse > 0.3) {
-      this._kiaiFlashAlpha = Math.min(1, this._kiaiFlashAlpha + this._kiaiBeatPulse * 0.8);
-    }
-    this._kiaiFlashAlpha *= Math.max(0, 1 - delta * 5);
-
-    if (this._kiaiFlashAlpha > 0.02) {
-      const flashA = this._kiaiFlashAlpha * intensity;
-      ctx.save();
-      pfPath(); ctx.clip();
-
-      // Upward expanding ring from judge line
-      const ringProgress = 1 - this._kiaiFlashAlpha; // 0→1 as ring expands
-      const ringMaxDist = (judgeLineY - topY) * 0.9;
-      const ringDistUp = ringProgress * ringMaxDist;
-      const ringDistDown = ringProgress * ringMaxDist * 0.6;
-
-      // Ring band — bright white/accent line expanding
-      const ringWidth = 6 + ringProgress * 4;
-      const yUp = judgeLineY - ringDistUp;
-      const yDown = judgeLineY + ringDistDown;
-      const pUp = perspX(Math.max(topY, yUp));
-      const pDown = perspX(Math.min(bottomY, yDown));
-      const pUp2 = perspX(Math.max(topY, yUp - ringWidth));
-      const pDown2 = perspX(Math.min(bottomY, yDown + ringWidth));
-
-      // Ring gradient — bright center, accent edges
-      const ringAlpha = flashA * 0.15;
-      ctx.fillStyle = `rgba(255,255,255,${ringAlpha})`;
-      ctx.beginPath();
-      ctx.moveTo(pUp2.l, Math.max(topY, yUp - ringWidth));
-      ctx.lineTo(pUp2.r, Math.max(topY, yUp - ringWidth));
-      ctx.lineTo(pDown2.r, Math.min(bottomY, yDown + ringWidth));
-      ctx.lineTo(pDown2.l, Math.min(bottomY, yDown + ringWidth));
-      ctx.lineTo(pDown.l, Math.min(bottomY, yDown));
-      ctx.lineTo(pUp.l, Math.max(topY, yUp));
-      ctx.closePath();
-      ctx.fill();
-
-      // Accent-colored ring halo (lighter blend)
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = `rgba(${acR},${acG},${acB},${ringAlpha * 0.5})`;
-      ctx.beginPath();
-      ctx.moveTo(pUp2.l, Math.max(topY, yUp - ringWidth * 2));
-      ctx.lineTo(pUp2.r, Math.max(topY, yUp - ringWidth * 2));
-      ctx.lineTo(pDown2.r, Math.min(bottomY, yDown + ringWidth * 2));
-      ctx.lineTo(pDown2.l, Math.min(bottomY, yDown + ringWidth * 2));
-      ctx.lineTo(pDown.l, Math.min(bottomY, yDown));
-      ctx.lineTo(pUp.l, Math.max(topY, yUp));
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
-
-      ctx.restore();
-    }
-
-    // ════════════════════════════════════════════════════════════════
-    //  FEVER LAYER 3: Speed lines — vertical motion streaks on beat
-    //  Anime-style speed lines that fly upward/downward on each beat
-    // ════════════════════════════════════════════════════════════════
-    if (this._kiaiBeatPulse > 0.4) {
-      ctx.save();
-      pfPath(); ctx.clip();
-      ctx.globalCompositeOperation = 'lighter';
-      const speedAlpha = (this._kiaiBeatPulse - 0.4) * intensity * 0.12;
-      const numLines = 8;
-      const pfWidth = rxJ - lxJ;
-      for (let i = 0; i < numLines; i++) {
-        // Pseudo-random but deterministic line positions based on flamePhase
-        const seed = Math.sin(this._kiaiFlamePhase * 0.7 + i * 47.3) * 0.5 + 0.5;
-        const x = lxJ + seed * pfWidth;
-        const lineLen = (judgeLineY - topY) * (0.3 + seed * 0.5);
-        const lineY = topY + seed * (judgeLineY - topY - lineLen);
-        // Thin bright line
-        ctx.strokeStyle = `rgba(255,255,255,${speedAlpha * (0.5 + seed * 0.5)})`;
-        ctx.lineWidth = 1 + seed;
-        ctx.beginPath();
-        ctx.moveTo(x, lineY);
-        ctx.lineTo(x, lineY + lineLen);
-        ctx.stroke();
-      }
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.restore();
-    }
-
-    // ════════════════════════════════════════════════════════════════
-    //  FEVER LAYER 4: Border glow — dramatic edge highlight + bloom
-    // ════════════════════════════════════════════════════════════════
-    this._kiaiBorderGlow += (pulse - this._kiaiBorderGlow) * Math.min(1, delta * 16);
-    const borderAlpha = intensity * 0.5 + this._kiaiBorderGlow * 0.6;
-    if (borderAlpha > 0.02) {
-      ctx.save();
-
-      // Inner bright edge highlight — with golden tint during fever
-      pfPath();
-      const edgeGrad = ctx.createLinearGradient(0, topY, 0, bottomY);
-      edgeGrad.addColorStop(0, `rgba(255,255,255,${borderAlpha * 0.6})`);
-      edgeGrad.addColorStop(0.3, `rgba(255,220,80,${borderAlpha * 0.8})`);
-      edgeGrad.addColorStop(0.55, `rgba(255,255,255,${borderAlpha * 1.0})`);
-      edgeGrad.addColorStop(0.8, `rgba(${acR},${acG},${acB},${borderAlpha * 0.7})`);
-      edgeGrad.addColorStop(1, `rgba(255,200,50,${borderAlpha * 0.4})`);
-      ctx.lineWidth = 2.5 + this._kiaiBorderGlow * 3;
-      ctx.strokeStyle = edgeGrad;
-      ctx.stroke();
-
-      // Mid bloom layer — golden accent
-      ctx.globalCompositeOperation = 'lighter';
-      pfPath();
-      ctx.lineWidth = 14 + this._kiaiBorderGlow * 12;
-      ctx.globalAlpha = borderAlpha * 0.14;
-      ctx.strokeStyle = `rgba(255,200,50,1)`;
-      ctx.stroke();
-
-      // Outer wide bloom — soft ambient glow
-      pfPath();
-      ctx.lineWidth = 32 + this._kiaiBorderGlow * 22;
-      ctx.globalAlpha = borderAlpha * 0.06;
-      ctx.strokeStyle = `rgba(${acR},${acG},${acB},1)`;
-      ctx.stroke();
-
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = 1;
-
-      ctx.restore();
-    }
-
-    // ════════════════════════════════════════════════════════════════
-    //  FEVER LAYER 4b: Wall glow — accent bleed on sides
-    // ════════════════════════════════════════════════════════════════
-    if (borderAlpha > 0.02) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const wallGlowW = 24 + this._kiaiBorderGlow * 16;
-      const bWallW = 14 + this._kiaiBorderGlow * 8;
-      const acColor = `rgba(${acR},${acG},${acB},`;
-      const goldColor = `rgba(255,200,50,`;
+      const sparkA = (this._kiaiBeatPulse - 0.3) * intensity * 0.6;
+      const sparkCount = 4;
 
-      // Left wall glow (above judge) — golden accent
-      ctx.fillStyle = `${goldColor}${borderAlpha * 0.03})`;
-      ctx.fillRect(lxJ - wallGlowW, topY, wallGlowW, judgeLineY - topY);
-      ctx.fillStyle = `${acColor}${borderAlpha * 0.05})`;
-      ctx.fillRect(lxJ - wallGlowW * 0.3, topY, wallGlowW * 0.3, judgeLineY - topY);
-
-      // Right wall glow (above judge)
-      ctx.fillStyle = `${goldColor}${borderAlpha * 0.03})`;
-      ctx.fillRect(rxJ, topY, wallGlowW, judgeLineY - topY);
-      ctx.fillStyle = `${acColor}${borderAlpha * 0.05})`;
-      ctx.fillRect(rxJ, topY, wallGlowW * 0.3, judgeLineY - topY);
-
-      // Below-judge mirror (fainter)
-      ctx.fillStyle = `${acColor}${borderAlpha * 0.02})`;
-      ctx.fillRect(lxJ - bWallW, judgeLineY, bWallW, bottomY - judgeLineY);
-      ctx.fillRect(rxJ, judgeLineY, bWallW, bottomY - judgeLineY);
-
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = 1;
-      ctx.restore();
-    }
-
-    // ════════════════════════════════════════════════════════════════
-    //  FEVER LAYER 5: Judge line inferno — dramatic flames
-    //  3 flame layers with golden/white core + accent tips
-    // ════════════════════════════════════════════════════════════════
-    const judgeWidth = rxJ - lxJ;
-    const judgeCX = (lxJ + rxJ) / 2;
-    const flameBase = 20 + noise * 14;
-    const flamePulse = pulse * 22;
-    const flameH = (flameBase + flamePulse) * intensity;
-
-    // 3 flame layers — clipped to playfield shape for perspective-correct rendering
-    ctx.save();
-    pfPath(); ctx.clip();
-    for (let layer = 0; layer < 3; layer++) {
-      const layerPhase = this._kiaiFlamePhase * (4 + layer * 3) + layer * 2.1;
-      const layerNoise = Math.sin(layerPhase) * 0.3 + 0.5;
-      const h = flameH * (1 - layer * 0.25) * (0.6 + layerNoise * 0.5);
-      const w = judgeWidth * (0.85 + layer * 0.08);
-      const alpha = intensity * (0.4 - layer * 0.1);
-
-      const flameGrad = ctx.createLinearGradient(judgeCX, judgeLineY - h, judgeCX, judgeLineY + 3);
-      const coreA = alpha * (0.7 + noise * 0.3);
-      // Golden/white core with accent tips
-      if (layer === 0) {
-        flameGrad.addColorStop(0, `rgba(255,200,50,0)`);
-        flameGrad.addColorStop(0.15, `rgba(255,200,50,${coreA * 0.3})`);
-        flameGrad.addColorStop(0.4, `rgba(255,255,255,${coreA})`);
-        flameGrad.addColorStop(0.7, `rgba(255,240,200,${coreA * 0.7})`);
-        flameGrad.addColorStop(0.9, `rgba(${acR},${acG},${acB},${coreA * 0.3})`);
-        flameGrad.addColorStop(1, 'rgba(255,255,255,0)');
-      } else {
-        flameGrad.addColorStop(0, `rgba(${acR},${acG},${acB},0)`);
-        flameGrad.addColorStop(0.2, `rgba(${acR},${acG},${acB},${coreA * 0.3})`);
-        flameGrad.addColorStop(0.5, `rgba(255,255,255,${coreA})`);
-        flameGrad.addColorStop(0.85, `rgba(255,255,255,${coreA * 0.6})`);
-        flameGrad.addColorStop(1, 'rgba(255,255,255,0)');
-      }
-
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = flameGrad;
-      const segs = 8;
-      const segW = w / segs;
-      ctx.beginPath();
-      ctx.moveTo(judgeCX - w / 2, judgeLineY + 2);
-      ctx.lineTo(judgeCX + w / 2, judgeLineY + 2);
-      for (let i = segs; i >= 0; i--) {
-        const sx = judgeCX - w / 2 + i * segW;
-        const wave = Math.sin(layerPhase + i * 0.9) * h * 0.25;
-        const py = judgeLineY - h + wave;
-        ctx.lineTo(sx, py);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.restore();
-    }
-
-    // Judge line hot glow — intensified
-    const hotH = 8 + pulse * 12;
-    const hotA = intensity * 0.6 + pulse * 0.3;
-    const hotGrad = ctx.createLinearGradient(judgeCX, judgeLineY - hotH, judgeCX, judgeLineY + hotH);
-    hotGrad.addColorStop(0, `rgba(255,200,50,0)`);
-    hotGrad.addColorStop(0.25, `rgba(255,200,50,${hotA * 0.15})`);
-    hotGrad.addColorStop(0.45, `rgba(255,255,255,${hotA * 0.5})`);
-    hotGrad.addColorStop(0.5, `rgba(255,255,255,${hotA})`);
-    hotGrad.addColorStop(0.55, `rgba(255,255,255,${hotA * 0.5})`);
-    hotGrad.addColorStop(0.75, `rgba(255,200,50,${hotA * 0.15})`);
-    hotGrad.addColorStop(1, `rgba(255,200,50,0)`);
-    ctx.save();
-    ctx.fillStyle = hotGrad;
-    ctx.fillRect(lxJ - 6, judgeLineY - hotH, judgeWidth + 12, hotH * 2);
-    ctx.restore();
-
-    // ════════════════════════════════════════════════════════════════
-    //  FEVER LAYER 6: Star particles on beat — sparkle bursts
-    //  Small diamond-shaped sparkles that appear on beat
-    // ════════════════════════════════════════════════════════════════
-    if (this._kiaiBeatPulse > 0.5) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const sparkCount = 6;
-      const sparkAlpha = (this._kiaiBeatPulse - 0.5) * intensity * 0.5;
       for (let i = 0; i < sparkCount; i++) {
-        const seed1 = Math.sin(this._kiaiFlamePhase * 1.3 + i * 23.7) * 0.5 + 0.5;
-        const seed2 = Math.cos(this._kiaiFlamePhase * 0.9 + i * 17.1) * 0.5 + 0.5;
-        const sx = lxJ + seed1 * (rxJ - lxJ);
-        const sy = judgeLineY - seed2 * flameH * 1.2;
-        const sparkSize = 3 + seed1 * 4;
-        // Diamond sparkle
-        ctx.fillStyle = `rgba(255,255,255,${sparkAlpha * (0.4 + seed2 * 0.6)})`;
+        const seed1 = Math.sin(this._kiaiFlamePhase * 1.1 + i * 31.7) * 0.5 + 0.5;
+        const seed2 = Math.cos(this._kiaiFlamePhase * 0.8 + i * 19.3) * 0.5 + 0.5;
+        const sparkSize = 2 + seed1 * 3;
+
+        // Left wall sparkles
+        const lY = topY + seed2 * (judgeLineY - topY);
+        const lXPersp = lxT + (lxJ - lxT) * seed2;
+        const lsx = lXPersp - 8 - seed1 * 12;
+        ctx.fillStyle = `rgba(255,255,255,${sparkA * (0.4 + seed2 * 0.6)})`;
         ctx.beginPath();
-        ctx.moveTo(sx, sy - sparkSize);
-        ctx.lineTo(sx + sparkSize * 0.4, sy);
-        ctx.lineTo(sx, sy + sparkSize);
-        ctx.lineTo(sx - sparkSize * 0.4, sy);
+        ctx.moveTo(lsx, lY - sparkSize);
+        ctx.lineTo(lsx + sparkSize * 0.4, lY);
+        ctx.lineTo(lsx, lY + sparkSize);
+        ctx.lineTo(lsx - sparkSize * 0.4, lY);
         ctx.closePath();
         ctx.fill();
-        // Accent glow
-        ctx.fillStyle = `rgba(255,200,50,${sparkAlpha * 0.3})`;
+
+        // Right wall sparkles
+        const rXPersp = rxT + (rxJ - rxT) * seed2;
+        const rsx = rXPersp + 8 + seed1 * 12;
+        ctx.fillStyle = `rgba(255,255,255,${sparkA * (0.3 + seed1 * 0.5)})`;
         ctx.beginPath();
-        ctx.moveTo(sx, sy - sparkSize * 1.5);
-        ctx.lineTo(sx + sparkSize * 0.7, sy);
-        ctx.lineTo(sx, sy + sparkSize * 1.5);
-        ctx.lineTo(sx - sparkSize * 0.7, sy);
+        ctx.moveTo(rsx, lY - sparkSize);
+        ctx.lineTo(rsx + sparkSize * 0.4, lY);
+        ctx.lineTo(rsx, lY + sparkSize);
+        ctx.lineTo(rsx - sparkSize * 0.4, lY);
         ctx.closePath();
         ctx.fill();
       }
+
       ctx.globalCompositeOperation = 'source-over';
       ctx.restore();
     }
-
-    ctx.restore(); // end pfPath clip
   }
 
   /* ── Beat Lines — horizontal timing markers per beat ── */

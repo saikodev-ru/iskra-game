@@ -1757,3 +1757,46 @@ Stage Summary:
 - Hit effects are ~75% larger with more dramatic visual impact (bloom, rings, particles)
 - CRT effect completely removed during gameplay, kept only on song select background
 - Files modified: public/game/game/NoteRenderer.js, public/game/main.js
+
+---
+Task ID: kick-chorus-redesign
+Agent: Main Agent
+Task: 1) Replace BPM-based beat pulsation with kick drum detection, 2) Redesign chorus effect to be beautiful+performant+non-distracting, 3) Reduce background pulse intensity, 4) Fix lag
+
+Work Log:
+- Created KickDrumDetector.js — offline analysis of AudioBuffer to detect kick drum hit positions using sub-bass frequency onset detection (decimation + RMS energy + half-wave rectified onset + adaptive threshold peak picking)
+- Modified AudioEngine.js — added startKickBeatScheduler(kickTimes, bpm) method that emits beat:pulse events at detected kick times instead of BPM intervals. Also added kickBased flag to beat:pulse events
+- Modified main.js — added KickDrumDetector import, run kick detection on map.audioBuffer before game start, shift detected kick times by LEAD_IN, use startKickBeatScheduler when kicks available (fallback to BPM)
+- Modified main.js kiaiBeatHandler — kick-based pulses are softer (0.25 vs 0.4 for BPM), chorus beat pulse reduced proportionally
+- Completely redesigned NoteRenderer._drawKiaiEffect() — replaced 6-layer fever effect with "Aurora Edge" design:
+  - Layer 1: Flowing aurora border glow along playfield walls (animated gradient with phase-shifted left/right edges)
+  - Layer 2: Gentle judge line shimmer (clean white/accent glow, not inferno)
+  - Layer 3: Edge sparkles on beat (4 tiny diamond dots along walls, not inside playfield)
+  - NO color overlay on the playfield — notes remain fully readable
+  - Dramatically fewer draw calls than the old 6-layer system
+- Reduced ThreeScene.js chorus amplification:
+  - FOV punch: 3.5+chorusBoost*2.0 → 2.0+chorusBoost*0.8
+  - Bass FOV: 0.8+chorusBoost*0.5 → 0.5+chorusBoost*0.2
+  - Chorus FOV kick: 2.0 → 0.8
+  - Bloom: beat 0.5→0.3, audio 0.15→0.1, bass 0.25→0.15, chorus beat 0.5→0.2
+  - Exposure boost: chorusBoost*0.35 → chorusBoost*0.12
+  - Point light: chorusBeat*1.5 → chorusBeat*0.6
+  - Camera wobble: reduced by ~40%
+- Reduced background shader pulse intensities:
+  - Audio color: 0.9 → 0.5
+  - Bass color: 1.0 → 0.6
+  - Beat color: 0.7 → 0.4
+  - Beat wave: 0.6 → 0.35
+  - Edge glow: 0.6 → 0.35
+  - Background zoom on beat: 0.14 → 0.06
+
+Stage Summary:
+- Beat pulsation now follows actual kick drums (бочка) instead of BPM — more musical
+- Kick pulses are softer than BPM pulses (user requested "не так сильно")
+- Chorus effect completely redesigned as "Aurora Edge" — beautiful flowing border glow + subtle judge shimmer + edge sparkles
+- Playfield is NEVER recolored during chorus — notes stay fully readable
+- All ThreeScene chorus amplification reduced 50-70% — eliminates lag during chorus
+- Background shader pulse intensities reduced 40-60% — softer ambient pulsation
+- New file: KickDrumDetector.js
+- Modified files: AudioEngine.js, main.js, NoteRenderer.js, ThreeScene.js
+- Lint passes clean (2 pre-existing warnings)

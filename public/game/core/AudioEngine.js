@@ -16,6 +16,10 @@ export default class AudioEngine {
     this._beatTimer = null;
     this._beatIndex = 0;
     this._bpm = 0;
+    // Kick-drum detected beat times (from KickDrumDetector)
+    this._kickTimes = null;     // Float64Array of kick hit times (seconds)
+    this._kickIndex = 0;        // next kick index to emit
+    this._kickTimer = null;     // rAF handle for kick-based scheduler
     // Audio analysis for reactive effects
     this._analyser = null;
     this._freqData = null;
@@ -193,6 +197,41 @@ export default class AudioEngine {
     };
   }
 
+  /**
+   * Start beat scheduler using pre-detected kick drum hit times.
+   * This replaces the BPM-based scheduler for more accurate beat pulsation.
+   * @param {number[]} kickTimes - Array of kick hit times in seconds
+   * @param {number} bpm - BPM for metadata (used in event data)
+   */
+  startKickBeatScheduler(kickTimes, bpm) {
+    this.stopBeatScheduler();
+    this._bpm = bpm || 120;
+    // Sort and store as Float64Array for fast binary search
+    this._kickTimes = new Float64Array(kickTimes.sort((a, b) => a - b));
+    this._kickIndex = 0;
+
+    const schedule = () => {
+      if (!this._playing || !this._kickTimes) return;
+      const ct = this.currentTime;
+      // Emit all kicks that have passed since last check
+      let emitted = 0;
+      while (this._kickIndex < this._kickTimes.length && this._kickTimes[this._kickIndex] <= ct && emitted < 4) {
+        EventBus.emit('beat:pulse', { bpm: this._bpm, index: this._kickIndex, kickBased: true });
+        this._kickIndex++;
+        emitted++;
+      }
+      // If we fell behind (tab switch), skip to current time
+      while (this._kickIndex < this._kickTimes.length && this._kickTimes[this._kickIndex] <= ct) {
+        this._kickIndex++;
+      }
+      this._kickTimer = requestAnimationFrame(schedule);
+    };
+    this._kickTimer = requestAnimationFrame(schedule);
+  }
+
+  /**
+   * Start BPM-based beat scheduler (fallback when no kick detection available).
+   */
   startBeatScheduler(bpm) {
     this.stopBeatScheduler();
     this._bpm = bpm;
@@ -206,7 +245,7 @@ export default class AudioEngine {
       // visual glitch stacks after tab switch
       let emitted = 0;
       while (this._beatIndex <= currentBeat && emitted < 4) {
-        EventBus.emit('beat:pulse', { bpm, index: this._beatIndex });
+        EventBus.emit('beat:pulse', { bpm, index: this._beatIndex, kickBased: false });
         this._beatIndex++;
         emitted++;
       }
@@ -224,7 +263,13 @@ export default class AudioEngine {
       cancelAnimationFrame(this._beatTimer);
       this._beatTimer = null;
     }
+    if (this._kickTimer) {
+      cancelAnimationFrame(this._kickTimer);
+      this._kickTimer = null;
+    }
     this._beatIndex = 0;
     this._bpm = 0;
+    this._kickTimes = null;
+    this._kickIndex = 0;
   }
 }
