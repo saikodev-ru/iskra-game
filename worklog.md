@@ -597,6 +597,36 @@ Stage Summary:
 
 ---
 Task ID: 1
+Agent: Main Agent
+Task: Fix game field visibility + cosmic FPS optimizations
+
+Work Log:
+- Diagnosed CRT overlay z-index conflict: `.crt-overlay` had z-index:1, same as #game canvas, causing compositing issues
+- Changed `.crt-overlay` z-index from 1 to 0 (below game canvas at z-index 1)
+- Removed infinite `crt-flicker 0.15s infinite` animation from `.crt-overlay::after` — was causing constant full-viewport repaints
+- Replaced with static subtle white overlay (opacity: 0.025) + will-change: opacity for GPU promotion
+- Added `will-change: transform` to body.zzz-active::after (scanlines) and ::before (vignette) for GPU compositing
+- Added GPU layer promotion for game canvases: `will-change: contents; transform: translateZ(0); contain: layout style paint;`
+- Throttled volume tick sounds to max 25/sec (40ms interval) — was creating oscillator+gain nodes on every wheel tick causing GC pressure
+- Batched wheel events via rAF — `_wheelBatch` accumulates deltas (capped ±9), processed once per frame instead of on every wheel event
+- Cached volume knob DOM references in `_volumeKnobEls` — eliminates per-event querySelector calls in _hlKnob, _updKnob, _hideVol
+- Reduced ThreeScene particle update frequency to every 2nd frame — halves GPU buffer uploads, drift compensated with *2 multiplier
+
+Stage Summary:
+- Fixed game field visibility (CRT overlay z-index conflict resolved)
+- Removed expensive infinite CRT flicker animation
+- Volume tick sounds throttled (25/sec max vs unlimited before)
+- Wheel events batched per frame (prevents main thread blocking)
+- Volume knob DOM cached (no querySelector in hot paths)
+- Particle updates halved (every 2nd frame)
+- Canvases GPU-composited with will-change + contain
+- Scanlines/vignette promoted to GPU layers
+- 3 files modified: main.js, ThreeScene.js, ZZZTheme.js
+- Lint passes clean (2 pre-existing warnings)
+- Git push requires GitHub PAT token (not available in this session)
+
+---
+Task ID: 1
 Agent: full-stack-developer
 Task: Fix unclickable bottom-left buttons in SongSelect.js - make bigger, use SVG icons, make play wider
 
