@@ -1958,8 +1958,11 @@ const ZZZTheme = {
           const cx = this._parallaxCX;
           const cy = this._parallaxCY;
           for (const el of this._parallaxEls) {
-            const intensity = el.dataset.parallax || 8;
-            el.style.transform = `translate(${cx * intensity}px, ${cy * intensity}px)`;
+            const intensity = parseFloat(el.dataset.parallax) || 8;
+            const setting = localStorage.getItem('rhythm-os-parallax') || 'standard';
+            if (setting === 'off') { el.style.transform = ''; return; }
+            const mult = setting === 'strong' ? 2.0 : 1.0;
+            el.style.transform = `translate(${cx * intensity * mult}px, ${cy * intensity * mult}px)`;
           }
         });
       }
@@ -1969,7 +1972,11 @@ const ZZZTheme = {
   /** Register an element for parallax effect */
   addParallax(el, intensity = 8) {
     el.classList.add('parallax-layer');
+    const setting = localStorage.getItem('rhythm-os-parallax') || 'standard';
+    const mult = setting === 'off' ? 0 : setting === 'strong' ? 2.0 : 1.0;
     el.dataset.parallax = intensity;
+    el._baseParallax = intensity;
+    if (setting === 'off') el.style.transform = '';
     this._parallaxEls.push(el);
   },
 

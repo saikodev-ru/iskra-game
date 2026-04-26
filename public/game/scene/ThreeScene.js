@@ -11,6 +11,7 @@ export default class ThreeScene {
   constructor(canvas) {
     this.canvas = canvas;
     this._beatIntensity = 0;
+    this._beatPulse = 0;
     this._bloomBase = 0.18;
     this._bloomTarget = 0.18;
     this._shakeFrames = [];
@@ -316,6 +317,7 @@ export default class ThreeScene {
         uniform float uBrightness;
         uniform float uOpacity;
         uniform float uMissFlash;
+        uniform float uBeatIntensity;
         uniform float uCrtIntensity;
         uniform float uGlitchIntensity;
         uniform float uGlitchSeed;
@@ -335,7 +337,7 @@ export default class ThreeScene {
             float scale = imgAspect / planeAspect;
             uv.x = (uv.x - 0.5) / scale + 0.5;
           }
-          float zoom = 1.0 + uBass * 0.06;
+          float zoom = 1.0 + uBass * 0.04 + uBeatIntensity * 0.08;
           uv = (uv - 0.5) / zoom + 0.5;
 
           // CRT: barrel distortion (TV edge warp)
@@ -399,6 +401,7 @@ export default class ThreeScene {
         uniforms: {
           uTexture: { value: texture },
           uBass: { value: 0 },
+          uBeatIntensity: { value: 0 },
           uAudioIntensity: { value: 0 },
           uCoverScale: { value: imgAspect },
           uPlaneAspect: { value: 1.0 },
@@ -638,6 +641,7 @@ export default class ThreeScene {
         uniform float uBrightness;
         uniform float uOpacity;
         uniform float uMissFlash;
+        uniform float uBeatIntensity;
         uniform float uCrtIntensity;
         uniform float uGlitchIntensity;
         uniform float uGlitchSeed;
@@ -657,7 +661,7 @@ export default class ThreeScene {
             float scale = imgAspect / planeAspect;
             uv.x = (uv.x - 0.5) / scale + 0.5;
           }
-          float zoom = 1.0 + uBass * 0.06;
+          float zoom = 1.0 + uBass * 0.04 + uBeatIntensity * 0.08;
           uv = (uv - 0.5) / zoom + 0.5;
 
           // CRT: barrel distortion (TV edge warp)
@@ -722,6 +726,7 @@ export default class ThreeScene {
         uniforms: {
           uTexture: { value: texture },
           uBass: { value: 0 },
+          uBeatIntensity: { value: 0 },
           uAudioIntensity: { value: 0 },
           uCoverScale: { value: videoAspect },
           uPlaneAspect: { value: 1.0 },
@@ -947,6 +952,11 @@ export default class ThreeScene {
     this._glitchSeed = Math.random() * 100;
   }
 
+  /** Trigger a beat pulse — called on each music beat */
+  triggerBeatPulse(intensity = 1.0) {
+    this._beatPulse = Math.max(this._beatPulse, intensity);
+  }
+
   setAspectRatio(ar) { this._aspectRatio = ar; this.resize(); }
 
   resize() {
@@ -1007,10 +1017,18 @@ export default class ThreeScene {
       this._beatIntensity *= 0.88;
     }
 
+    // ── Beat pulse (from beat:pulse events) ──
+    if (this._beatPulse > 0.01) {
+      this._beatPulse *= 0.82; // Fast decay — sharp beat feel
+    } else {
+      this._beatPulse = 0;
+    }
+
     // ── Background image — audio-reactive cover with glow + zoom ──
     if (this._bgImageMesh && this._bgImageMaterial && this._bgImageMaterial.uniforms) {
       this._bgImageMaterial.uniforms.uBass.value = bassPulse;
       this._bgImageMaterial.uniforms.uAudioIntensity.value = audioPulse;
+      this._bgImageMaterial.uniforms.uBeatIntensity.value = this._beatPulse;
     }
 
     // ── Particles — audio-reactive (only on disco + visible) ──
@@ -1032,17 +1050,28 @@ export default class ThreeScene {
 
     // ── Camera FOV — smooth audio-reactive (skip updateProjectionMatrix when barely changed) ──
     {
-      const targetFOV = this._baseFOV + bassPulse * 0.6;
+      const targetFOV = this._baseFOV + this._beatPulse * 1.2 + bassPulse * 0.3;
       const newFov = this.camera.fov + (targetFOV - this.camera.fov) * 0.1;
       if (Math.abs(newFov - this.camera.fov) > 0.01) {
         this.camera.fov = newFov;
         this.camera.updateProjectionMatrix();
       }
       this._fovPulse = 0;
+
+      // ── Beat wobble — subtle camera shake on beat ──
+      if (this._beatPulse > 0.1) {
+        const wobbleX = Math.sin(time * 0.047) * this._beatPulse * 0.015;
+        const wobbleY = Math.cos(time * 0.031) * this._beatPulse * 0.012;
+        this.camera.position.x = wobbleX;
+        this.camera.position.y = wobbleY;
+      } else {
+        this.camera.position.x *= 0.9;
+        this.camera.position.y *= 0.9;
+      }
     }
 
     // ── Bloom — reactive to audio + hits ──
-    const audioBloom = this._bloomBase + audioPulse * 0.12 + bassPulse * 0.18;
+    const audioBloom = this._bloomBase + this._beatPulse * 0.3 + audioPulse * 0.08 + bassPulse * 0.12;
     this._bloomTarget = Math.max(this._bloomTarget, audioBloom);
     this.bloomPass.strength += (this._bloomTarget - this.bloomPass.strength) * 0.12;
     this._bloomTarget += (this._bloomBase - this._bloomTarget) * 0.06;
@@ -1087,13 +1116,15 @@ export default class ThreeScene {
         const drift = audioContentTime - videoTime;
         const absDrift = Math.abs(drift);
 
-        if (absDrift > 0.5) {
+        if (drift < -0.5) {
+          // Audio jumped backward (restart/loop) — let preview handler sync video
+          this._videoElement.playbackRate = 1.0;
+        } else if (absDrift > 0.5) {
           // Large drift: hard seek to correct position
           this._videoElement.currentTime = audioContentTime;
           this._videoElement.playbackRate = 1.0;
         } else if (absDrift > 0.05) {
           // Moderate drift: gradual correction via playback rate adjustment
-          // Speed up or slow down slightly to re-sync over ~0.5s
           const rate = drift > 0 ? 1.05 : 0.95;
           this._videoElement.playbackRate = rate;
         } else {
@@ -1114,6 +1145,7 @@ export default class ThreeScene {
       // Audio-reactive uniforms
       this._videoMaterial.uniforms.uBass.value = bassPulse;
       this._videoMaterial.uniforms.uAudioIntensity.value = audioPulse;
+      this._videoMaterial.uniforms.uBeatIntensity.value = this._beatPulse;
       this._videoMaterial.uniforms.uMissFlash.value = this._missFlash * gfx;
       // CRT + Glitch uniforms
       this._videoMaterial.uniforms.uCrtIntensity.value = this._crtIntensity;
@@ -1126,6 +1158,7 @@ export default class ThreeScene {
     if (this._bgImageMesh && this._bgImageMaterial && this._bgImageMaterial.uniforms) {
       this._bgImageMaterial.uniforms.uBass.value = bassPulse;
       this._bgImageMaterial.uniforms.uAudioIntensity.value = audioPulse;
+      this._bgImageMaterial.uniforms.uBeatIntensity.value = this._beatPulse;
       if (this._bgImageMaterial.uniforms.uCrtIntensity) this._bgImageMaterial.uniforms.uCrtIntensity.value = this._crtIntensity;
       if (this._bgImageMaterial.uniforms.uGlitchIntensity) this._bgImageMaterial.uniforms.uGlitchIntensity.value = this._glitchIntensity;
       if (this._bgImageMaterial.uniforms.uGlitchSeed) this._bgImageMaterial.uniforms.uGlitchSeed.value = this._glitchSeed;
@@ -1155,8 +1188,11 @@ export default class ThreeScene {
       this._videoMesh.position.y = pg.cy + this._bgOffsetY;
     }
 
-    // Camera position: always smoothly return to center (no shake)
-    this.camera.position.x *= 0.85;
+    // Camera position: smoothly return to center when no beat wobble active
+    if (this._beatPulse <= 0.1) {
+      this.camera.position.x *= 0.85;
+      this.camera.position.y *= 0.85;
+    }
 
     try {
       this.composer.render();

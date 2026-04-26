@@ -116,6 +116,7 @@ async function boot() {
   const LEAD_IN = 1.0; // 1 second lead-in before notes arrive
 
   let gameLoop = null, currentBeatMap = null, currentJudgement = null, gameActive = false;
+  let _focusGuardCounter = 0;
   let _endingGame = false;  // guard against double-calling endGame()
   let _inCountdown = false; // true during 3-2-1 countdown (after resume)
   let _dying = false;       // true during death animation (HP depleted)
@@ -170,6 +171,14 @@ async function boot() {
       if (hitSounds) hitSounds.setVolume(value / 100);
     } else if (key === 'bgDim') {
       noteRenderer.setBackgroundDim(value);
+    } else if (key === 'parallax') {
+      // Update parallax elements' multiplier — ZZZTheme reads localStorage dynamically
+      if (ZZZTheme._parallaxEls) {
+        const mult = value === 'off' ? 0 : value === 'strong' ? 2.0 : 1.0;
+        ZZZTheme._parallaxEls.forEach(el => {
+          if (value === 'off') el.style.transform = '';
+        });
+      }
     }
   });
 
@@ -319,6 +328,10 @@ async function boot() {
       const kiaiIntensity = currentBeatMap.getKiaiIntensity(audio.currentTime);
       if (kiaiIntensity > 0.05) {
         noteRenderer.triggerKiaiBeatPulse(kiaiIntensity);
+        three.triggerBeatPulse(kiaiIntensity);
+      } else {
+        // Still pulse on every beat, even outside kiai — just softer
+        three.triggerBeatPulse(0.4);
       }
     };
 
@@ -378,7 +391,6 @@ async function boot() {
 
         // ── Focus guard: prevent any element from stealing keyboard focus during gameplay ──
         // Only check every 10th frame to reduce DOM access overhead
-        if (!_focusGuardCounter) _focusGuardCounter = 0;
         if (++_focusGuardCounter >= 10) {
           _focusGuardCounter = 0;
           const ae = document.activeElement;

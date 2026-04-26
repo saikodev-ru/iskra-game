@@ -95,6 +95,16 @@ export default class Settings {
         </div>
       </div>
       <div style="margin-bottom:20px;">
+        <div class="zzz-label" style="margin-bottom:8px;">PARALLAX</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="parallax-btns">
+          ${[
+            { id: 'off', label: 'OFF' },
+            { id: 'standard', label: 'STANDARD' },
+            { id: 'strong', label: 'STRONG' },
+          ].map(p => `<button class="zzz-btn zzz-btn--sm ${p.id === (localStorage.getItem('rhythm-os-parallax') || 'standard') ? 'zzz-btn--primary' : ''}" data-parallax="${p.id}" style="flex:1;min-width:70px;font-size:11px;padding:6px 8px;">${p.label}</button>`).join('')}
+        </div>
+      </div>
+      <div style="margin-bottom:20px;">
         <div class="zzz-label" style="margin-bottom:8px;">RESOLUTION SCALE (%)</div>
         <div style="display:flex;gap:10px;align-items:center;">
           <input type="range" id="settings-res-scale" min="50" max="150" value="${savedResScale}" step="10" style="flex:1;" />
@@ -163,6 +173,16 @@ export default class Settings {
         document.querySelectorAll('[data-graphics]').forEach(b => b.classList.remove('zzz-btn--primary'));
         e.currentTarget.classList.add('zzz-btn--primary');
         EventBus.emit('settings:changed', { key: 'graphics', value: preset });
+      });
+    });
+
+    document.querySelectorAll('[data-parallax]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const val = e.currentTarget.dataset.parallax;
+        localStorage.setItem('rhythm-os-parallax', val);
+        document.querySelectorAll('[data-parallax]').forEach(b => b.classList.remove('zzz-btn--primary'));
+        e.currentTarget.classList.add('zzz-btn--primary');
+        EventBus.emit('settings:changed', { key: 'parallax', value: val });
       });
     });
 

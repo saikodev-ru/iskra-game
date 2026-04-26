@@ -1140,11 +1140,17 @@ export default class SongSelect {
           return;
         }
         if (!this.audio.isPlaying) {
+          // Audio ended — restart both audio and video from preview point
           this.audio.play(set.audioBuffer, Math.max(0, previewTime));
           this._syncVideoPreview(set, previewTime);
+          // Force video restart for preview loop
+          if (this.three && this.three._videoElement && this.three._videoActive) {
+            try {
+              this.three._videoElement.currentTime = Math.max(0, previewTime);
+              this.three._videoElement.play().catch(() => {});
+            } catch(_) {}
+          }
         } else {
-          // Even while audio is playing, periodically ensure video is synced
-          // (handles cases where video loaded late or drifted)
           this._syncVideoPreview(set, previewTime);
         }
       }, 500);
@@ -1157,7 +1163,7 @@ export default class SongSelect {
     try {
       const video = this.three._videoElement;
       const drift = Math.abs(video.currentTime - previewTime);
-      if (drift > 1.0) {
+      if (drift > 0.3) {  // Reduced threshold for faster resync
         video.currentTime = Math.max(0, previewTime);
       }
       if (video.paused) {
