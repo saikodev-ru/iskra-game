@@ -1071,18 +1071,17 @@ export default class ThreeScene {
       this._particles.material.size = 0.04 + this._audioLevels.bass * 0.02;
     }
 
+    // ── Chorus intensity — smooth ramp ──
+    if (this._chorusIntensity > 0.01) {
+      this._chorusBeatPulse *= 0.85;
+    } else {
+      this._chorusBeatPulse = 0;
+    }
+    const chorusBoost = this._chorusIntensity;
+    const chorusBeat = this._chorusBeatPulse;
+
     // ── Camera FOV — smooth audio-reactive (skip updateProjectionMatrix when barely changed) ──
     {
-      // Chorus intensity — smooth ramp
-      if (this._chorusIntensity > 0.01) {
-        this._chorusBeatPulse *= 0.85;
-      } else {
-        this._chorusBeatPulse = 0;
-      }
-
-      const chorusBoost = this._chorusIntensity;
-      const chorusBeat = this._chorusBeatPulse;
-
       // FOV punch — amplified 4x on beat, extra during chorus
       const targetFOV = this._baseFOV
         + this._beatPulse * (3.5 + chorusBoost * 2.0)   // bigger beat punch
