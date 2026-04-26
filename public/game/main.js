@@ -329,6 +329,8 @@ async function boot() {
       if (kiaiIntensity > 0.05) {
         noteRenderer.triggerKiaiBeatPulse(kiaiIntensity);
         three.triggerBeatPulse(kiaiIntensity);
+        // Chorus-specific beat pulse for scene-level effects
+        three.triggerChorusBeatPulse(kiaiIntensity);
       } else {
         // Still pulse on every beat, even outside kiai — just softer
         three.triggerBeatPulse(0.4);
@@ -468,6 +470,8 @@ async function boot() {
         // Compute kiai intensity for the renderer
         const kiaiIntensity = currentBeatMap ? currentBeatMap.getKiaiIntensity(ct) : 0;
         noteRenderer.setKiaiIntensity(kiaiIntensity);
+        // Pass chorus intensity to ThreeScene for scene-level fever effects
+        three.setChorusIntensity(kiaiIntensity);
         noteRenderer.render({ notes: currentBeatMap.getNotesInWindow(ct), currentTime: ct, laneCount: currentLaneCount, delta, bpm: currentBeatMap.metadata.bpm || 120, bpmChanges: currentBeatMap.bpmChanges });
         three.update(performance.now());
       }
@@ -518,6 +522,10 @@ async function boot() {
     noteRenderer.clearLaneGlows();
     noteRenderer.setKiaiIntensity(0);
     noteRenderer._kiaiBeatPulse = 0;
+    three.setChorusIntensity(0);
+    three._chorusBeatPulse = 0;
+    three.renderer.toneMappingExposure = 1.0;
+    three._chorusExposure = 1.0;
     three._clearBackgroundImage();
     three._clearBackgroundVideo();
     three._leadInOffset = 0; // Reset lead-in offset for preview mode
