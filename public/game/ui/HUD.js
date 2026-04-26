@@ -137,10 +137,14 @@ export default class HUD {
     const now = performance.now();
     if (now - this._scoreAnimT < 160) return; // cooldown: don't re-trigger mid-animation
     this._scoreAnimT = now;
-    // Re-trigger by removing + re-adding the animation
+    // Re-trigger by removing + re-adding the animation (avoid forced reflow)
     el.style.animation = 'none';
-    void el.offsetHeight; // force reflow
-    el.style.animation = 'hud-score-flip 0.2s cubic-bezier(0.22,1,0.36,1) forwards';
+    // Use double-rAF instead of offsetHeight to avoid layout thrashing
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.animation = 'hud-score-flip 0.2s cubic-bezier(0.22,1,0.36,1) forwards';
+      });
+    });
   }
 
   /** Trigger a combo pop animation. `milestone` = bigger pop for 50/100/200/500 */
@@ -151,10 +155,14 @@ export default class HUD {
     if (now - this._comboAnimT < 120) return;
     this._comboAnimT = now;
     el.style.animation = 'none';
-    void el.offsetHeight;
-    el.style.animation = milestone
-      ? 'hud-combo-milestone 0.3s cubic-bezier(0.22,1,0.36,1) forwards'
-      : 'hud-combo-pop 0.18s cubic-bezier(0.22,1,0.36,1) forwards';
+    // Use double-rAF instead of offsetHeight to avoid layout thrashing
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.animation = milestone
+          ? 'hud-combo-milestone 0.3s cubic-bezier(0.22,1,0.36,1) forwards'
+          : 'hud-combo-pop 0.18s cubic-bezier(0.22,1,0.36,1) forwards';
+      });
+    });
   }
 
   /** Clean up all running CSS animations */
@@ -170,7 +178,7 @@ export default class HUD {
 
   _startAnimLoop() {
     const tick = () => {
-      this._animateNumbers();
+      if (!this._hidden) this._animateNumbers();
       this._animFrame = requestAnimationFrame(tick);
     };
     tick();

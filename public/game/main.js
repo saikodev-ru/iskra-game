@@ -377,9 +377,14 @@ async function boot() {
         if (_inCountdown) return;
 
         // ── Focus guard: prevent any element from stealing keyboard focus during gameplay ──
-        const ae = document.activeElement;
-        if (ae && ae !== document.body && ae !== document.documentElement) {
-          ae.blur();
+        // Only check every 10th frame to reduce DOM access overhead
+        if (!_focusGuardCounter) _focusGuardCounter = 0;
+        if (++_focusGuardCounter >= 10) {
+          _focusGuardCounter = 0;
+          const ae = document.activeElement;
+          if (ae && ae !== document.body && ae !== document.documentElement) {
+            ae.blur();
+          }
         }
 
         _updateQuickRestart();

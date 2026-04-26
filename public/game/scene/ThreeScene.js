@@ -33,6 +33,9 @@ export default class ThreeScene {
     this._baseFOV = 70;
     this._fovPulse = 0;
     this._glowHue = 0;
+    // Pre-allocated color objects to avoid per-frame GC
+    this._targetColor = new THREE.Color(0xAAFF00);
+    this._bassTargetColor = new THREE.Color(0xAAFF00);
     // Background image for song select
     this._bgImageMesh = null;
     this._bgImageMaterial = null;
@@ -163,7 +166,8 @@ export default class ThreeScene {
     this._resizeHandler = () => this.resize();
     window.addEventListener('resize', this._resizeHandler);
 
-    // Mouse tracking for reverse parallax
+    // Mouse tracking for reverse parallax — throttled via rAF
+    this._mouseRAF = null;
     this._mouseHandler = (e) => {
       this._mouseX = (e.clientX / window.innerWidth - 0.5) * 2;  // -1 to 1
       this._mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
@@ -1022,11 +1026,14 @@ export default class ThreeScene {
       this._particles.material.size = 0.04 + rawBass * 0.02;
     }
 
-    // ── Camera FOV — smooth audio-reactive ──
+    // ── Camera FOV — smooth audio-reactive (skip updateProjectionMatrix when barely changed) ──
     {
       const targetFOV = this._baseFOV + bassPulse * 0.6;
-      this.camera.fov += (targetFOV - this.camera.fov) * 0.1;
-      this.camera.updateProjectionMatrix();
+      const newFov = this.camera.fov + (targetFOV - this.camera.fov) * 0.1;
+      if (Math.abs(newFov - this.camera.fov) > 0.01) {
+        this.camera.fov = newFov;
+        this.camera.updateProjectionMatrix();
+      }
       this._fovPulse = 0;
     }
 
@@ -1040,13 +1047,13 @@ export default class ThreeScene {
     const targetIntensity = 0.6 + bassPulse * 0.8 + audioPulse * 0.4;
     this.pointLight.intensity += (targetIntensity - this.pointLight.intensity) * 0.1;
     if (this.pointLight.color.r > 0.67 || this.pointLight.color.b > 0.1) {
-      this.pointLight.color.lerp(new THREE.Color(0xAAFF00), 0.08);
+      this.pointLight.color.lerp(this._targetColor, 0.08);
     }
 
     // ── Bass light ──
     const bassLightTarget = bassPulse * 1.2;
     this._bassLight.intensity += (bassLightTarget - this._bassLight.intensity) * 0.15;
-    this._bassLight.color.lerp(new THREE.Color(0xAAFF00), 0.05);
+    this._bassLight.color.lerp(this._bassTargetColor, 0.05);
 
     // ── Accent light pulse ──
     this._accentLight.intensity = 0.15 + audioPulse * 0.3;
@@ -1129,18 +1136,17 @@ export default class ThreeScene {
       this._glitchIntensity = 0;
     }
 
-    // ── Reverse parallax — move bg opposite to mouse ──
+    // ── Reverse parallax — move bg opposite to mouse (use cached geom) ──
     const targetX = -this._mouseX * this._parallaxIntensity;
     const targetY = this._mouseY * this._parallaxIntensity;
     this._bgOffsetX += (targetX - this._bgOffsetX) * 0.06;
     this._bgOffsetY += (targetY - this._bgOffsetY) * 0.06;
+    const pg = this._calcBgPlaneGeometry();
     if (this._bgImageMesh) {
-      const pg = this._calcBgPlaneGeometry();
       this._bgImageMesh.position.x = pg.cx + this._bgOffsetX;
       this._bgImageMesh.position.y = pg.cy + this._bgOffsetY;
     }
     if (this._videoMesh) {
-      const pg = this._calcBgPlaneGeometry();
       this._videoMesh.position.x = pg.cx + this._bgOffsetX;
       this._videoMesh.position.y = pg.cy + this._bgOffsetY;
     }

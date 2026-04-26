@@ -75,14 +75,13 @@ body.zzz-active::before {
 .crt-overlay::after {
   content: '';
   position: absolute; inset: 0;
-  animation: crt-flicker 0.1s infinite;
+  animation: crt-flicker 0.15s infinite;
   opacity: 0.025;
   background: white;
 }
 @keyframes crt-flicker {
   0%, 100% { opacity: 0.015; }
-  30% { opacity: 0.035; }
-  70% { opacity: 0.01; }
+  50% { opacity: 0.03; }
 }
 
 /* ── GLITCH TRANSITION ────────────────────── */
@@ -1940,16 +1939,24 @@ const ZZZTheme = {
       if (target) _crtSounds.crtClick();
     });
 
-    // Global parallax mouse tracking
+    // Global parallax mouse tracking — throttled via rAF to avoid layout thrashing
     this._parallaxEls = [];
+    this._parallaxRAF = null;
+    this._parallaxCX = 0;
+    this._parallaxCY = 0;
     document.addEventListener('mousemove', (e) => {
-      const cx = (e.clientX / window.innerWidth - 0.5) * 2;  // -1 to 1
-      const cy = (e.clientY / window.innerHeight - 0.5) * 2;
-      for (const el of this._parallaxEls) {
-        const intensity = el.dataset.parallax || 8;
-        const x = cx * intensity;
-        const y = cy * intensity;
-        el.style.transform = `translate(${x}px, ${y}px)`;
+      this._parallaxCX = (e.clientX / window.innerWidth - 0.5) * 2;
+      this._parallaxCY = (e.clientY / window.innerHeight - 0.5) * 2;
+      if (!this._parallaxRAF) {
+        this._parallaxRAF = requestAnimationFrame(() => {
+          this._parallaxRAF = null;
+          const cx = this._parallaxCX;
+          const cy = this._parallaxCY;
+          for (const el of this._parallaxEls) {
+            const intensity = el.dataset.parallax || 8;
+            el.style.transform = `translate(${cx * intensity}px, ${cy * intensity}px)`;
+          }
+        });
       }
     });
   },

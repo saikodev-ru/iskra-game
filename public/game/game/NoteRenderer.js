@@ -770,41 +770,31 @@ export default class NoteRenderer {
     }
 
     // ════════════════════════════════════════════════════════
-    //  Layer 3b: Wall glow — bright accent light bleeding outward from left/right edges
+    //  Layer 3b: Wall glow — simplified to avoid per-frame gradient creation
     // ════════════════════════════════════════════════════════
     if (borderAlpha > 0.02) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const wallGlowW = 20 + this._kiaiBorderGlow * 14;
+      const bWallW = 12 + this._kiaiBorderGlow * 6;
+      const acColor = `rgba(${acR},${acG},${acB},`;
+      const whColor = `rgba(255,255,255,`;
 
-      // Left wall glow — narrow strip bleeding left from judge-line left edge
-      const lGrad = ctx.createLinearGradient(lxJ - wallGlowW, 0, lxJ, 0);
-      lGrad.addColorStop(0, `rgba(${acR},${acG},${acB},0)`);
-      lGrad.addColorStop(0.5, `rgba(${acR},${acG},${acB},${borderAlpha * 0.06})`);
-      lGrad.addColorStop(1, `rgba(255,255,255,${borderAlpha * 0.12})`);
-      ctx.fillStyle = lGrad;
+      // Left wall glow (above judge) — simple 2-step gradient
+      ctx.fillStyle = `${acColor}${borderAlpha * 0.04})`;
       ctx.fillRect(lxJ - wallGlowW, topY, wallGlowW, judgeLineY - topY);
+      ctx.fillStyle = `${whColor}${borderAlpha * 0.08})`;
+      ctx.fillRect(lxJ - wallGlowW * 0.3, topY, wallGlowW * 0.3, judgeLineY - topY);
 
-      // Right wall glow — narrow strip bleeding right from judge-line right edge
-      const rGrad = ctx.createLinearGradient(rxJ, 0, rxJ + wallGlowW, 0);
-      rGrad.addColorStop(0, `rgba(255,255,255,${borderAlpha * 0.12})`);
-      rGrad.addColorStop(0.5, `rgba(${acR},${acG},${acB},${borderAlpha * 0.06})`);
-      rGrad.addColorStop(1, `rgba(${acR},${acG},${acB},0)`);
-      ctx.fillStyle = rGrad;
+      // Right wall glow (above judge)
+      ctx.fillStyle = `${acColor}${borderAlpha * 0.04})`;
       ctx.fillRect(rxJ, topY, wallGlowW, judgeLineY - topY);
+      ctx.fillStyle = `${whColor}${borderAlpha * 0.08})`;
+      ctx.fillRect(rxJ, topY, wallGlowW * 0.3, judgeLineY - topY);
 
       // Below-judge mirror (fainter)
-      const bWallW = 12 + this._kiaiBorderGlow * 6;
-      const lGradB = ctx.createLinearGradient(lxJ - bWallW, 0, lxJ, 0);
-      lGradB.addColorStop(0, `rgba(${acR},${acG},${acB},0)`);
-      lGradB.addColorStop(1, `rgba(${acR},${acG},${acB},${borderAlpha * 0.04})`);
-      ctx.fillStyle = lGradB;
+      ctx.fillStyle = `${acColor}${borderAlpha * 0.025})`;
       ctx.fillRect(lxJ - bWallW, judgeLineY, bWallW, bottomY - judgeLineY);
-
-      const rGradB = ctx.createLinearGradient(rxJ, 0, rxJ + bWallW, 0);
-      rGradB.addColorStop(0, `rgba(${acR},${acG},${acB},${borderAlpha * 0.04})`);
-      rGradB.addColorStop(1, `rgba(${acR},${acG},${acB},0)`);
-      ctx.fillStyle = rGradB;
       ctx.fillRect(rxJ, judgeLineY, bWallW, bottomY - judgeLineY);
 
       ctx.globalCompositeOperation = 'source-over';
@@ -1967,11 +1957,16 @@ export default class NoteRenderer {
 
   _hexToRgb(hex) {
     if (!hex || hex.length < 7) return { r: 200, g: 200, b: 200 };
+    // Use cache to avoid repeated parseInt on the same hex values every frame
+    if (this._rgbCache && this._rgbCacheKey === hex) return this._rgbCache;
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
     if (isNaN(r) || isNaN(g) || isNaN(b)) return { r: 200, g: 200, b: 200 };
-    return { r, g, b };
+    const result = { r, g, b };
+    this._rgbCacheKey = hex;
+    this._rgbCache = result;
+    return result;
   }
 
   /* ── Utility ── */
