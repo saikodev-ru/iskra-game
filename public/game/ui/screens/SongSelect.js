@@ -146,6 +146,12 @@ export default class SongSelect {
     document.getElementById('osz-input').addEventListener('change', (e) => this._handleOszFiles(e.target.files));
     document.getElementById('song-search').addEventListener('input', (e) => this._filterSongs(e.target.value));
 
+    // Auto-focus search input so user can start typing immediately
+    const searchInput = document.getElementById('song-search');
+    if (searchInput) {
+      requestAnimationFrame(() => searchInput.focus());
+    }
+
     // Dynamic fade edges on song list scroll + drag-to-scroll (osu!-style)
     const songList = document.getElementById('song-list');
     if (songList) {
@@ -253,7 +259,11 @@ export default class SongSelect {
     const oszInput = document.getElementById('osz-input');
     if (oszInput) oszInput.addEventListener('change', (e) => this._handleOszFiles(e.target.files));
     const searchInput = document.getElementById('song-search');
-    if (searchInput) searchInput.addEventListener('input', (e) => this._filterSongs(e.target.value));
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => this._filterSongs(e.target.value));
+      // Auto-focus search input when re-enabling (returning from game)
+      requestAnimationFrame(() => searchInput.focus());
+    }
 
     // Drag-to-scroll setup
     const songList = document.getElementById('song-list');

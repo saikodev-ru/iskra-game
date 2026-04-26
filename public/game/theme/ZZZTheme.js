@@ -3,6 +3,26 @@ import EventBus from '../core/EventBus.js';
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700;900&display=swap');
 
+/* ── Global unselectable for all game elements ── */
+#three, #game, #hud, #judgement-overlay, #screen, #modal,
+#screen *, #modal *, #hud *,
+canvas, .zzz-btn, .zzz-panel, .song-card, .song-card *,
+.ss-toolbar, .ss-toolbar *, .ss-search-wrap, .ss-search,
+.ss-action-bar, .ss-action-bar *, .diff-dropdown, .diff-dropdown *,
+.vol-knob-wrap, .vol-knob-wrap *, .vk-val, .vk-label,
+#volume-overlay, #volume-overlay *,
+.song-context-menu, .song-context-menu *,
+.result-screen, .result-screen *,
+.mm-nav-btn, .mm-title, .mm-stat-card,
+.crt-overlay, .glitch-transition,
+.pause-overlay, .pause-overlay *,
+.settings-overlay, .settings-overlay *,
+.loading-screen, .loading-screen *,
+.countdown-overlay, .countdown-overlay * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 :root {
   --zzz-bg:        #000000;
   --zzz-panel:     #1A1A1A;
@@ -1886,12 +1906,17 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 }
 
 /* VOLUME KNOBS */
-.vol-knob-wrap { display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;user-select:none;transition:transform 0.2s ease; }
+.vol-knob-wrap { display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;user-select:none;-webkit-user-select:none;transition:transform 0.2s ease; }
 .vol-knob-wrap:hover { transform:scale(1.06); }
 .vol-knob-wrap:hover .vol-knob-bg { box-shadow:0 6px 28px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.07),inset 0 1px 0 rgba(255,255,255,0.06); }
 .vol-knob-wrap:active { transform:scale(0.97); }
+.vol-knob--master { margin:8px 0; }
 .vol-knob-bg { transition:box-shadow 0.25s ease,transform 0.2s ease; }
-.vk-val { font-family:var(--zzz-font);font-weight:900;font-size:15px;color:rgba(255,255,255,0.85);letter-spacing:0.06em;min-width:36px;text-align:center;-webkit-text-stroke:0.3px rgba(255,255,255,0.3);text-shadow:0 0 8px rgba(255,255,255,0.08); }
+.vk-val { font-family:var(--zzz-font);font-weight:900;font-size:14px;color:rgba(255,255,255,0.85);letter-spacing:0.06em;min-width:36px;text-align:center;-webkit-text-stroke:0.3px rgba(255,255,255,0.3);text-shadow:0 0 8px rgba(255,255,255,0.08); }
+.vk-label { font-family:var(--zzz-font);font-weight:700;font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:0.15em;text-transform:uppercase;margin-top:0px;transition:color 0.2s ease; }
+.vol-knob--master .vk-label { font-size:12px;letter-spacing:0.18em; }
+.vol-knob--master .vk-val { font-size:16px; }
+#volume-overlay { backdrop-filter:blur(8px);background:rgba(0,0,0,0.25);border-radius:16px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 8px 32px rgba(0,0,0,0.5);padding:0 8px; }
 `;
 
 let _crtSounds = null;
