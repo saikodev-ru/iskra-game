@@ -11,7 +11,6 @@ import JudgementSystem from './game/JudgementSystem.js';
 import NoteRenderer  from './game/NoteRenderer.js';
 import ColorExtractor from './game/ColorExtractor.js';
 import KickDrumDetector from './game/KickDrumDetector.js';
-import ChorusDetector from './game/ChorusDetector.js';
 import RecordStore   from './game/RecordStore.js';
 import JudgementDisplay from './ui/JudgementDisplay.js';
 import HUD           from './ui/HUD.js';
@@ -238,31 +237,7 @@ async function boot() {
       }
     }
 
-    // ── Chorus detection — auto-detect chorus sections if not provided by the map ──
-    // Many maps lack kiai sections. Use ChorusDetector to find chorus sections
-    // from audio analysis so the "Aurora Edge" effect is visible during choruses.
-    if (shiftedMap.kiaiSections.length === 0 && map.audioBuffer) {
-      try {
-        const detectedChoruses = ChorusDetector.detect(map.audioBuffer, map.notes);
-        if (detectedChoruses.length > 0) {
-          // Shift detected choruses by LEAD_IN and add to the beatmap
-          const shiftedChoruses = detectedChoruses.map(s => ({
-            startTime: s.startTime + LEAD_IN,
-            endTime: s.endTime + LEAD_IN
-          }));
-          shiftedMap.kiaiSections = shiftedChoruses;
-          // Re-create BeatMap with the detected chorus sections
-          currentBeatMap = new BeatMap(shiftedMap);
-          currentJudgement = new JudgementSystem(currentBeatMap);
-          currentJudgement.reset();
-          console.log(`[RHYMIX] 🎵 Auto-detected ${shiftedChoruses.length} chorus section(s) → kiai sections`);
-        } else {
-          console.log('[RHYMIX] No chorus sections detected by ChorusDetector');
-        }
-      } catch (e) {
-        console.warn('[RHYMIX] Chorus detection failed', e);
-      }
-    } else if (shiftedMap.kiaiSections.length > 0) {
+    if (shiftedMap.kiaiSections.length > 0) {
       console.log(`[RHYMIX] 🎵 Using ${shiftedMap.kiaiSections.length} kiai section(s) from map data`);
     }
 
@@ -370,20 +345,17 @@ async function boot() {
     const comboBreakHandler = ({ combo }) => { judgementDisplay.showComboBreak(combo); };
 
     // Kiai beat pulse: on each beat during kiai, trigger a visual pulse on the renderer
-    // Kick-based pulses are softer than BPM-based ones
     const kiaiBeatHandler = ({ kickBased } = {}) => {
       if (!gameActive || !currentBeatMap) return;
       const kiaiIntensity = currentBeatMap.getKiaiIntensity(audio.currentTime);
-      // Kick-based pulses are gentler — don't pound as hard as BPM-based
-      const basePulse = kickBased ? 0.25 : 0.4;
       if (kiaiIntensity > 0.05) {
-        noteRenderer.triggerKiaiBeatPulse(kiaiIntensity * (kickBased ? 0.6 : 1.0));
-        three.triggerBeatPulse(kiaiIntensity * basePulse);
+        noteRenderer.triggerKiaiBeatPulse(kiaiIntensity);
+        three.triggerBeatPulse(kiaiIntensity);
         // Chorus-specific beat pulse for scene-level effects
-        three.triggerChorusBeatPulse(kiaiIntensity * basePulse);
+        three.triggerChorusBeatPulse(kiaiIntensity);
       } else {
         // Still pulse on every beat, even outside kiai — just softer
-        three.triggerBeatPulse(kickBased ? 0.15 : 0.3);
+        three.triggerBeatPulse(kickBased ? 0.15 : 0.4);
       }
     };
 

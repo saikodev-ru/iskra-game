@@ -221,21 +221,21 @@ export default class ThreeScene {
         float audioPulse = uAudioIntensity;
         float bassPulse = uBassIntensity;
 
-        // Green glow that pulses with overall audio
-        vec3 audioColor = vec3(0.4, 0.7, 0.0) * audioPulse * 0.5 * smoothstep(0.85, 0.0, vig);
+        // Green glow that pulses with overall audio — 3x stronger
+        vec3 audioColor = vec3(0.4, 0.7, 0.0) * audioPulse * 0.9 * smoothstep(0.85, 0.0, vig);
 
-        // Bass-reactive deep glow
-        vec3 bassColor = vec3(0.25, 0.5, 0.0) * bassPulse * 0.6 * smoothstep(0.95, 0.0, vig);
+        // Bass-reactive deep glow — 3x stronger, wider spread
+        vec3 bassColor = vec3(0.25, 0.5, 0.0) * bassPulse * 1.0 * smoothstep(0.95, 0.0, vig);
 
-        // Beat-reactive flash — moderate punch
-        vec3 beatColor = vec3(0.6, 1.0, 0.0) * uBeatIntensity * 0.4 * smoothstep(0.75, 0.0, vig);
+        // Beat-reactive flash — 4x stronger, dramatic punch
+        vec3 beatColor = vec3(0.6, 1.0, 0.0) * uBeatIntensity * 0.7 * smoothstep(0.75, 0.0, vig);
 
         // Radial beat wave — concentric ring that pulses out from center on beat
         float beatWave = 0.0;
         if (uBeatIntensity > 0.05) {
           float dist = vig;
           float ring = abs(dist - (1.0 - uBeatIntensity) * 0.6);
-          beatWave = smoothstep(0.08, 0.0, ring) * uBeatIntensity * 0.35;
+          beatWave = smoothstep(0.08, 0.0, ring) * uBeatIntensity * 0.6;
         }
         vec3 waveColor = vec3(0.5, 0.9, 0.1) * beatWave;
 
@@ -243,9 +243,9 @@ export default class ThreeScene {
         float shimmer = fract(sin(dot(uv * 100.0 + uTime * 0.1, vec2(12.9898, 78.233))) * 43758.5453);
         baseColor += vec3(0.008) * shimmer;
 
-        // Edge glow on bass
+        // Edge glow on bass — 3x stronger
         float edge = smoothstep(0.3, 0.7, vig);
-        vec3 edgeColor = vec3(0.15, 0.35, 0.0) * bassPulse * edge * 0.35;
+        vec3 edgeColor = vec3(0.15, 0.35, 0.0) * bassPulse * edge * 0.6;
 
         vec3 color = baseColor + audioColor + bassColor + beatColor + waveColor + edgeColor;
 
@@ -350,7 +350,7 @@ export default class ThreeScene {
             float scale = imgAspect / planeAspect;
             uv.x = (uv.x - 0.5) / scale + 0.5;
           }
-          float zoom = 1.0 + uBass * 0.03 + uBeatIntensity * 0.06;
+          float zoom = 1.0 + uBass * 0.06 + uBeatIntensity * 0.14;
           uv = (uv - 0.5) / zoom + 0.5;
 
           // CRT: barrel distortion (TV edge warp)
@@ -674,7 +674,7 @@ export default class ThreeScene {
             float scale = imgAspect / planeAspect;
             uv.x = (uv.x - 0.5) / scale + 0.5;
           }
-          float zoom = 1.0 + uBass * 0.03 + uBeatIntensity * 0.06;
+          float zoom = 1.0 + uBass * 0.06 + uBeatIntensity * 0.14;
           uv = (uv - 0.5) / zoom + 0.5;
 
           // CRT: barrel distortion (TV edge warp)
@@ -1084,9 +1084,9 @@ export default class ThreeScene {
     {
       // FOV punch — amplified 4x on beat, extra during chorus
       const targetFOV = this._baseFOV
-        + this._beatPulse * (2.0 + chorusBoost * 0.8)   // moderate beat punch
-        + bassPulse * (0.5 + chorusBoost * 0.2)         // bass breathing
-        + chorusBeat * 0.8;                               // subtle chorus kick
+        + this._beatPulse * (3.5 + chorusBoost * 2.0)   // bigger beat punch
+        + bassPulse * (0.8 + chorusBoost * 0.5)         // bass breathing
+        + chorusBeat * 2.0;                               // chorus beat kick
       const newFov = this.camera.fov + (targetFOV - this.camera.fov) * 0.12;
       if (Math.abs(newFov - this.camera.fov) > 0.01) {
         this.camera.fov = newFov;
@@ -1094,13 +1094,13 @@ export default class ThreeScene {
       }
       this._fovPulse = 0;
 
-      // ── Beat wobble — subtle camera shake ──
+      // ── Beat wobble — amplified camera shake ──
       if (this._beatPulse > 0.1 || chorusBeat > 0.1) {
-        const shakeAmp = (0.02 + chorusBoost * 0.01);
+        const shakeAmp = (0.035 + chorusBoost * 0.025);
         const wobbleX = Math.sin(time * 0.047) * this._beatPulse * shakeAmp
-                       + Math.sin(time * 0.071) * chorusBeat * 0.012;
+                       + Math.sin(time * 0.071) * chorusBeat * 0.03;
         const wobbleY = Math.cos(time * 0.031) * this._beatPulse * shakeAmp * 0.8
-                       + Math.cos(time * 0.053) * chorusBeat * 0.01;
+                       + Math.cos(time * 0.053) * chorusBeat * 0.025;
         this.camera.position.x = wobbleX;
         this.camera.position.y = wobbleY;
       } else {
@@ -1111,23 +1111,23 @@ export default class ThreeScene {
 
     // ── Bloom — reactive to audio + hits + chorus — AMPLIFIED ──
     const audioBloom = this._bloomBase
-      + this._beatPulse * (0.3 + chorusBoost * 0.15)  // beat bloom moderate
-      + audioPulse * (0.1 + chorusBoost * 0.05)        // audio bloom subtle
-      + bassPulse * (0.15 + chorusBoost * 0.08)        // bass bloom subtle
-      + chorusBeat * 0.2;                               // chorus beat bloom gentle
+      + this._beatPulse * (0.5 + chorusBoost * 0.4)   // beat bloom 2x stronger
+      + audioPulse * (0.15 + chorusBoost * 0.12)       // audio bloom 2x stronger
+      + bassPulse * (0.25 + chorusBoost * 0.15)        // bass bloom 2x stronger
+      + chorusBeat * 0.5;                               // chorus beat bloom
     this._bloomTarget = Math.max(this._bloomTarget, audioBloom);
     this.bloomPass.strength += (this._bloomTarget - this.bloomPass.strength) * 0.14;
     this._bloomTarget += (this._bloomBase - this._bloomTarget) * 0.05;
 
     // ── Chorus exposure boost — brighter during fever ──
-    const targetExposure = 1.0 + chorusBoost * 0.12 + chorusBeat * 0.08;
+    const targetExposure = 1.0 + chorusBoost * 0.35 + chorusBeat * 0.2;
     this._chorusExposure += (targetExposure - this._chorusExposure) * 0.08;
     if (Math.abs(this._chorusExposure - this.renderer.toneMappingExposure) > 0.005) {
       this.renderer.toneMappingExposure = this._chorusExposure;
     }
 
     // ── Point light — reactive glow — AMPLIFIED ──
-    const targetIntensity = 0.6 + bassPulse * (1.0 + chorusBoost * 0.3) + audioPulse * (0.5 + chorusBoost * 0.2) + chorusBeat * 0.6;
+    const targetIntensity = 0.6 + bassPulse * (1.4 + chorusBoost * 0.6) + audioPulse * (0.7 + chorusBoost * 0.4) + chorusBeat * 1.5;
     this.pointLight.intensity += (targetIntensity - this.pointLight.intensity) * 0.12;
     if (this.pointLight.color.r > 0.67 || this.pointLight.color.b > 0.1) {
       this.pointLight.color.lerp(this._targetColor, 0.08);
