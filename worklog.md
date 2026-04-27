@@ -1800,3 +1800,31 @@ Stage Summary:
 - New file: KickDrumDetector.js
 - Modified files: AudioEngine.js, main.js, NoteRenderer.js, ThreeScene.js
 - Lint passes clean (2 pre-existing warnings)
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Delete ChorusDetector and restore original Muse Dash Fever chorus effect
+
+Work Log:
+- Removed `import ChorusDetector from './game/ChorusDetector.js'` from main.js
+- Removed the ChorusDetector.detect() block (lines 241-267) that auto-detected chorus sections
+- Deleted the entire ChorusDetector.js file (372 lines of chorus detection algorithm)
+- Restored the kiaiBeatHandler to use full intensity (no kickBased reduction for chorus triggers)
+- Restored the original intense Muse Dash Fever chorus effect in ThreeScene.js:
+  - Background shader: audio glow 0.5→0.9, bass glow 0.6→1.0, beat flash 0.4→0.7, beat wave 0.35→0.6, edge glow 0.35→0.6
+  - Background image/video zoom: uBass*0.03→0.06, uBeatIntensity*0.06→0.14
+  - FOV punch: beat 2.0→3.5, chorus 0.8→2.0, bass 0.5→0.8, chorusBoost 0.8→2.0
+  - Camera shake: shakeAmp 0.02→0.035, chorusBoost 0.01→0.025, chorus wobble X 0.012→0.03, Y 0.01→0.025
+  - Bloom: beat 0.3→0.5, chorusBoost 0.15→0.4, audio 0.1→0.15, bass 0.15→0.25, chorusBeat 0.2→0.5
+  - Exposure: chorusBoost 0.12→0.35, chorusBeat 0.08→0.2
+  - Point light: bass 1.0→1.4, chorusBoost 0.3→0.6, audio 0.5→0.7, chorusBeat 0.6→1.5
+- Committed locally: "fix: delete ChorusDetector, restore original Muse Dash Fever chorus effect"
+- Push failed due to missing PAT token (not available in this session)
+
+Stage Summary:
+- ChorusDetector.js completely deleted
+- Chorus auto-detection removed from main.js — effect now relies on kiaiSections from map data
+- All intensity values restored to the original Muse Dash Fever levels
+- The chorus effect will be clearly visible when a beatmap has kiai sections defined
+- Need PAT token to push to remote
