@@ -1861,3 +1861,53 @@ Stage Summary:
 - 2D game canvas (NoteRenderer) still has its own kiai effects independently
 - Miss flash red overlay still provides visual feedback on missed notes
 - Files modified: `public/game/scene/ThreeScene.js`, `public/game/main.js`
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Create osu! beatmap Library feature with search, download, and radial progress
+
+Work Log:
+- Created `src/app/api/osu-search/route.ts` — API proxy for osu! beatmap search (nerinyan.moe)
+- Created `src/app/api/osu-download/[setId]/route.ts` — Streaming .osz download proxy with Content-Length header
+- Created `public/game/game/OsuLibrary.js` — Library module with search, tile grid, radial-progress download
+- Modified `public/game/ui/screens/SongSelect.js` — Added LIBRARY button between IMPORT and PLAYLIST
+- Added CSS to `public/game/theme/ZZZTheme.js` — Library panel styles, tile styles, radial download progress
+- Search API tested: returns mania beatmap sets with covers, star ratings
+- Download API tested: streams .osz with Content-Length for progress tracking
+- Downloads prioritize video content
+
+Stage Summary:
+- LIBRARY button opens full-screen overlay with search bar
+- Search queries osu! API for mania beatmaps (mode=3)
+- Results shown as tile grid with cover images, title, artist, star rating
+- Each tile has circular download button with radial SVG progress indicator
+- After download, .osz is imported via OszLoader and added to song list
+- ESC key closes library panel
+
+---
+Task ID: 3
+Agent: Main Agent (subagent for ThreeScene/main.js)
+Task: Remove pulsating background effect during gameplay, match song select style
+
+Work Log:
+- Added `_gameplayMode` flag to ThreeScene constructor
+- Added `setGameplayMode(enabled)` method that resets reactive state when enabled
+- Modified `update()` to skip all reactive effects in gameplay mode:
+  - Background shader: beat/bass/audio uniforms → 0
+  - Background image: audio uniforms → 0
+  - Camera FOV: locked at _baseFOV, no wobble
+  - Bloom: target locked at _bloomBase
+  - Exposure: locked at 1.0
+  - Point light: locked at base intensity
+  - Bass light: decays to 0
+  - Accent light: locked at 0.15
+  - Video sync: continues normally
+  - Miss flash: still works (game feedback, not background)
+- Modified main.js: three.setGameplayMode(true) in startGame(), false in endGame()
+
+Stage Summary:
+- During gameplay, 3D background is now completely static (like song select)
+- No FOV pulsation, camera wobble, bloom pulsation, or exposure changes
+- 2D canvas kiai effects (NoteRenderer) still work independently
+- Background image/video shows without any beat-reactive effects
