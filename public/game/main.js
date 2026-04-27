@@ -264,6 +264,9 @@ async function boot() {
     // Hide Three.js dark gradient bg mesh to prevent "double background"
     three.hideBgMesh();
 
+    // Enable gameplay mode — keep 3D background static (no pulsation) during gameplay
+    three.setGameplayMode(true);
+
     // Use video background if available, otherwise use image background
     if (map.videoUrl) {
       three.setBackgroundVideo(map.videoUrl, audio);
@@ -522,6 +525,7 @@ async function boot() {
     _inCountdown = false;
     _dying = false;
     _deadPause = false;
+    three.setGameplayMode(false);
     _quickRestartHeld = false;
     _quickRestartKey = null;
     _removeQuickRestartOverlay();

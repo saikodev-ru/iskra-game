@@ -1828,3 +1828,36 @@ Stage Summary:
 - All intensity values restored to the original Muse Dash Fever levels
 - The chorus effect will be clearly visible when a beatmap has kiai sections defined
 - Need PAT token to push to remote
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Remove pulsating background effect during gameplay, make it match song select style
+
+Work Log:
+- Added `_gameplayMode` flag to ThreeScene constructor (default: false)
+- Added `setGameplayMode(enabled)` public method that resets all reactive state when enabled
+- Modified ThreeScene.update() to skip all reactive 3D effects when _gameplayMode is true:
+  - Background shader uniforms (uBeatIntensity, uBassIntensity, uAudioIntensity) set to 0 in gameplay mode; uTime still updates
+  - Background image uniforms (uBass, uAudioIntensity, uBeatIntensity) set to 0 in gameplay mode
+  - Camera FOV locked at baseFOV with smooth interpolation back; no camera wobble
+  - Bloom target locked at _bloomBase (no audio-reactive bloom)
+  - Chorus exposure locked at 1.0 (no brightness amplification)
+  - Point light intensity locked at base (0.6); no color lerp needed
+  - Bass light intensity decays to 0 (intensity *= 0.9)
+  - Accent light intensity locked at base (0.15)
+  - Video background audio-reactive uniforms (uBass, uAudioIntensity, uBeatIntensity) set to 0; miss flash still works
+  - Second background image uniform update (CRT+glitch section) also sets audio uniforms to 0 in gameplay mode
+- Miss flash (red overlay) still works even in gameplay mode — it's a game feedback element, not a background pulsation
+- Video sync continues to work normally in gameplay mode (position tracking, texture updates)
+- Added `three.setGameplayMode(true)` in main.js startGame() after hideBgMesh()
+- Added `three.setGameplayMode(false)` in main.js endGame() early on (before gameActive=false)
+- Lint passes (0 errors, 2 pre-existing warnings)
+
+Stage Summary:
+- 3D background is now completely STATIC during gameplay — no FOV changes, no camera wobble, no bloom pulsation, no exposure changes, no background zoom pulsation
+- Background image/video still shows and syncs with audio — just no reactive effects on top
+- Matches the song select screen's static background behavior
+- 2D game canvas (NoteRenderer) still has its own kiai effects independently
+- Miss flash red overlay still provides visual feedback on missed notes
+- Files modified: `public/game/scene/ThreeScene.js`, `public/game/main.js`

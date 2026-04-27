@@ -18,7 +18,8 @@ canvas, .zzz-btn, .zzz-panel, .song-card, .song-card *,
 .pause-overlay, .pause-overlay *,
 .settings-overlay, .settings-overlay *,
 .loading-screen, .loading-screen *,
-.countdown-overlay, .countdown-overlay * {
+.countdown-overlay, .countdown-overlay *,
+.lib-overlay, .lib-overlay * {
   -webkit-user-select: none;
   user-select: none;
 }
@@ -1921,6 +1922,230 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 .vol-knob--master .vk-label { font-size:12px;letter-spacing:0.18em; }
 .vol-knob--master .vk-val { font-size:16px; }
 #volume-overlay { backdrop-filter:blur(8px);background:rgba(0,0,0,0.25);border-radius:16px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 8px 32px rgba(0,0,0,0.5);padding:0 8px; }
+
+/* ── LIBRARY BUTTON ────────────────────────────────── */
+.ss-action-btn--library {
+  background: rgba(0,229,255,0.1);
+  border-color: rgba(0,229,255,0.2);
+  color: #00E5FF;
+}
+.ss-action-btn--library:hover {
+  background: rgba(0,229,255,0.18);
+  border-color: rgba(0,229,255,0.35);
+  box-shadow: 0 0 12px rgba(0,229,255,0.1);
+}
+
+/* ── LIBRARY PANEL ────────────────────────────────── */
+.lib-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(20px);
+  display: flex; flex-direction: column;
+  animation: lib-overlay-in 0.3s cubic-bezier(0.22,1,0.36,1) forwards;
+  font-family: var(--zzz-font);
+}
+@keyframes lib-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.lib-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.lib-title {
+  font-weight: 900; font-size: 18px; color: #00E5FF;
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+
+.lib-search {
+  flex: 1; max-width: 400px;
+  padding: 10px 16px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  color: var(--zzz-text);
+  font-family: var(--zzz-font); font-weight: 500; font-size: 13px;
+  outline: none; transition: border-color 0.2s;
+}
+.lib-search:focus {
+  border-color: rgba(0,229,255,0.4);
+  box-shadow: 0 0 12px rgba(0,229,255,0.1);
+}
+.lib-search::placeholder { color: rgba(255,255,255,0.25); }
+
+.lib-close-btn {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+  color: var(--zzz-muted); cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  transition: all 0.15s ease; font-size: 18px;
+}
+.lib-close-btn:hover {
+  background: rgba(255,61,61,0.15); border-color: rgba(255,61,61,0.3); color: #ff6b6b;
+}
+
+.lib-grid {
+  flex: 1; overflow-y: auto; padding: 20px 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  align-content: start;
+}
+
+.lib-tile {
+  display: flex; align-items: stretch;
+  background: rgba(20,20,20,0.9);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px; overflow: hidden;
+  cursor: default;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 72px;
+}
+.lib-tile:hover {
+  background: rgba(30,30,30,0.95);
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.lib-tile-cover {
+  flex: 0 0 90px; background-size: cover; background-position: center;
+  position: relative;
+  -webkit-mask-image: linear-gradient(90deg, black 40%, transparent 100%);
+  mask-image: linear-gradient(90deg, black 40%, transparent 100%);
+}
+
+.lib-tile-info {
+  flex: 1; display: flex; flex-direction: column; justify-content: center;
+  padding: 8px 10px; overflow: hidden; gap: 2px;
+}
+
+.lib-tile-title {
+  font-weight: 900; font-size: 12px; color: var(--zzz-text);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.lib-tile-artist {
+  font-weight: 500; font-size: 10px; color: var(--zzz-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.lib-tile-meta {
+  display: flex; align-items: center; gap: 6px; margin-top: 2px;
+}
+
+.lib-tile-stars {
+  font-weight: 700; font-size: 10px;
+  font-family: var(--zzz-mono);
+}
+
+.lib-tile-badge {
+  font-size: 7px; font-weight: 700;
+  background: rgba(168,85,247,0.15); color: #A855F7;
+  border: 1px solid rgba(168,85,247,0.25);
+  border-radius: 4px; padding: 1px 4px;
+  letter-spacing: 0.05em;
+}
+
+.lib-tile-video {
+  font-size: 9px; opacity: 0.4;
+}
+
+.lib-tile-actions {
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 12px; flex-shrink: 0;
+}
+
+/* Radial progress download button */
+.lib-dl-btn {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(0,229,255,0.1); border: 2px solid rgba(0,229,255,0.25);
+  color: #00E5FF; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s ease; position: relative;
+  padding: 0;
+}
+.lib-dl-btn:hover:not(:disabled) {
+  background: rgba(0,229,255,0.2);
+  border-color: rgba(0,229,255,0.4);
+  box-shadow: 0 0 12px rgba(0,229,255,0.15);
+  transform: scale(1.08);
+}
+.lib-dl-btn:disabled {
+  cursor: not-allowed;
+}
+
+.lib-dl-btn svg { width: 18px; height: 18px; }
+
+/* Radial progress ring */
+.lib-dl-progress {
+  position: absolute; inset: -3px;
+  width: calc(100% + 6px); height: calc(100% + 6px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+  display: none;
+}
+.lib-dl-progress circle {
+  fill: none; stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.lib-dl-progress .progress-bg {
+  stroke: rgba(0,229,255,0.15);
+}
+.lib-dl-progress .progress-fill {
+  stroke: #00E5FF;
+  transition: stroke-dashoffset 0.15s ease;
+}
+
+/* Download states */
+.lib-dl-btn--done {
+  background: rgba(170,255,0,0.1); border-color: rgba(170,255,0,0.3);
+  color: var(--zzz-lime);
+}
+.lib-dl-btn--error {
+  background: rgba(255,61,61,0.1); border-color: rgba(255,61,61,0.3);
+  color: var(--zzz-red);
+}
+
+.lib-empty {
+  grid-column: 1 / -1;
+  text-align: center; padding: 60px 20px;
+  color: var(--zzz-muted); font-size: 14px;
+}
+
+.lib-loading {
+  grid-column: 1 / -1;
+  text-align: center; padding: 60px 20px;
+}
+
+.lib-loading-spinner {
+  width: 32px; height: 32px; margin: 0 auto 12px;
+  border: 3px solid rgba(0,229,255,0.15);
+  border-top-color: #00E5FF;
+  border-radius: 50%;
+  animation: lib-spin 0.8s linear infinite;
+}
+@keyframes lib-spin {
+  to { transform: rotate(360deg); }
+}
+
+.lib-count {
+  font-family: var(--zzz-mono); font-size: 10px;
+  color: rgba(255,255,255,0.3); flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .lib-grid {
+    grid-template-columns: 1fr;
+    padding: 12px 16px;
+  }
+  .lib-header { padding: 12px 16px; gap: 8px; }
+  .lib-search { max-width: none; }
+}
 `;
 
 let _crtSounds = null;

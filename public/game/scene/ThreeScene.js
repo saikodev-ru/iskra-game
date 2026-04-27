@@ -75,6 +75,9 @@ export default class ThreeScene {
     this._parallaxIntensity = 0.15; // how far the bg shifts (world units at z=-4)
     this._cachedBgGeom = null; // cached bg plane geometry
 
+    // Gameplay mode — when true, 3D background stays static (no pulsation)
+    this._gameplayMode = false;
+
     this._init();
     this._setupListeners();
   }
@@ -975,6 +978,21 @@ export default class ThreeScene {
     this._chorusIntensity = Math.max(0, Math.min(1, intensity));
   }
 
+  /** Enable/disable gameplay mode — when enabled, 3D background stays static (no pulsation) */
+  setGameplayMode(enabled) {
+    this._gameplayMode = !!enabled;
+    if (enabled) {
+      // Reset all reactive state to baseline
+      this._beatPulse = 0;
+      this._beatIntensity = 0;
+      this._chorusBeatPulse = 0;
+      this._chorusIntensity = 0;
+      this._chorusExposure = 1.0;
+      this._fovPulse = 0;
+      this._bloomTarget = this._bloomBase;
+    }
+  }
+
   /** Trigger chorus beat pulse — called on each beat during chorus */
   triggerChorusBeatPulse(intensity = 1.0) {
     this._chorusBeatPulse = Math.max(this._chorusBeatPulse, intensity);
@@ -1031,12 +1049,27 @@ export default class ThreeScene {
     const bassPulse = levels.bass * gfx;
     const audioPulse = levels.intensity * gfx;
 
+    // In gameplay mode, skip all reactive 3D effects — keep background static like song select
+    if (this._gameplayMode) {
+      // Still update video sync and render, but don't apply beat/chorus pulsation
+      this._beatPulse = 0;
+      this._beatIntensity = 0;
+      this._chorusBeatPulse = 0;
+      // Keep chorus intensity for potential future use, but don't apply it
+    }
+
     // ── Background shader ──
     if (this._bgMaterial) {
       this._bgMaterial.uniforms.uTime.value = time * 0.001;
-      this._bgMaterial.uniforms.uBeatIntensity.value = this._beatIntensity * gfx;
-      this._bgMaterial.uniforms.uBassIntensity.value = bassPulse;
-      this._bgMaterial.uniforms.uAudioIntensity.value = audioPulse;
+      if (this._gameplayMode) {
+        this._bgMaterial.uniforms.uBeatIntensity.value = 0;
+        this._bgMaterial.uniforms.uBassIntensity.value = 0;
+        this._bgMaterial.uniforms.uAudioIntensity.value = 0;
+      } else {
+        this._bgMaterial.uniforms.uBeatIntensity.value = this._beatIntensity * gfx;
+        this._bgMaterial.uniforms.uBassIntensity.value = bassPulse;
+        this._bgMaterial.uniforms.uAudioIntensity.value = audioPulse;
+      }
       this._beatIntensity *= 0.88;
     }
 
@@ -1049,9 +1082,15 @@ export default class ThreeScene {
 
     // ── Background image — audio-reactive cover with glow + zoom ──
     if (this._bgImageMesh && this._bgImageMaterial && this._bgImageMaterial.uniforms) {
-      this._bgImageMaterial.uniforms.uBass.value = bassPulse;
-      this._bgImageMaterial.uniforms.uAudioIntensity.value = audioPulse;
-      this._bgImageMaterial.uniforms.uBeatIntensity.value = this._beatPulse;
+      if (this._gameplayMode) {
+        this._bgImageMaterial.uniforms.uBass.value = 0;
+        this._bgImageMaterial.uniforms.uAudioIntensity.value = 0;
+        this._bgImageMaterial.uniforms.uBeatIntensity.value = 0;
+      } else {
+        this._bgImageMaterial.uniforms.uBass.value = bassPulse;
+        this._bgImageMaterial.uniforms.uAudioIntensity.value = audioPulse;
+        this._bgImageMaterial.uniforms.uBeatIntensity.value = this._beatPulse;
+      }
     }
 
     // ── Particles — audio-reactive (only on disco + visible) ──
@@ -1081,7 +1120,16 @@ export default class ThreeScene {
     const chorusBeat = this._chorusBeatPulse;
 
     // ── Camera FOV — smooth audio-reactive (skip updateProjectionMatrix when barely changed) ──
-    {
+    if (this._gameplayMode) {
+      // Keep camera FOV at base
+      if (Math.abs(this.camera.fov - this._baseFOV) > 0.01) {
+        this.camera.fov += (this._baseFOV - this.camera.fov) * 0.12;
+        this.camera.updateProjectionMatrix();
+      }
+      // No camera wobble
+      this.camera.position.x *= 0.9;
+      this.camera.position.y *= 0.9;
+    } else {
       // FOV punch — amplified 4x on beat, extra during chorus
       const targetFOV = this._baseFOV
         + this._beatPulse * (3.5 + chorusBoost * 2.0)   // bigger beat punch
@@ -1110,36 +1158,53 @@ export default class ThreeScene {
     }
 
     // ── Bloom — reactive to audio + hits + chorus — AMPLIFIED ──
-    const audioBloom = this._bloomBase
-      + this._beatPulse * (0.5 + chorusBoost * 0.4)   // beat bloom 2x stronger
-      + audioPulse * (0.15 + chorusBoost * 0.12)       // audio bloom 2x stronger
-      + bassPulse * (0.25 + chorusBoost * 0.15)        // bass bloom 2x stronger
-      + chorusBeat * 0.5;                               // chorus beat bloom
-    this._bloomTarget = Math.max(this._bloomTarget, audioBloom);
+    if (this._gameplayMode) {
+      this._bloomTarget = this._bloomBase;
+    } else {
+      const audioBloom = this._bloomBase
+        + this._beatPulse * (0.5 + chorusBoost * 0.4)   // beat bloom 2x stronger
+        + audioPulse * (0.15 + chorusBoost * 0.12)       // audio bloom 2x stronger
+        + bassPulse * (0.25 + chorusBoost * 0.15)        // bass bloom 2x stronger
+        + chorusBeat * 0.5;                               // chorus beat bloom
+      this._bloomTarget = Math.max(this._bloomTarget, audioBloom);
+    }
     this.bloomPass.strength += (this._bloomTarget - this.bloomPass.strength) * 0.14;
     this._bloomTarget += (this._bloomBase - this._bloomTarget) * 0.05;
 
     // ── Chorus exposure boost — brighter during fever ──
-    const targetExposure = 1.0 + chorusBoost * 0.35 + chorusBeat * 0.2;
-    this._chorusExposure += (targetExposure - this._chorusExposure) * 0.08;
+    if (this._gameplayMode) {
+      this._chorusExposure = 1.0;
+    } else {
+      const targetExposure = 1.0 + chorusBoost * 0.35 + chorusBeat * 0.2;
+      this._chorusExposure += (targetExposure - this._chorusExposure) * 0.08;
+    }
     if (Math.abs(this._chorusExposure - this.renderer.toneMappingExposure) > 0.005) {
       this.renderer.toneMappingExposure = this._chorusExposure;
     }
 
     // ── Point light — reactive glow — AMPLIFIED ──
-    const targetIntensity = 0.6 + bassPulse * (1.4 + chorusBoost * 0.6) + audioPulse * (0.7 + chorusBoost * 0.4) + chorusBeat * 1.5;
-    this.pointLight.intensity += (targetIntensity - this.pointLight.intensity) * 0.12;
-    if (this.pointLight.color.r > 0.67 || this.pointLight.color.b > 0.1) {
-      this.pointLight.color.lerp(this._targetColor, 0.08);
+    if (this._gameplayMode) {
+      const baseLightIntensity = 0.6;
+      this.pointLight.intensity += (baseLightIntensity - this.pointLight.intensity) * 0.12;
+    } else {
+      const targetIntensity = 0.6 + bassPulse * (1.4 + chorusBoost * 0.6) + audioPulse * (0.7 + chorusBoost * 0.4) + chorusBeat * 1.5;
+      this.pointLight.intensity += (targetIntensity - this.pointLight.intensity) * 0.12;
+      if (this.pointLight.color.r > 0.67 || this.pointLight.color.b > 0.1) {
+        this.pointLight.color.lerp(this._targetColor, 0.08);
+      }
     }
 
     // ── Bass light ──
-    const bassLightTarget = bassPulse * 1.2;
-    this._bassLight.intensity += (bassLightTarget - this._bassLight.intensity) * 0.15;
-    this._bassLight.color.lerp(this._bassTargetColor, 0.05);
+    if (this._gameplayMode) {
+      this._bassLight.intensity *= 0.9;
+    } else {
+      const bassLightTarget = bassPulse * 1.2;
+      this._bassLight.intensity += (bassLightTarget - this._bassLight.intensity) * 0.15;
+      this._bassLight.color.lerp(this._bassTargetColor, 0.05);
+    }
 
     // ── Accent light pulse ──
-    this._accentLight.intensity = 0.15 + audioPulse * 0.3;
+    this._accentLight.intensity = this._gameplayMode ? 0.15 : 0.15 + audioPulse * 0.3;
 
     // ── Miss flash — decay the red overlay ──
     if (this._missFlash > 0.005) {
@@ -1193,9 +1258,15 @@ export default class ThreeScene {
       }
       this._skipVideoFrame = !this._skipVideoFrame;
       // Audio-reactive uniforms
-      this._videoMaterial.uniforms.uBass.value = bassPulse;
-      this._videoMaterial.uniforms.uAudioIntensity.value = audioPulse;
-      this._videoMaterial.uniforms.uBeatIntensity.value = this._beatPulse;
+      if (this._gameplayMode) {
+        this._videoMaterial.uniforms.uBass.value = 0;
+        this._videoMaterial.uniforms.uAudioIntensity.value = 0;
+        this._videoMaterial.uniforms.uBeatIntensity.value = 0;
+      } else {
+        this._videoMaterial.uniforms.uBass.value = bassPulse;
+        this._videoMaterial.uniforms.uAudioIntensity.value = audioPulse;
+        this._videoMaterial.uniforms.uBeatIntensity.value = this._beatPulse;
+      }
       this._videoMaterial.uniforms.uMissFlash.value = this._missFlash * gfx;
       // CRT + Glitch uniforms
       this._videoMaterial.uniforms.uCrtIntensity.value = this._crtIntensity;
@@ -1206,9 +1277,15 @@ export default class ThreeScene {
 
     // ── Background image — CRT + glitch uniforms ──
     if (this._bgImageMesh && this._bgImageMaterial && this._bgImageMaterial.uniforms) {
-      this._bgImageMaterial.uniforms.uBass.value = bassPulse;
-      this._bgImageMaterial.uniforms.uAudioIntensity.value = audioPulse;
-      this._bgImageMaterial.uniforms.uBeatIntensity.value = this._beatPulse;
+      if (this._gameplayMode) {
+        this._bgImageMaterial.uniforms.uBass.value = 0;
+        this._bgImageMaterial.uniforms.uAudioIntensity.value = 0;
+        this._bgImageMaterial.uniforms.uBeatIntensity.value = 0;
+      } else {
+        this._bgImageMaterial.uniforms.uBass.value = bassPulse;
+        this._bgImageMaterial.uniforms.uAudioIntensity.value = audioPulse;
+        this._bgImageMaterial.uniforms.uBeatIntensity.value = this._beatPulse;
+      }
       if (this._bgImageMaterial.uniforms.uCrtIntensity) this._bgImageMaterial.uniforms.uCrtIntensity.value = this._crtIntensity;
       if (this._bgImageMaterial.uniforms.uGlitchIntensity) this._bgImageMaterial.uniforms.uGlitchIntensity.value = this._glitchIntensity;
       if (this._bgImageMaterial.uniforms.uGlitchSeed) this._bgImageMaterial.uniforms.uGlitchSeed.value = this._glitchSeed;

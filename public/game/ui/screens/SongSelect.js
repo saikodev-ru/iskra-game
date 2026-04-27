@@ -3,6 +3,7 @@ import OszLoader from '../../game/OszLoader.js';
 import DifficultyAnalyzer from '../../game/DifficultyAnalyzer.js';
 import RecordStore from '../../game/RecordStore.js';
 import ZZZTheme from '../../theme/ZZZTheme.js';
+import OsuLibrary from '../../game/OsuLibrary.js';
 
 
 export default class SongSelect {
@@ -37,12 +38,30 @@ export default class SongSelect {
     this._leavingToGame = false;  // true when transitioning to game screen
     this._leavingToMenu = false;  // true when going back to main menu (keep audio playing)
     this._initialized = false;  // true after first init() completes
+    this._osuLibrary = null;
   }
 
   /** Navigate back to main menu — keeps music preview playing */
   _goBackToMenu() {
     this._leavingToMenu = true;
     this.screens.show('main-menu');
+  }
+
+  /** Open the osu! beatmap library panel */
+  _openLibrary() {
+    if (!this._osuLibrary) {
+      this._osuLibrary = new OsuLibrary({
+        audio: this.audio,
+        oszLoader: this.oszLoader,
+        onImported: (beatmapSet) => {
+          this.beatmapSets.push(beatmapSet);
+          this._buildFilteredIndices();
+          this._renderSongList();
+          this._selectSong(this.beatmapSets.length - 1);
+        }
+      });
+    }
+    this._osuLibrary.open();
   }
 
   /** Get local best record for a beatmap difficulty (legacy compat) */
@@ -105,6 +124,10 @@ export default class SongSelect {
                 <span>IMPORT</span>
               </label>
               <input type="file" id="osz-input" accept=".osz" style="display:none;" multiple />
+              <button id="library-btn" class="ss-action-btn ss-action-btn--library" data-crt-click>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                <span>LIBRARY</span>
+              </button>
               <button id="create-playlist-btn" class="ss-action-btn ss-action-btn--accent" data-crt-click>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
                 <span>PLAYLIST</span>
@@ -244,6 +267,12 @@ export default class SongSelect {
       }
     };
     EventBus.on('records:changed', this._recordsChangedHandler);
+
+    // Library button
+    const libraryBtn = document.getElementById('library-btn');
+    if (libraryBtn) {
+      libraryBtn.addEventListener('click', () => this._openLibrary());
+    }
   }
 
   /** Re-enable UI effects after returning from game (without reloading song data).
@@ -340,6 +369,12 @@ export default class SongSelect {
       }
     };
     EventBus.on('records:changed', this._recordsChangedHandler);
+
+    // Library button
+    const libraryBtn2 = document.getElementById('library-btn');
+    if (libraryBtn2) {
+      libraryBtn2.addEventListener('click', () => this._openLibrary());
+    }
 
     // Render current selection info + auto-play preview
     if (this.selectedIndex >= 0 && this.selectedIndex < this.beatmapSets.length) {
@@ -1449,6 +1484,9 @@ export default class SongSelect {
     // Clean up transition overlay if still present
     const transOverlay = document.getElementById('song-transition-overlay');
     if (transOverlay) transOverlay.remove();
+
+    // Clean up library panel
+    if (this._osuLibrary) { this._osuLibrary.close(); this._osuLibrary = null; }
 
     // Reset transitioning state
     this._transitioning = false;
