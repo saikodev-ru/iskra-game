@@ -1,7 +1,7 @@
 import DifficultyAnalyzer from './DifficultyAnalyzer.js';
 
 /**
- * OsuLibrary — Browse and download beatmaps from osu! via the nerinyan.moe mirror API.
+ * OsuLibrary — Browse and download beatmaps from osu! via the catboy.best mirror API.
  * Provides a full-screen overlay panel with search, map tiles, and radial-progress download.
  */
 export default class OsuLibrary {
@@ -98,7 +98,7 @@ export default class OsuLibrary {
       if (!response.ok) throw new Error(`API returned ${response.status}`);
       const data = await response.json();
 
-      // The API may return an array directly or an object with a property
+      // API returns normalized array directly (already filtered to mania)
       const sets = Array.isArray(data) ? data : (data.beatmapsets || data.data || []);
 
       if (sets.length === 0) {
@@ -106,8 +106,8 @@ export default class OsuLibrary {
         return;
       }
 
-      // Filter to mania maps only
-      const maniaSets = sets.filter(s => s.beatmaps && s.beatmaps.some(b => b.mode === 3));
+      // Further filter to mania maps (belt-and-suspenders — API already filters)
+      const maniaSets = sets.filter(s => s.beatmaps && s.beatmaps.length > 0);
 
       if (maniaSets.length === 0) {
         grid.innerHTML = '<div class="lib-empty">NO MANIA MAPS FOUND</div>';

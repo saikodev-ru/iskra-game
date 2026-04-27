@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+/**
+ * Download beatmap sets via catboy.best mirror API.
+ * Streams the .osz file (with video) directly to the client.
+ */
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ setId: string }> }
@@ -17,8 +21,8 @@ export async function GET(
   }
 
   try {
-    // Download with video (default from nerinyan.moe includes video)
-    const url = `https://api.nerinyan.moe/d/${setId}`;
+    // Download with video from catboy.best
+    const url = `https://catboy.best/d/${setId}`;
     const response = await fetch(url, {
       redirect: 'follow',
       headers: { 'Accept': 'application/octet-stream' },
