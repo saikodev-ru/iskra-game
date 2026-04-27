@@ -11,6 +11,7 @@ import JudgementSystem from './game/JudgementSystem.js';
 import NoteRenderer  from './game/NoteRenderer.js';
 import ColorExtractor from './game/ColorExtractor.js';
 import KickDrumDetector from './game/KickDrumDetector.js';
+import ChorusDetector from './game/ChorusDetector.js';
 import RecordStore   from './game/RecordStore.js';
 import JudgementDisplay from './ui/JudgementDisplay.js';
 import HUD           from './ui/HUD.js';
@@ -235,6 +236,34 @@ async function boot() {
       } catch (e) {
         console.warn('[RHYMIX] Kick detection failed, falling back to BPM', e);
       }
+    }
+
+    // ── Chorus detection — auto-detect chorus sections if not provided by the map ──
+    // Many maps lack kiai sections. Use ChorusDetector to find chorus sections
+    // from audio analysis so the "Aurora Edge" effect is visible during choruses.
+    if (shiftedMap.kiaiSections.length === 0 && map.audioBuffer) {
+      try {
+        const detectedChoruses = ChorusDetector.detect(map.audioBuffer, map.notes);
+        if (detectedChoruses.length > 0) {
+          // Shift detected choruses by LEAD_IN and add to the beatmap
+          const shiftedChoruses = detectedChoruses.map(s => ({
+            startTime: s.startTime + LEAD_IN,
+            endTime: s.endTime + LEAD_IN
+          }));
+          shiftedMap.kiaiSections = shiftedChoruses;
+          // Re-create BeatMap with the detected chorus sections
+          currentBeatMap = new BeatMap(shiftedMap);
+          currentJudgement = new JudgementSystem(currentBeatMap);
+          currentJudgement.reset();
+          console.log(`[RHYMIX] 🎵 Auto-detected ${shiftedChoruses.length} chorus section(s) → kiai sections`);
+        } else {
+          console.log('[RHYMIX] No chorus sections detected by ChorusDetector');
+        }
+      } catch (e) {
+        console.warn('[RHYMIX] Chorus detection failed', e);
+      }
+    } else if (shiftedMap.kiaiSections.length > 0) {
+      console.log(`[RHYMIX] 🎵 Using ${shiftedMap.kiaiSections.length} kiai section(s) from map data`);
     }
 
     input.setLaneCount(currentBeatMap.laneCount);
