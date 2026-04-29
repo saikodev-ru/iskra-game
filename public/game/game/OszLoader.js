@@ -173,6 +173,7 @@ class BeatmapStore {
     }
 
     const results = raw.map((entry) => {
+      if (!entry) return null;
       // Reconstruct AudioBuffer (set-level)
       if (entry._hasAudioBuffer && entry.audioBuffer?.sampleRate && entry.audioBuffer?.channelData) {
         try {
@@ -186,6 +187,7 @@ class BeatmapStore {
       // Reconstruct per-difficulty AudioBuffers (for maps with different audio per diff)
       if (entry.difficulties && Array.isArray(entry.difficulties)) {
         for (const diff of entry.difficulties) {
+          if (!diff) continue;
           if (diff._hasDiffAudioBuffer && diff.audioBuffer?.sampleRate && diff.audioBuffer?.channelData) {
             try {
               diff.audioBuffer = BeatmapStore._deserializeAudioBuffer(ctx, diff.audioBuffer);
@@ -201,7 +203,7 @@ class BeatmapStore {
       BeatmapStore._reconstructBlobUrls(entry);
 
       return entry;
-    });
+    }).filter(Boolean);
 
     if (shouldClose) {
       try { await ctx.close(); } catch (_) { /* ignore */ }
@@ -227,6 +229,7 @@ class BeatmapStore {
     });
 
     const results = raw.map((entry) => {
+      if (!entry) return null;
       // Mark that this entry HAS an AudioBuffer available but don't decode it
       // entry._hasAudioBuffer is already true/false
       if (entry._hasAudioBuffer && entry.audioBuffer) {
@@ -247,6 +250,7 @@ class BeatmapStore {
       // Same for per-difficulty AudioBuffers
       if (entry.difficulties && Array.isArray(entry.difficulties)) {
         for (const diff of entry.difficulties) {
+          if (!diff) continue;
           if (diff._hasDiffAudioBuffer && diff.audioBuffer) {
             diff._audioBufferNeedsDecode = true;
             // Strip per-difficulty serialized PCM data too
@@ -272,7 +276,7 @@ class BeatmapStore {
       }
 
       return entry;
-    });
+    }).filter(Boolean);
 
     console.log(`[BeatmapStore] Loaded ${results.length} beatmap sets (metadata only, AudioBuffers + big data stripped)`);
     return results;
@@ -320,6 +324,7 @@ class BeatmapStore {
     if (entry.difficulties && Array.isArray(entry.difficulties)) {
       for (let i = 0; i < entry.difficulties.length; i++) {
         const diff = entry.difficulties[i];
+        if (!diff) continue;
         if (diff._hasDiffAudioBuffer && diff.audioBuffer?.sampleRate && diff.audioBuffer?.channelData) {
           try {
             diffAudioBuffers.set(i, BeatmapStore._deserializeAudioBuffer(ctx, diff.audioBuffer));
