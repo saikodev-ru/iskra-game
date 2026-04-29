@@ -1229,8 +1229,44 @@ export default class SongSelect {
       this.audio.play(audioBuffer, Math.max(0, previewTime));
       this.audio.fadeTo(previewVolume, 0.4);
       // Sync video to preview time if video is playing
-      // Note: video may not be ready yet (async load), ThreeScene.update() handles sync once it's ready
-      this._syncVideoPreview(set, previewTime);
+      // The video may not be loaded yet — attach a one-shot listener to sync once it's ready
+      if (set.videoUrl && this.three && this.three._videoElement) {
+        const video = this.three._videoElement;
+        if (video.readyState >= 2) {
+          // Already loaded — sync immediately
+          this._syncVideoPreview(set, previewTime);
+        } else {
+          // Wait for video to be ready, then sync
+          const onLoaded = () => {
+            video.removeEventListener('loadeddata', onLoaded);
+            video.removeEventListener('canplay', onLoaded);
+            // Only sync if still on the same song
+            if (set === this.beatmapSets[this.selectedIndex]) {
+              this._syncVideoPreview(set, previewTime);
+            }
+          };
+          video.addEventListener('loadeddata', onLoaded);
+          video.addEventListener('canplay', onLoaded);
+
+          // Fallback: if video fails to load, switch to background image
+          const onVideoError = () => {
+            video.removeEventListener('loadeddata', onLoaded);
+            video.removeEventListener('canplay', onLoaded);
+            video.removeEventListener('error', onVideoError);
+            if (set === this.beatmapSets[this.selectedIndex] && this.three) {
+              console.warn('[SongSelect] Video failed to load, falling back to background image');
+              if (set.backgroundUrl) {
+                this.three.setTVTexture(set.backgroundUrl);
+              } else {
+                this.three.setTVStatic();
+              }
+            }
+          };
+          video.addEventListener('error', onVideoError);
+        }
+      } else {
+        this._syncVideoPreview(set, previewTime);
+      }
 
       // Repeat preview when it ends + ensure video stays synced
       this._previewInterval = setInterval(() => {
@@ -1243,8 +1279,8 @@ export default class SongSelect {
           // Audio ended — restart both audio and video from preview point
           this.audio.play(audioBuffer, Math.max(0, previewTime));
           this._syncVideoPreview(set, previewTime);
-          // Force video restart for preview loop
-          if (this.three && this.three._videoElement && this.three._videoActive) {
+          // Force video restart for preview loop (if ready)
+          if (this.three && this.three._videoElement && this.three._videoActive && this.three._videoElement.readyState >= 2) {
             try {
               this.three._videoElement.currentTime = Math.max(0, previewTime);
               this.three._videoElement.play().catch(() => {});
@@ -1257,13 +1293,16 @@ export default class SongSelect {
     }, 250);
   }
 
-  /** Sync the video background to the preview time */
+  /** Sync the video background to the preview time.
+   *  Only seeks/plays when video has loaded enough data (readyState >= 2). */
   _syncVideoPreview(set, previewTime) {
     if (!this.three || !set.videoUrl || !this.three._videoActive || !this.three._videoElement) return;
     try {
       const video = this.three._videoElement;
+      // Don't try to seek/play until the video has loaded enough data
+      if (video.readyState < 2) return;  // HAVE_CURRENT_DATA = 2
       const drift = Math.abs(video.currentTime - previewTime);
-      if (drift > 0.3) {  // Reduced threshold for faster resync
+      if (drift > 0.3) {
         video.currentTime = Math.max(0, previewTime);
       }
       if (video.paused) {

@@ -32,13 +32,13 @@ const HP_DRAIN_RATE = 1.0;
 // within this time, no penalty. Increased to 150ms to match release window lenience.
 const HOLD_GRACE_PERIOD = 0.150; // 150ms
 
-// LN tick rate: 1 tick per beat during hold (osu!mania standard)
+// LN tick rate: 2 ticks per beat during hold (double osu!mania standard for better feedback)
 // Minimum hold duration to generate ticks (at least 1 beat long)
 const TICK_MIN_HOLD_FOR_TICKS = 0.1; // seconds
 // Safety caps to prevent OOM
-const MAX_TICKS_PER_NOTE = 30;       // max ticks per single hold note
-const MIN_BEAT_INTERVAL = 0.1;       // min beat interval for tick gen (600 BPM cap)
-const MAX_TOTAL_TICKS = 2000;        // global cap across all hold notes
+const MAX_TICKS_PER_NOTE = 60;       // max ticks per single hold note (doubled for 2x tick rate)
+const MIN_BEAT_INTERVAL = 0.05;      // min tick interval for tick gen (doubled rate = 1200 BPM cap)
+const MAX_TOTAL_TICKS = 4000;        // global cap across all hold notes (doubled for 2x)
 
 export default class JudgementSystem {
   constructor(beatMap) {
@@ -87,22 +87,22 @@ export default class JudgementSystem {
       note._sliderBreak = false;
 
       // ── Compute LN tick positions ──
-      // Ticks occur every beat between head and tail.
-      // First tick is 1 beat after the head, last tick is 1 beat before the tail.
+      // Ticks occur every HALF-beat (2x rate) between head and tail.
+      // First tick is 1 half-beat after the head, last tick is 1 half-beat before the tail.
       if (note.type === 'hold' && note.duration > TICK_MIN_HOLD_FOR_TICKS
           && this._totalTickCount < MAX_TOTAL_TICKS) {
         const bpm = this.map.getBpmAt(note.time);
-        // Safety: clamp beat interval to prevent excessive tick generation
-        const beatInterval = Math.max(MIN_BEAT_INTERVAL, 60 / Math.max(1, bpm));
+        // Safety: clamp tick interval to prevent excessive tick generation
+        const tickInterval = Math.max(MIN_BEAT_INTERVAL, 60 / Math.max(1, bpm) / 2); // half-beat = 2x ticks
         const holdEnd = note.time + note.duration;
         const ticks = [];
 
-        // Generate ticks at each beat during the hold
-        // Start 1 beat after head, end before tail
-        let tickTime = note.time + beatInterval;
-        while (tickTime < holdEnd - beatInterval * 0.5 && ticks.length < MAX_TICKS_PER_NOTE) {
+        // Generate ticks at each half-beat during the hold
+        // Start 1 tick interval after head, end before tail
+        let tickTime = note.time + tickInterval;
+        while (tickTime < holdEnd - tickInterval * 0.5 && ticks.length < MAX_TICKS_PER_NOTE) {
           ticks.push(tickTime);
-          tickTime += beatInterval;
+          tickTime += tickInterval;
         }
 
         note.ticks = ticks;

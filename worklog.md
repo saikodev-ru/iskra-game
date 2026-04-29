@@ -1943,3 +1943,49 @@ Stage Summary:
 - Visual state restored to commit 83af8f3 (the "perfect" state with: tilted+styled judgement text, glassmorphism backing panels under score/combo, darker lanes with sharper dividers, Project Sekai hit effects, kiai note glow behind notes, long notes with ticks, dynamic playfield dim overlay, Kiai Drive chorus effect)
 - Memory leak fixes applied: estimated 500MB-1.5GB RAM recovery depending on play sessions
 - Key fixes: AudioBuffer release, GainNode disconnection, blob URL revocation, EventBus listener cleanup, cache canvas release
+
+---
+Task ID: 2
+Agent: subagent
+Task: Rework kiai note glow — add lane column glow, brighter per-note glow, judge line glow dots
+
+Work Log:
+- Rewrote `_drawKiaiNoteGlow()` in NoteRenderer.js with 3 distinct layers:
+  - **LAYER A: Vertical lane column glow** — For each lane with an active kiai note, draws a perspective-correct trapezoid (narrow at top, wide at judge line) filled with a vertical gradient. Gradient is transparent at top, brightest near judge line (60% opacity at bottom). Opacity pulses with `kiaiSmoothPulse`. Uses the lane's color from `LANE_COLORS`. First pass collects active lanes into a `Map<lane, {color, closestAlpha}>`.
+  - **LAYER B: Per-note glow** — Same logic as before (iterates notes, calls `_drawKiaiGlowAt`), but `_drawKiaiGlowAt` now draws smaller, brighter glows (see below).
+  - **LAYER C: Judge line glow dots** — For each active lane, draws a bright white glow sprite (0.8x lane width) at the judge line position, plus a colored halo sprite (1.6x lane width). Both pulse with `kiaiSmoothPulse`.
+- Reworked `_drawKiaiGlowAt()`:
+  - Halo size multiplier: `1.6` → `1.1` (smaller, more focused — not a blob)
+  - Halo alpha: `0.35` → `0.45` (brighter)
+  - Core alpha: `0.2` → `0.4` (doubled brightness for sharp defined edge)
+- Removed unused `rgb` variable in Layer C (sprites handle coloring internally)
+- All rendering preserves `globalCompositeOperation = 'lighter'` and existing note filtering logic
+- Lint passes clean
+
+Stage Summary:
+- Kiai note glow is now visually striking with 3 layers: lane column beam, focused per-note glow, judge line dots
+- Per-note glow is smaller (1.1x vs 1.6x) but much brighter (core alpha 0.4 vs 0.2)
+- Lane column glow lights up entire lane behind approaching notes during kiai
+- Judge line glow dots pulse at each active lane position
+- Files modified: `public/game/game/NoteRenderer.js`
+
+---
+Task ID: 3+4
+Agent: general-purpose
+Task: Fix combo alignment and video preview
+
+Work Log:
+- HUD.js: Changed combo container positioning from `right:2.5%` to `left:52%` so it's offset from center symmetrically with the score panel (which uses `left:2.5%`). Both panels now have the same distance from the vertical center line of the playfield. Combo text remains left-aligned.
+- HUD.js: Adjusted combo's glassmorphism backing panel inset from `inset:-14px -10px -10px -20px` to `inset:-14px -20px -10px -10px` — the extra padding is now on the right side (matching left-aligned text), mirroring the score panel's extra padding on the left side (matching right-aligned text).
+- SongSelect.js _syncVideoPreview(): Added `video.readyState < 2` guard — don't try to seek or play video until it has at least HAVE_CURRENT_DATA. Prevents errors when video hasn't loaded yet.
+- SongSelect.js _playPreview(): Instead of calling _syncVideoPreview() immediately after audio starts, now checks if the video is loaded (readyState >= 2). If not, attaches one-shot `loadeddata`/`canplay` event listeners that trigger the first video sync once the video is ready. This means audio starts immediately but video joins in when loaded.
+- SongSelect.js _playPreview(): Added `error` event listener on video element as fallback — if video fails to load, switches to background image (set.backgroundUrl) or static. Prevents broken empty video background.
+- SongSelect.js _playPreview() preview loop interval: Added `readyState >= 2` check before force-restarting video on loop repeat. Prevents trying to seek an unloaded video.
+
+Stage Summary:
+- Combo panel is now symmetrically positioned from center (left:52%) matching score panel's offset (left:2.5%), both with matching glassmorphism backing insets
+- Video preview no longer tries to seek/play until loaded (readyState >= 2 check in _syncVideoPreview)
+- Audio preview starts immediately; video sync is deferred via loadeddata/canplay event listeners
+- Video load failure falls back to background image or static
+- Files modified: `public/game/ui/HUD.js`, `public/game/ui/screens/SongSelect.js`
+- Lint passes clean

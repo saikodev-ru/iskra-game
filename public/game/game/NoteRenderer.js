@@ -247,7 +247,7 @@ export default class NoteRenderer {
   /** Add a tick hit effect at the judge line — like pressing a note but subtler */
   addTickEffect(lane, laneCount) {
     if (this._graphicsPreset === 'low') return;
-    if (this._tickEffectCount >= 8) return; // cap for perf
+    if (this._tickEffectCount >= 16) return; // cap raised for 2x tick rate
     const judgeLineY = this._getJudgeLineY();
     const geom = this._getLaneGeometry(lane, judgeLineY, laneCount);
     const color = NoteRenderer.LANE_COLORS[lane % NoteRenderer.LANE_COLORS.length] || '#AAFF00';
@@ -255,7 +255,7 @@ export default class NoteRenderer {
     const rgb = this._hexToRgb(color);
     this._tickEffectPool.push(
       geom.centerX, judgeLineY, geom.width,
-      0.3, 0.3, // life, maxLife
+      0.45, 0.45, // life, maxLife — longer for more visibility
       rgb.r, rgb.g, rgb.b
     );
     this._tickEffectCount++;
@@ -1228,9 +1228,92 @@ export default class NoteRenderer {
     const pulse = this._kiaiSmoothPulse;
     const kiaiPulse = 0.85 + pulse * 0.15;
 
+    // Collect which lanes have visible notes (for column glow + judge line dots)
+    const activeLanes = new Map(); // lane -> { color, closestAlpha }
+
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
+    // ════════════════════════════════════════════════════════════════
+    //  LAYER A: Vertical lane column glow — beam of light per active lane
+    //  A gradient column from top of playfield down to judge line that
+    //  pulses with kiaiSmoothPulse, giving a "spotlight on the lane" feel.
+    // ════════════════════════════════════════════════════════════════
+    // First pass: identify active lanes
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
+      if (note.hit && note.judgement !== 'miss' && note.type !== 'hold') continue;
+      if (note.judgement === 'miss') {
+        const noteY = this._noteY(note.time, currentTime, judgeLineY);
+        if (this._fadeOut(noteY, judgeLineY) <= 0) continue;
+      }
+      const headY = this._noteY(note.time, currentTime, judgeLineY);
+      if (headY < clipTop || headY > clipBottom) continue;
+      const fadeIn = this._fadeIn(headY, judgeLineY);
+      const fadeOut = this._fadeOut(headY, judgeLineY);
+      const missAlpha = note.judgement === 'miss' ? 0.7 : 1;
+      const alpha = fadeIn * fadeOut * missAlpha;
+      if (alpha < 0.01) continue;
+
+      let color = NoteRenderer.LANE_COLORS[note.lane % NoteRenderer.LANE_COLORS.length];
+      if (headY > judgeLineY) color = this._desaturateColor(color, headY);
+
+      const existing = activeLanes.get(note.lane);
+      if (!existing || alpha > existing.closestAlpha) {
+        activeLanes.set(note.lane, { color, closestAlpha: alpha });
+      }
+
+      // Also check hold note tails
+      if (note.type === 'hold' && note.duration >= NoteRenderer.MIN_HOLD_DURATION) {
+        const tailY = this._noteY(note.time + note.duration, currentTime, judgeLineY);
+        if (tailY >= clipTop && tailY <= clipBottom) {
+          const tFadeIn = this._fadeIn(tailY, judgeLineY);
+          const tFadeOut = this._fadeOut(tailY, judgeLineY);
+          const tAlpha = tFadeIn * tFadeOut * missAlpha;
+          if (tAlpha > 0.01) {
+            const ex2 = activeLanes.get(note.lane);
+            if (!ex2 || tAlpha > ex2.closestAlpha) {
+              let tColor = NoteRenderer.LANE_COLORS[note.lane % NoteRenderer.LANE_COLORS.length];
+              if (tailY > judgeLineY) tColor = this._desaturateColor(tColor, tailY);
+              activeLanes.set(note.lane, { color: tColor, closestAlpha: tAlpha });
+            }
+          }
+        }
+      }
+    }
+
+    // Draw lane column glows
+    for (const [lane, info] of activeLanes) {
+      const rgb = this._hexToRgb(info.color);
+      const colAlpha = info.closestAlpha * kiai * kiaiPulse;
+
+      // Lane geometry at top and judge line for perspective trapezoid
+      const topGeom = this._getLaneGeometry(lane, topY, laneCount);
+      const judgeGeom = this._getLaneGeometry(lane, judgeLineY, laneCount);
+
+      // Vertical gradient column: bright near note, fading toward top and judge line
+      const colGrad = ctx.createLinearGradient(0, topY, 0, judgeLineY);
+      colGrad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+      colGrad.addColorStop(0.15, `rgba(${rgb.r},${rgb.g},${rgb.b},${colAlpha * 0.08})`);
+      colGrad.addColorStop(0.5, `rgba(${rgb.r},${rgb.g},${rgb.b},${colAlpha * 0.2})`);
+      colGrad.addColorStop(0.8, `rgba(${rgb.r},${rgb.g},${rgb.b},${colAlpha * 0.35})`);
+      colGrad.addColorStop(0.95, `rgba(${rgb.r},${rgb.g},${rgb.b},${colAlpha * 0.5})`);
+      colGrad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},${colAlpha * 0.6})`);
+
+      ctx.fillStyle = colGrad;
+      ctx.beginPath();
+      ctx.moveTo(topGeom.x, topY);
+      ctx.lineTo(topGeom.x + topGeom.width, topY);
+      ctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
+      ctx.lineTo(judgeGeom.x, judgeLineY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  LAYER B: Per-note glow (brighter, more focused than before)
+    //  This is handled by _drawKiaiGlowAt — the per-note sprite glow.
+    // ════════════════════════════════════════════════════════════════
     for (let i = 0; i < notes.length; i++) {
       const note = notes[i];
       // Skip fully resolved notes (hit and not missed, and hold notes fully released)
@@ -1272,6 +1355,30 @@ export default class NoteRenderer {
       }
     }
 
+    // ════════════════════════════════════════════════════════════════
+    //  LAYER C: Judge line glow dots — bright spot at judge line for
+    //  each lane that has a note approaching. Pulsates with kiaiSmoothPulse.
+    // ════════════════════════════════════════════════════════════════
+    for (const [lane, info] of activeLanes) {
+      const dotAlpha = info.closestAlpha * kiai * kiaiPulse;
+      const judgeGeom = this._getLaneGeometry(lane, judgeLineY, laneCount);
+      const cx = judgeGeom.centerX;
+
+      // Bright core dot using white glow sprite
+      const dotSize = judgeGeom.width * 0.8;
+      ctx.globalAlpha = dotAlpha * 0.7;
+      ctx.drawImage(this._whiteGlow, cx - dotSize / 2, judgeLineY - dotSize / 2, dotSize, dotSize);
+
+      // Colored halo around the dot
+      const glowSprite = this._getGlowSprite(info.color);
+      if (glowSprite) {
+        const haloSize = judgeGeom.width * 1.6;
+        ctx.globalAlpha = dotAlpha * 0.5;
+        ctx.drawImage(glowSprite, cx - haloSize / 2, judgeLineY - haloSize / 2, haloSize, haloSize);
+      }
+    }
+
+    ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
   }
@@ -1283,15 +1390,15 @@ export default class NoteRenderer {
     const glowSprite = this._getGlowSprite(color);
     if (!glowSprite) return;
 
-    // Layer 1: wide soft glow halo behind the note (lane color)
-    const gs = Math.max(corners.width, corners.height) * 1.6 * corners.scale;
+    // Layer 1: tight bright halo behind the note (lane color) — smaller but brighter
+    const gs = Math.max(corners.width, corners.height) * 1.1 * corners.scale;
     const glowSize = gs * (1.3 + kiai * 0.4) * kiaiPulse;
-    ctx.globalAlpha = alpha * 0.35 * kiai * kiaiPulse;
+    ctx.globalAlpha = alpha * 0.45 * kiai * kiaiPulse;
     ctx.drawImage(glowSprite, corners.centerX - glowSize / 2, noteY - glowSize / 2, glowSize, glowSize);
 
-    // Layer 2: tight bright core glow (lane color, more intense)
+    // Layer 2: tight bright core glow (lane color, more intense) — alpha 0.2 → 0.4
     const coreSize = gs * 0.9 * kiaiPulse;
-    ctx.globalAlpha = alpha * 0.2 * kiai * kiaiPulse;
+    ctx.globalAlpha = alpha * 0.4 * kiai * kiaiPulse;
     ctx.drawImage(glowSprite, corners.centerX - coreSize / 2, noteY - coreSize / 2, coreSize, coreSize);
   }
 
@@ -2029,28 +2136,28 @@ export default class NoteRenderer {
 
       // Expanding ring effect — like hitting a note but smaller
       const expandProgress = 1 - ratio;
-      const ringW = w * (0.5 + expandProgress * 0.6);
-      const ringH = 6 + expandProgress * 10;
+      const ringW = w * (0.6 + expandProgress * 0.8);
+      const ringH = 8 + expandProgress * 14;
 
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
 
-      // Colored glow ring
-      ctx.globalAlpha = ratio * 0.5;
+      // Colored glow ring — brighter than before for better visibility
+      ctx.globalAlpha = ratio * 0.7;
       const grad = ctx.createLinearGradient(0, y - ringH, 0, y + ringH);
       grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
-      grad.addColorStop(0.3, `rgba(${r},${g},${b},${ratio * 0.4})`);
-      grad.addColorStop(0.5, `rgba(${r},${g},${b},${ratio * 0.7})`);
-      grad.addColorStop(0.7, `rgba(${r},${g},${b},${ratio * 0.4})`);
+      grad.addColorStop(0.2, `rgba(${r},${g},${b},${ratio * 0.5})`);
+      grad.addColorStop(0.5, `rgba(${r},${g},${b},${ratio * 0.9})`);
+      grad.addColorStop(0.8, `rgba(${r},${g},${b},${ratio * 0.5})`);
       grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
       ctx.fillStyle = grad;
       ctx.fillRect(cx - ringW / 2, y - ringH, ringW, ringH * 2);
 
-      // White center flash
-      ctx.globalAlpha = ratio * 0.6;
-      const coreW = w * 0.5;
+      // White center flash — wider for more visibility
+      ctx.globalAlpha = ratio * 0.8;
+      const coreW = w * 0.65;
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(cx - coreW / 2, y - 2, coreW, 4);
+      ctx.fillRect(cx - coreW / 2, y - 3, coreW, 6);
 
       ctx.globalCompositeOperation = 'source-over';
       ctx.restore();

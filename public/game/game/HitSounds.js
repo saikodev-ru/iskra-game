@@ -180,24 +180,24 @@ export default class HitSounds {
     });
   }
 
-  /** LN tick hit — quiet, subtle sound like a soft note press.
-   *  Uses the tap sound at lower volume, with a synthesized softer fallback. */
+  /** LN tick hit — noticeable tick sound for hold note feedback.
+   *  Uses the tap sound at moderate volume, with a synthesized fallback. */
   tick() {
-    if (this._playBuffer('tap', 0.35)) return;
-    // Synthesized fallback — very soft short tick
+    if (this._playBuffer('tap', 0.55)) return;
+    // Synthesized fallback — louder, crisper tick
     this._play(g => {
-      const dur = 0.025;
+      const dur = 0.035;
       const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < data.length; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 7) * 0.2;
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 5) * 0.35;
       }
       const src = this._ctx.createBufferSource();
       src.buffer = buf;
       const filt = this._ctx.createBiquadFilter();
-      filt.type = 'highpass'; filt.frequency.value = 8000;
+      filt.type = 'highpass'; filt.frequency.value = 6000;
       src.connect(filt); filt.connect(g);
-      g.gain.setValueAtTime(0.25, this._ctx.currentTime);
+      g.gain.setValueAtTime(0.45, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start(); src.stop(this._ctx.currentTime + dur);
     });
