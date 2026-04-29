@@ -56,6 +56,9 @@ export default class JudgementSystem {
     this._baseScore = 0; // 1,000,000 / totalScoringSlots — score per slot at MAX
     this._died = false; // true when HP reached 0 (forces D rank)
 
+    // ── Hit error tracking for Unstable Rate (UR) ──
+    this._hitErrors = []; // array of timing errors in ms (positive = late, negative = early)
+
     // ── Score V2 LN tick system ──
     this.tickHits = 0;       // ticks successfully held through
     this.tickMisses = 0;     // ticks missed (not holding when tick passed)
@@ -75,6 +78,7 @@ export default class JudgementSystem {
     this.hp = 100;
     this._lastDrainTime = 0;
     this._died = false;
+    this._hitErrors = [];
 
     // Reset all note flags and compute tick positions
     this._totalTickCount = 0;
@@ -172,8 +176,13 @@ export default class JudgementSystem {
       this._activeHoldNotes.set(lane, note);
     }
 
-    EventBus.emit('note:hit', { note, judgement, delta: Math.round(delta * 1000), timing });
-    return { note, judgement, delta, timing };
+    // Track hit error for UR calculation (delta in ms, positive = early in our convention)
+    // Convert to osu! convention: negative = early, positive = late
+    const hitErrorMs = -Math.round(delta * 1000); // flip sign: positive = late (osu! style)
+    this._hitErrors.push(hitErrorMs);
+
+    EventBus.emit('note:hit', { note, judgement, delta: Math.round(delta * 1000), timing, hitError: hitErrorMs });
+    return { note, judgement, delta, timing, hitError: hitErrorMs };
   }
 
   judgeRelease(lane, releaseTime) {
@@ -198,8 +207,10 @@ export default class JudgementSystem {
       note.releaseJudgement = judgement;
       note.released = true;
       this._applyReleaseJudgementV2(judgement);
-      EventBus.emit('note:hit', { note, judgement, delta: Math.round(delta * 1000), isRelease: true });
-      return { note, judgement, delta };
+      const hitErrorMs = -Math.round(delta * 1000);
+      this._hitErrors.push(hitErrorMs);
+      EventBus.emit('note:hit', { note, judgement, delta: Math.round(delta * 1000), isRelease: true, hitError: hitErrorMs });
+      return { note, judgement, delta, hitError: hitErrorMs };
     }
     if (releaseTime < holdEnd - releaseWindow) {
       // Released way too early — start grace period
@@ -222,8 +233,10 @@ export default class JudgementSystem {
     // Score V2: Release affects score, accuracy, and combo
     this._applyReleaseJudgementV2(judgement);
 
-    EventBus.emit('note:hit', { note, judgement, delta: Math.round(delta * 1000), isRelease: true });
-    return { note, judgement, delta };
+    const hitErrorMs = -Math.round(delta * 1000);
+    this._hitErrors.push(hitErrorMs);
+    EventBus.emit('note:hit', { note, judgement, delta: Math.round(delta * 1000), isRelease: true, hitError: hitErrorMs });
+    return { note, judgement, delta, hitError: hitErrorMs };
   }
 
   /**
@@ -556,6 +569,22 @@ export default class JudgementSystem {
     return currentTime > lastNote.time + lastNote.duration + 2;
   }
 
+  /** Calculate Unstable Rate (UR) — standard deviation of hit errors × 10
+   *  This is the same formula as osu!: UR = stddev(hitErrors) * 10
+   *  Lower UR = more consistent timing */
+  getUnstableRate() {
+    const errors = this._hitErrors;
+    if (errors.length < 2) return 0;
+    const mean = errors.reduce((a, b) => a + b, 0) / errors.length;
+    const variance = errors.reduce((a, b) => a + (b - mean) ** 2, 0) / errors.length;
+    return Math.sqrt(variance) * 10;
+  }
+
+  /** Get recent hit errors for the hit error bar display */
+  getHitErrors(maxCount = 30) {
+    return this._hitErrors.slice(-maxCount);
+  }
+
   getStats() {
     return {
       score: this.score,
@@ -571,6 +600,8 @@ export default class JudgementSystem {
       tickMisses: this.tickMisses,
       totalNotes: this._totalNotes,
       totalTicks: this._totalTickCount,
+      unstableRate: this.getUnstableRate(),
+      hitErrors: this.getHitErrors(),
     };
   }
 }

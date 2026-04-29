@@ -27,6 +27,14 @@ export default class HUD {
     this._scoreAnimT = 0;   // timestamp of last score animation trigger
     this._comboAnimT = 0;
 
+    // ── Instability indicator state ──
+    this._hitErrors = [];          // recent hit errors (ms), positive = late
+    this._fpsFrames = 0;          // frame counter for FPS
+    this._fpsTime = performance.now();
+    this._fps = 0;                // current FPS value
+    this._lastFpsUpdate = 0;
+    this._unstableRate = 0;
+
     this._injectCSS();
     this._build();
   }
@@ -106,6 +114,30 @@ export default class HUD {
 
         <!-- ── Pause button ── -->
         <button id="hud-pause" class="zzz-btn zzz-btn--sm" style="position:absolute;top:16px;right:16px;pointer-events:all;font-size:11px;padding:6px 14px;opacity:0.5;transition:opacity 0.2s;">⏸</button>
+
+        <!-- ── Instability Indicator — bottom right corner (osu! style) ── -->
+        <div id="hud-instability" style="display:none;position:absolute;right:12px;bottom:12px;z-index:10;">
+          <!-- FPS -->
+          <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:4px;margin-bottom:4px;">
+            <span id="hud-ur-label" style="font-family:var(--zzz-mono);font-size:8px;color:rgba(255,255,255,0.3);letter-spacing:0.05em;">UR</span>
+            <span id="hud-ur" style="font-family:var(--zzz-mono);font-size:11px;color:rgba(255,255,255,0.55);font-variant-numeric:tabular-nums;">0.00</span>
+          </div>
+          <!-- Hit error bar -->
+          <div id="hud-error-bar" style="position:relative;width:120px;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:visible;margin-bottom:4px;">
+            <!-- Timing window colored zones -->
+            <div style="position:absolute;left:50%;transform:translateX(-50%);width:33.6%;height:100%;background:rgba(0,255,100,0.08);border-radius:1px;"></div> <!-- ±45ms of ±200ms -->
+            <div style="position:absolute;left:50%;transform:translateX(-50%);width:67.2%;height:100%;background:rgba(255,200,0,0.06);border-radius:2px;"></div> <!-- ±90ms -->
+            <!-- Center line (perfect timing) -->
+            <div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,0.35);transform:translateX(-0.5px);"></div>
+            <!-- Hit error marks container -->
+            <div id="hud-error-marks" style="position:absolute;inset:0;overflow:hidden;border-radius:3px;"></div>
+          </div>
+          <!-- FPS -->
+          <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:4px;">
+            <span id="hud-fps-label" style="font-family:var(--zzz-mono);font-size:8px;color:rgba(255,255,255,0.3);letter-spacing:0.05em;">FPS</span>
+            <span id="hud-fps" style="font-family:var(--zzz-mono);font-size:11px;color:rgba(255,255,255,0.45);font-variant-numeric:tabular-nums;">0</span>
+          </div>
+        </div>
       </div>
     `;
     this.els = {
@@ -117,6 +149,10 @@ export default class HUD {
       health: null,
       progress: document.getElementById('hud-progress'),
       pause: document.getElementById('hud-pause'),
+      instability: document.getElementById('hud-instability'),
+      fps: document.getElementById('hud-fps'),
+      ur: document.getElementById('hud-ur'),
+      errorMarks: document.getElementById('hud-error-marks'),
     };
     this.els.pause.addEventListener('click', () => EventBus.emit('game:pause', {}));
     this.els.pause.addEventListener('mouseenter', () => { this.els.pause.style.opacity = '1'; });
@@ -134,7 +170,103 @@ export default class HUD {
       this.els.rank.appendChild(fill);
     }
 
+    // Check if instability indicator is enabled
+    this._updateInstabilityVisibility();
+
     this._startAnimLoop();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     INSTABILITY INDICATOR (osu! style)
+     Shows FPS, hit error bar, and Unstable Rate (UR) in the bottom-right.
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /** Check setting and show/hide the instability indicator */
+  _updateInstabilityVisibility() {
+    const enabled = localStorage.getItem('rhythm-os-instability-indicator') === 'true';
+    if (this.els.instability) {
+      this.els.instability.style.display = enabled ? 'block' : 'none';
+    }
+    this._instabilityEnabled = enabled;
+  }
+
+  /** Update hit errors for the indicator. Called from game loop with stats. */
+  setHitErrors(errors) {
+    this._hitErrors = errors || [];
+  }
+
+  /** Update UR value */
+  setUnstableRate(ur) {
+    this._unstableRate = ur || 0;
+  }
+
+  /** Render the hit error bar with colored marks */
+  _renderHitErrorBar() {
+    const container = this.els.errorMarks;
+    if (!container) return;
+
+    // Clear existing marks
+    container.innerHTML = '';
+
+    const errors = this._hitErrors;
+    if (errors.length === 0) return;
+
+    // The bar represents ±200ms (bad window), mapped to 0-100% width
+    const maxMs = 200;
+    const barWidth = 120; // px, matches CSS
+
+    // Show last 30 hits
+    const recentErrors = errors.slice(-30);
+
+    for (let i = 0; i < recentErrors.length; i++) {
+      const err = recentErrors[i];
+      const absErr = Math.abs(err);
+
+      // Skip hits outside the display range
+      if (absErr > maxMs * 1.5) continue;
+
+      // Color based on judgement window
+      let color;
+      if (absErr <= 45) color = 'rgba(0,255,100,0.85)';       // perfect
+      else if (absErr <= 90) color = 'rgba(255,200,0,0.8)';    // great
+      else if (absErr <= 140) color = 'rgba(255,140,0,0.75)';  // good
+      else color = 'rgba(255,50,50,0.7)';                       // bad
+
+      // Position: center = 50%, early = left, late = right
+      const pct = 50 + (err / maxMs) * 50;
+
+      // Opacity: older hits fade out
+      const age = (recentErrors.length - i) / recentErrors.length;
+      const opacity = 0.3 + age * 0.7;
+
+      const mark = document.createElement('div');
+      mark.style.cssText = `
+        position:absolute;
+        left:${Math.max(0, Math.min(100, pct))}%;
+        top:0;
+        width:2px;
+        height:100%;
+        background:${color};
+        opacity:${opacity};
+        transform:translateX(-1px);
+        border-radius:1px;
+      `;
+      container.appendChild(mark);
+    }
+  }
+
+  /** Update FPS counter */
+  _updateFPS() {
+    this._fpsFrames++;
+    const now = performance.now();
+    const elapsed = now - this._fpsTime;
+
+    // Update FPS every 500ms
+    if (elapsed >= 500) {
+      this._fps = Math.round((this._fpsFrames / elapsed) * 1000);
+      this._fpsFrames = 0;
+      this._fpsTime = now;
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -246,11 +378,25 @@ export default class HUD {
       this._displayAccuracy += accDiff * 0.15;
       if (this.els.accuracy) this.els.accuracy.textContent = this._displayAccuracy.toFixed(2) + '%';
     }
+
+    /* ── Instability indicator ── */
+    if (this._instabilityEnabled) {
+      this._updateFPS();
+
+      // Update display every ~4 frames to avoid thrashing DOM
+      if (now - this._lastFpsUpdate > 66) {
+        this._lastFpsUpdate = now;
+        if (this.els.fps) this.els.fps.textContent = this._fps;
+        if (this.els.ur) this.els.ur.textContent = this._unstableRate.toFixed(2);
+        this._renderHitErrorBar();
+      }
+    }
   }
 
   show() {
     this._hidden = false;
     this._frozen = false;
+    this._updateInstabilityVisibility();
     this.els.inner.style.display = 'block';
   }
   hide() {
@@ -314,6 +460,9 @@ export default class HUD {
     this.setAccuracy(stats.accuracy);
     this.setRank(stats.rank);
     this.setHealth(stats.health || 100);
+    // Update instability indicator data
+    if (stats.hitErrors) this.setHitErrors(stats.hitErrors);
+    if (stats.unstableRate !== undefined) this.setUnstableRate(stats.unstableRate);
   }
 
   destroy() {

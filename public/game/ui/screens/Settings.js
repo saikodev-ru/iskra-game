@@ -118,6 +118,19 @@ export default class Settings {
           <span style="font-size:9px;color:var(--zzz-muted);font-family:var(--zzz-mono);">HOLD TO RESTART</span>
         </div>
       </div>
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div class="zzz-label" style="margin-bottom:2px;">INSTABILITY INDICATOR</div>
+            <div style="font-size:9px;color:var(--zzz-muted);font-family:var(--zzz-mono);">FPS + HIT ERROR + UR</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;">
+            <input type="checkbox" id="settings-instability" ${localStorage.getItem('rhythm-os-instability-indicator') === 'true' ? 'checked' : ''} style="opacity:0;width:0;height:0;position:absolute;" />
+            <span style="position:absolute;inset:0;background:rgba(255,255,255,0.1);border-radius:12px;transition:background 0.2s;cursor:pointer;"></span>
+            <span style="position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:transform 0.2s,background 0.2s;cursor:pointer;"></span>
+          </label>
+        </div>
+      </div>
       <div>
         <div class="zzz-label" style="margin-bottom:8px;">KEY BINDINGS (4-KEY)</div>
         <div id="keybinds" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
@@ -160,6 +173,30 @@ export default class Settings {
 
     const ri = document.getElementById('settings-res-scale'), rv = document.getElementById('settings-res-scale-val');
     if (ri) ri.addEventListener('input', () => { const v = parseInt(ri.value); rv.textContent = v + '%'; localStorage.setItem('rhythm-os-res-scale', v.toString()); EventBus.emit('settings:changed', { key: 'resScale', value: v }); });
+
+    // Instability indicator toggle
+    const instCb = document.getElementById('settings-instability');
+    if (instCb) {
+      // Style the toggle based on initial state
+      const updateToggleStyle = (checked) => {
+        const parent = instCb.parentElement;
+        if (!parent) return;
+        const bg = parent.querySelector('span:nth-child(2)');
+        const knob = parent.querySelector('span:nth-child(3)');
+        if (bg) bg.style.background = checked ? 'rgba(170,255,0,0.5)' : 'rgba(255,255,255,0.1)';
+        if (knob) {
+          knob.style.transform = checked ? 'translateX(20px)' : 'translateX(0)';
+          knob.style.background = checked ? '#AAFF00' : '#fff';
+        }
+      };
+      updateToggleStyle(instCb.checked);
+      instCb.addEventListener('change', () => {
+        const v = instCb.checked;
+        localStorage.setItem('rhythm-os-instability-indicator', v.toString());
+        updateToggleStyle(v);
+        EventBus.emit('settings:changed', { key: 'instabilityIndicator', value: v });
+      });
+    }
 
     document.querySelectorAll('[data-aspect]').forEach(btn => {
       btn.addEventListener('click', (e) => {

@@ -1989,3 +1989,35 @@ Stage Summary:
 - Video load failure falls back to background image or static
 - Files modified: `public/game/ui/HUD.js`, `public/game/ui/screens/SongSelect.js`
 - Lint passes clean
+---
+Task ID: 6
+Agent: main
+Task: Add "instability indicator" setting with FPS and UR display in bottom-right corner (osu! style)
+
+Work Log:
+- Added `_hitErrors = []` array to JudgementSystem to track timing errors per hit
+- Added hit error tracking to `judgeHit()` — converts delta to osu! convention (negative = early, positive = late)
+- Added hit error tracking to `judgeRelease()` for both release paths (early release + normal release)
+- Added `_hitErrors = []` reset in `reset()` method
+- Added `getUnstableRate()` method — calculates UR = stddev(hitErrors) * 10 (same as osu!)
+- Added `getHitErrors(maxCount=30)` method — returns recent errors for the display
+- Added `unstableRate` and `hitErrors` to `getStats()` return object
+- Added instability indicator panel to HUD — bottom-right corner with:
+  - FPS counter (updated every 500ms)
+  - Hit error bar with colored marks (green=perfect, yellow=great, orange=good, red=bad)
+  - UR (Unstable Rate) value display
+  - Timing window colored zones on the bar background
+  - Center white line for perfect timing
+  - Marks fade based on age (older = more transparent)
+- Added `_updateInstabilityVisibility()` method to HUD — reads localStorage setting
+- Added FPS tracking in `_animateNumbers()` with frame counter
+- Added hit error bar rendering with DOM-based colored marks (updated every ~66ms)
+- Added toggle switch to Settings panel with proper styling (lime accent when enabled)
+- Added `settings:changed` handler for `instabilityIndicator` key in main.js
+- Setting stored as `rhythm-os-instability-indicator` in localStorage (default: off)
+
+Stage Summary:
+- JudgementSystem now tracks all hit errors for UR calculation
+- HUD displays osu!-style instability indicator (FPS + hit error bar + UR) in bottom-right corner
+- Toggle available in Settings under "INSTABILITY INDICATOR" with "FPS + HIT ERROR + UR" subtitle
+- Feature is off by default, must be enabled in settings

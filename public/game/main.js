@@ -183,6 +183,9 @@ async function boot() {
         }
       }
       // ThreeScene reads localStorage dynamically in render loop, no extra action needed
+    } else if (key === 'instabilityIndicator') {
+      // Toggle the instability indicator visibility
+      hud._updateInstabilityVisibility();
     }
   });
 
