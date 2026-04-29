@@ -92,16 +92,16 @@ export default class HUD {
           </div>
 
           <!-- ── RIGHT: Combo + Rank (on shared playfield perspective plane) ── -->
-          <div style="position:absolute;left:52%;top:56%;transform:rotateX(28deg) translateY(-50%);text-align:left;transform-origin:center 120%;">
+          <div style="position:absolute;right:2.5%;top:56%;transform:rotateX(28deg) translateY(-50%);text-align:right;transform-origin:center 120%;">
             <!-- Dark glass backing panel -->
-            <div style="position:absolute;inset:-14px -20px -10px -10px;background:rgba(0,0,0,0.45);border-radius:16px;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.04);pointer-events:none;"></div>
+            <div style="position:absolute;inset:-14px -10px -10px -20px;background:rgba(0,0,0,0.45);border-radius:16px;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.04);pointer-events:none;"></div>
             <div style="position:relative;">
-              <div style="display:flex;align-items:baseline;gap:8px;">
-                <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:82px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;filter:drop-shadow(0 0 1px rgba(0,0,0,0.95)) drop-shadow(0 0 1px rgba(0,0,0,0.95)) drop-shadow(0 4px 12px rgba(0,0,0,0.9)) drop-shadow(0 0 24px rgba(255,255,255,0.08));">0</div>
+              <div style="display:flex;align-items:baseline;gap:8px;justify-content:flex-end;">
+                <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="X" style="font-family:var(--zzz-font);font-weight:900;font-size:40px;opacity:1;transform:scale(1) rotate(-25deg);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-right:4px;"></div>
                 <div style="font-family:var(--zzz-font);font-weight:700;font-size:20px;color:rgba(255,255,255,0.55);letter-spacing:0.05em;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.9));">x</div>
-                <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="X" style="font-family:var(--zzz-font);font-weight:900;font-size:40px;opacity:1;transform:scale(1) rotate(-25deg);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
+                <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:82px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;filter:drop-shadow(0 0 1px rgba(0,0,0,0.95)) drop-shadow(0 0 1px rgba(0,0,0,0.95)) drop-shadow(0 4px 12px rgba(0,0,0,0.9)) drop-shadow(0 0 24px rgba(255,255,255,0.08));">0</div>
               </div>
-              <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.9));">COMBO</div>
+              <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px;text-align:right;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.9));">COMBO</div>
             </div>
           </div>
 
