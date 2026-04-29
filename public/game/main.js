@@ -126,6 +126,7 @@ async function boot() {
   let _deathFreezeTime = 0; // frozen game time when death starts (notes stop moving)
   let _skipResult = false;  // when true, endGame() rAF won't show result screen (restart)
   let _quitGame = false;    // when true, endGame() skips saving result to records
+  let _isRestart = false;   // when true, endGame() preserves map resources (audioBuffer, blob URLs) for immediate restart
   let _quickRestartKey = null; // key code for quick restart (e.g. 'ShiftLeft')
   let _quickRestartHeld = false;
   let _quickRestartStart = 0;
@@ -564,9 +565,9 @@ async function boot() {
     if (currentBeatMap && currentBeatMap.audioBuffer) {
       currentBeatMap.audioBuffer = null;
     }
-    // Also evict the AudioBuffer from currentMapData so SongSelect
-    // can reload it on-demand from IndexedDB (prevents RAM accumulation)
-    if (currentMapData && currentMapData.audioBuffer) {
+    // Only evict the AudioBuffer from currentMapData if NOT restarting.
+    // Restarts immediately call startGame(currentMapData) which needs audioBuffer.
+    if (!_isRestart && currentMapData && currentMapData.audioBuffer) {
       currentMapData.audioBuffer = null;
     }
     // Release AudioEngine's internal buffer reference (~85MB lead-in buffer)
@@ -599,8 +600,8 @@ async function boot() {
     three._chorusBeatPulse = 0;
     three.renderer.toneMappingExposure = 1.0;
     three._chorusExposure = 1.0;
-    three._clearBackgroundImage();
-    three._clearBackgroundVideo();
+    three._clearBackgroundImage(!_isRestart); // preserve blob URLs during restart
+    three._clearBackgroundVideo(!_isRestart); // preserve blob URLs during restart
     three._leadInOffset = 0; // Reset lead-in offset for preview mode
     three.showBgMesh(); // Restore dark gradient bg mesh for menus
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
@@ -634,6 +635,7 @@ async function boot() {
     // and avoid race conditions with the game loop's requestAnimationFrame
     requestAnimationFrame(() => {
       _endingGame = false;
+      _isRestart = false; // Reset restart flag
       // If restart was triggered, skip showing the result screen
       if (_skipResult) { _skipResult = false; currentMapData = null; return; }
       screens.show('result', { stats, map: _mapDataForResult });
@@ -700,7 +702,7 @@ async function boot() {
     if (!noResume) {
       document.getElementById('resume-btn').addEventListener('click', () => { _closePause(); resumeGame(); });
     }
-    document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = !_deadPause; endGame(); startGame(currentMapData); });
+    document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = !_deadPause; _isRestart = true; endGame(); startGame(currentMapData); });
     document.getElementById('settings-btn').addEventListener('click', () => { _openPauseSettings(); });
     document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = !_deadPause; endGame(); screens.show('song-select'); });
     EventBus.emit('game:pause');
@@ -878,6 +880,7 @@ async function boot() {
     if (currentMapData && gameActive) {
       _skipResult = true;
       _quitGame = true; // Don't save result for quick restart
+      _isRestart = true; // Preserve audioBuffer + blob URLs for restart
       endGame();
       startGame(currentMapData);
     }

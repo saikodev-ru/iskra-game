@@ -560,9 +560,10 @@ export default class ThreeScene {
 
   _invalidateBgGeom() { this._cachedBgGeom = null; }
 
-  _clearBackgroundImage() {
+  _clearBackgroundImage(revokeBlobUrls = true) {
     // ── Memory: revoke blob URL to free underlying Blob data ──
-    if (this._bgImageUrl && this._bgImageUrl.startsWith('blob:')) {
+    // Skip revocation during restarts — the blob URL is still needed by startGame()
+    if (revokeBlobUrls && this._bgImageUrl && this._bgImageUrl.startsWith('blob:')) {
       URL.revokeObjectURL(this._bgImageUrl);
     }
     this._bgImageUrl = null;
@@ -592,6 +593,9 @@ export default class ThreeScene {
 
   /** Set a video as the background — synced to audio playback time */
   setBackgroundVideo(url, audioEngine) {
+    // Guard: don't try to create video textures if WebGL context is lost
+    if (this._disposed || !this.renderer || !this.renderer.getContext()) return;
+
     // Increment generation counter to invalidate any pending loads
     const loadId = ++this._videoLoadId;
 
@@ -871,15 +875,22 @@ export default class ThreeScene {
   }
 
   /** Clear the video background and release resources */
-  _clearBackgroundVideo() {
+  _clearBackgroundVideo(revokeBlobUrls = true) {
     this._videoActive = false;
     this._videoPaused = false;
     this._skipVideoFrame = false;
     // ── Memory: revoke blob URL to free underlying Blob data (50-200MB for videos) ──
-    if (this._videoUrl && this._videoUrl.startsWith('blob:')) {
+    // Skip revocation during restarts — the blob URL is still needed by startGame()
+    if (revokeBlobUrls && this._videoUrl && this._videoUrl.startsWith('blob:')) {
       URL.revokeObjectURL(this._videoUrl);
+      this._videoUrl = null;
+    } else if (!revokeBlobUrls) {
+      // Keep the URL for restart, but clear the reference so we don't double-revoke later
+      // The URL will be revoked when the map is truly discarded (quit to menu)
+      this._videoUrl = null; // Don't revoke, just clear our reference
+    } else {
+      this._videoUrl = null;
     }
-    this._videoUrl = null;
     if (this._videoMesh) {
       this.scene.remove(this._videoMesh);
       this._videoMesh.geometry.dispose();
