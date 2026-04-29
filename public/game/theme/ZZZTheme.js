@@ -1,7 +1,7 @@
 import EventBus from '../core/EventBus.js';
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap');
 
 /* ── Global unselectable for all game elements ── */
 #three, #game, #hud, #judgement-overlay, #screen, #modal,
@@ -38,7 +38,7 @@ canvas, .zzz-btn, .zzz-panel, .song-card, .song-card *,
   --zzz-graphite-2:#3A3A3A;
   --zzz-text:      #F0F0F0;
   --zzz-muted:     #CCCCCC;
-  --zzz-font:      'Google Sans', 'Segoe UI', sans-serif;
+  --zzz-font:      'Rubik', 'Segoe UI', sans-serif;
   --zzz-mono:      'JetBrains Mono', 'Fira Code', monospace;
 }
 
