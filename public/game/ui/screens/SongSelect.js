@@ -1236,23 +1236,18 @@ export default class SongSelect {
           // Already loaded — sync immediately
           this._syncVideoPreview(set, previewTime);
         } else {
-          // Wait for video to be ready, then sync
+          // Wait for video to be ready, then sync (use {once:true} to prevent listener accumulation)
           const onLoaded = () => {
-            video.removeEventListener('loadeddata', onLoaded);
-            video.removeEventListener('canplay', onLoaded);
             // Only sync if still on the same song
             if (set === this.beatmapSets[this.selectedIndex]) {
               this._syncVideoPreview(set, previewTime);
             }
           };
-          video.addEventListener('loadeddata', onLoaded);
-          video.addEventListener('canplay', onLoaded);
+          video.addEventListener('loadeddata', onLoaded, { once: true });
+          video.addEventListener('canplay', onLoaded, { once: true });
 
           // Fallback: if video fails to load, switch to background image
           const onVideoError = () => {
-            video.removeEventListener('loadeddata', onLoaded);
-            video.removeEventListener('canplay', onLoaded);
-            video.removeEventListener('error', onVideoError);
             if (set === this.beatmapSets[this.selectedIndex] && this.three) {
               console.warn('[SongSelect] Video failed to load, falling back to background image');
               if (set.backgroundUrl) {
@@ -1262,7 +1257,7 @@ export default class SongSelect {
               }
             }
           };
-          video.addEventListener('error', onVideoError);
+          video.addEventListener('error', onVideoError, { once: true });
         }
       } else {
         this._syncVideoPreview(set, previewTime);
@@ -1341,19 +1336,22 @@ export default class SongSelect {
     this._loadingAudio = true;
 
     try {
-      // Evict previous set's AudioBuffer to free memory
+      // Evict previous set's AudioBuffer to free memory (~30-80MB per buffer)
       if (this._loadedAudioSetId && this._loadedAudioSetId !== set.id) {
         const prevSet = this.beatmapSets.find(s => s.id === this._loadedAudioSetId);
         if (prevSet) {
           prevSet.audioBuffer = null;
           prevSet._audioBufferNeedsDecode = true;
+          // Null ALL difficulty AudioBuffers, not just hasCustomAudio ones.
+          // Shared-audio diffs hold the same ~30-80MB buffer object as the set,
+          // so missing them keeps the entire buffer un-GC-able.
           for (const diff of prevSet.difficulties) {
-            if (diff.hasCustomAudio) {
-              diff.audioBuffer = null;
-              diff._audioBufferNeedsDecode = true;
-            }
+            diff.audioBuffer = null;
+            diff._audioBufferNeedsDecode = true;
           }
         }
+        // Also release AudioEngine's internal reference to the old buffer
+        this.audio.releaseBuffer();
       }
 
       const { audioBuffer, diffAudioBuffers } = await this.oszLoader.loadAudioBufferForSet(set.id);
@@ -1419,6 +1417,20 @@ export default class SongSelect {
   /** Load AudioBuffer on demand, then confirm song selection */
   async _ensureAudioBufferLoadedAndConfirm(set) {
     try {
+      // Evict previous set's AudioBuffer to free memory (~30-80MB per buffer)
+      if (this._loadedAudioSetId && this._loadedAudioSetId !== set.id) {
+        const prevSet = this.beatmapSets.find(s => s.id === this._loadedAudioSetId);
+        if (prevSet) {
+          prevSet.audioBuffer = null;
+          prevSet._audioBufferNeedsDecode = true;
+          for (const diff of prevSet.difficulties) {
+            diff.audioBuffer = null;
+            diff._audioBufferNeedsDecode = true;
+          }
+        }
+        this.audio.releaseBuffer();
+      }
+
       const { audioBuffer, diffAudioBuffers } = await this.oszLoader.loadAudioBufferForSet(set.id);
       set.audioBuffer = audioBuffer;
       set._audioBufferNeedsDecode = false;
@@ -1576,6 +1588,17 @@ export default class SongSelect {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       if (result && result.difficulties && result.difficulties.length > 0) {
+        // Strip AudioBuffers from the import result before adding to the list.
+        // The buffers are already saved to IndexedDB by oszLoader.load().
+        // Keeping them in-memory would bypass the eviction system in
+        // _ensureAudioBufferLoaded, causing ~30-80MB leak per import.
+        result.audioBuffer = null;
+        result._audioBufferNeedsDecode = true;
+        for (const diff of result.difficulties) {
+          diff.audioBuffer = null;
+          diff._audioBufferNeedsDecode = true;
+        }
+
         this.beatmapSets.push(result);
         this._buildFilteredIndices();
         this._renderSongList();
