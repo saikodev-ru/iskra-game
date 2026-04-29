@@ -182,7 +182,7 @@ body.zzz-active::before {
   pointer-events: none; user-select: none;
   position: absolute;
   left: 50%; top: 45%;
-  transform: translate(-50%, -50%) perspective(800px) rotateX(-4deg);
+  transform: translate(-50%, -50%) perspective(800px) rotateX(-12deg);
   white-space: nowrap;
   -webkit-text-stroke: 1px rgba(255,255,255,0.08);
   paint-order: stroke fill;
@@ -234,12 +234,12 @@ body.zzz-active::before {
 }
 
 @keyframes judge-in  { 
-  from { transform: translate(-50%, -50%) perspective(800px) rotateX(-4deg) scale(1.8); opacity:0; } 
-  to   { transform: translate(-50%, -50%) perspective(800px) rotateX(-4deg) scale(1); opacity:1; } 
+  from { transform: translate(-50%, -50%) perspective(800px) rotateX(-12deg) scale(1.8); opacity:0; } 
+  to   { transform: translate(-50%, -50%) perspective(800px) rotateX(-12deg) scale(1); opacity:1; } 
 }
 @keyframes judge-out { 
-  from { opacity:1; transform: translate(-50%, -50%) perspective(800px) rotateX(-4deg) scale(1); } 
-  to   { opacity:0; transform: translate(-50%, -50%) perspective(800px) rotateX(-4deg) translateY(-20px) scale(0.9); } 
+  from { opacity:1; transform: translate(-50%, -50%) perspective(800px) rotateX(-12deg) scale(1); } 
+  to   { opacity:0; transform: translate(-50%, -50%) perspective(800px) rotateX(-12deg) translateY(-20px) scale(0.9); } 
 }
 .judgement--in  { animation: judge-in  0.06s cubic-bezier(0.22,1,0.36,1) forwards; }
 .judgement--out { animation: judge-out 0.22s ease-in forwards; }

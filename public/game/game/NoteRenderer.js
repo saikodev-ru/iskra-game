@@ -546,35 +546,35 @@ export default class NoteRenderer {
     cctx.stroke();
     cctx.restore();
 
-    // ── Lane dividers — subtle gray lines ──
+    // ── Lane dividers — clean visible lines with gradient fade ──
     for (let i = 1; i < laneCount; i++) {
       const topG = this._getLaneGeometry(i, topY, laneCount);
       const judgeG = this._getLaneGeometry(i, judgeLineY, laneCount);
       const bottomG = this._getLaneGeometry(i, bottomY, laneCount);
 
-      // Above judge line
+      // Above judge line — gradient from faint at top to visible near judge line
       cctx.save();
       const divGrad = cctx.createLinearGradient(0, topY, 0, judgeLineY);
-      divGrad.addColorStop(0, 'rgba(255,255,255,0.01)');
-      divGrad.addColorStop(0.6, 'rgba(255,255,255,0.04)');
-      divGrad.addColorStop(0.9, 'rgba(255,255,255,0.06)');
-      divGrad.addColorStop(1, 'rgba(255,255,255,0.02)');
+      divGrad.addColorStop(0, 'rgba(255,255,255,0.02)');
+      divGrad.addColorStop(0.4, 'rgba(255,255,255,0.08)');
+      divGrad.addColorStop(0.85, 'rgba(255,255,255,0.14)');
+      divGrad.addColorStop(1, 'rgba(255,255,255,0.06)');
       cctx.strokeStyle = divGrad;
-      cctx.lineWidth = 0.5;
+      cctx.lineWidth = 1;
       cctx.beginPath();
       cctx.moveTo(topG.x, topY);
       cctx.lineTo(judgeG.x, judgeLineY);
       cctx.stroke();
       cctx.restore();
 
-      // Below judge line (same subtle style as above)
+      // Below judge line
       cctx.save();
       const belowDivGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
-      belowDivGrad.addColorStop(0, 'rgba(255,255,255,0.06)');
-      belowDivGrad.addColorStop(0.5, 'rgba(255,255,255,0.04)');
+      belowDivGrad.addColorStop(0, 'rgba(255,255,255,0.10)');
+      belowDivGrad.addColorStop(0.5, 'rgba(255,255,255,0.06)');
       belowDivGrad.addColorStop(1, 'rgba(255,255,255,0.01)');
       cctx.strokeStyle = belowDivGrad;
-      cctx.lineWidth = 0.5;
+      cctx.lineWidth = 1;
       cctx.beginPath();
       cctx.moveTo(judgeG.x, judgeLineY);
       cctx.lineTo(bottomG.x, bottomY);
@@ -1386,6 +1386,11 @@ export default class NoteRenderer {
       this._drawHoldBody(note, laneCount, color, bodyTop, bodyBottom, judgeLineY, isMissed, isHolding);
     }
 
+    // ── Project Sekai-style beat ticks along the hold body ──
+    if (bodyTop < bodyBottom && this._currentBpm && !isMissed) {
+      this._drawHoldTicks(note, laneCount, color, tailTime, headTime, currentTime, judgeLineY, bodyTop, bodyBottom, isHolding);
+    }
+
     // Draw tail cap with fade-in / fade-out
     if (tailY >= clipTop && tailY <= clipBottom) {
       const tailColor = tailY > judgeLineY ? this._desaturateColor(color, tailY) : color;
@@ -1480,6 +1485,63 @@ export default class NoteRenderer {
       ctx.moveTo(topCx, segTop);
       ctx.lineTo(botCx, segBot);
       ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Draw Project Sekai-style beat ticks along the hold note body.
+   * Small horizontal marks at each beat position, with brighter marks on whole beats.
+   * Ticks get wider near the judge line (perspective scaling) and are clipped to the lane.
+   */
+  _drawHoldTicks(note, laneCount, color, tailTime, headTime, currentTime, judgeLineY, bodyTop, bodyBottom, isHolding) {
+    const ctx = this.ctx;
+    const bpm = this._currentBpm || 120;
+    const beatInterval = 60 / bpm;
+    const halfBeatInterval = beatInterval / 2;
+
+    // Start from first beat after tail
+    const firstBeat = Math.ceil(tailTime / beatInterval) * beatInterval;
+
+    for (let t = firstBeat; t < headTime; t += halfBeatInterval) {
+      const y = this._noteY(t, currentTime, judgeLineY);
+      if (y < bodyTop || y > bodyBottom) continue;
+
+      const isWholeBeat = Math.abs((t / beatInterval) - Math.round(t / beatInterval)) < 0.01;
+
+      const geom = this._getLaneGeometry(note.lane, y, laneCount);
+      const scale = this._getNoteScale(y);
+      const pad = 3 * scale;
+
+      const tickW = geom.width - pad * 2;
+      const cx = geom.x + geom.width / 2;
+
+      // Fade alpha matching the body fade
+      const fadeIn = this._fadeIn(y, judgeLineY);
+      const fadeOut = this._fadeOut(y, judgeLineY);
+      const alpha = fadeIn * fadeOut;
+      if (alpha < 0.01) continue;
+
+      ctx.save();
+      if (isWholeBeat) {
+        // Whole beat: wider, brighter tick
+        ctx.globalAlpha = alpha * (isHolding ? 0.6 : 0.35);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2 * scale;
+        ctx.beginPath();
+        ctx.moveTo(cx - tickW * 0.35, y);
+        ctx.lineTo(cx + tickW * 0.35, y);
+        ctx.stroke();
+      } else {
+        // Half beat: short, subtle tick
+        ctx.globalAlpha = alpha * (isHolding ? 0.35 : 0.18);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1 * scale;
+        ctx.beginPath();
+        ctx.moveTo(cx - tickW * 0.18, y);
+        ctx.lineTo(cx + tickW * 0.18, y);
+        ctx.stroke();
+      }
       ctx.restore();
     }
   }
