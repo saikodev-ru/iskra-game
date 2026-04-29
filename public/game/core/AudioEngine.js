@@ -103,6 +103,11 @@ export default class AudioEngine {
     this._playing = false;
   }
 
+  /** Release AudioBuffer references for GC. Call after game ends. */
+  releaseBuffer() {
+    this._currentBuffer = null;
+  }
+
   pause() {
     if (!this._playing) return;
     // Save raw audio position WITHOUT offset, so resume doesn't double-count it.

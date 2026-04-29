@@ -41,11 +41,11 @@ export default class HUD {
     const style = document.createElement('style');
     style.id = 'hud-anim-css';
     style.textContent = `
-      /* Score: 3D flip-down slide into view */
+      /* Score: slide down into view (no rotateX — conflicts with parent tilt) */
       @keyframes hud-score-flip {
-        0%   { transform: translateY(-60%) rotateX(-70deg); opacity: 0.15; filter: blur(2px); }
+        0%   { transform: translateY(-40%) scale(0.95); opacity: 0.15; filter: blur(2px); }
         60%  { opacity: 0.85; filter: blur(0.5px); }
-        100% { transform: translateY(0) rotateX(0deg); opacity: 1; filter: blur(0); }
+        100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
       }
       /* Combo: sharp pop with slight overshoot */
       @keyframes hud-combo-pop {
@@ -67,31 +67,33 @@ export default class HUD {
     this.container.innerHTML = `
       <div id="hud-inner" style="position:relative;width:100%;height:100%;pointer-events:none;display:none;">
 
-        <!-- ── 3D Perspective Plane — wraps score & combo with shared tilt ── -->
+        <!-- ── Shared perspective plane — score & combo tilt together as one surface ── -->
         <div id="hud-perspective-plane" style="position:absolute;inset:0;perspective:800px;perspective-origin:50% 35%;">
 
-          <!-- ── LEFT: Score + Accuracy (with glassmorphism backing) ── -->
-          <div style="position:absolute;left:5%;top:55%;transform:translateY(-50%) rotateX(28deg);transform-origin:50% 100%;transform-style:preserve-3d;text-align:right;">
-            <div style="position:absolute;top:-12px;bottom:-12px;left:-16px;right:-16px;background:rgba(0,0,0,0.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:12px;border:1px solid rgba(255,255,255,0.06);pointer-events:none;"></div>
+          <!-- ── LEFT: Score + Accuracy (on shared playfield perspective plane) ── -->
+          <div style="position:absolute;left:2.5%;top:56%;transform:rotateX(28deg) translateY(-50%);text-align:right;transform-origin:center 120%;">
+            <!-- Dark glass backing panel -->
+            <div style="position:absolute;inset:-14px -20px -10px -10px;background:rgba(0,0,0,0.45);border-radius:16px;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.04);pointer-events:none;"></div>
             <div style="position:relative;">
-              <div style="font-family:var(--zzz-font);font-weight:500;font-size:10px;color:rgba(170,255,0,0.45);letter-spacing:0.25em;text-transform:uppercase;margin-bottom:2px;">SCORE</div>
-              <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:44px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;text-shadow:0 0 30px rgba(170,255,0,0.25),0 2px 12px rgba(0,0,0,0.95),-1px -1px 0 rgba(0,0,0,0.8),1px -1px 0 rgba(0,0,0,0.8),-1px 1px 0 rgba(0,0,0,0.8),1px 1px 0 rgba(0,0,0,0.8);transform-style:preserve-3d;">0</div>
-              <div style="width:60px;height:1px;background:linear-gradient(to right,transparent,rgba(170,255,0,0.3));margin:8px auto 8px 0;"></div>
-              <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.35);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:1px;">ACCURACY</div>
-              <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-weight:600;font-size:18px;color:rgba(255,255,255,0.7);font-variant-numeric:tabular-nums;letter-spacing:0.04em;text-shadow:0 0 8px rgba(0,0,0,0.9),-1px -1px 0 rgba(0,0,0,0.7),1px -1px 0 rgba(0,0,0,0.7),-1px 1px 0 rgba(0,0,0,0.7),1px 1px 0 rgba(0,0,0,0.7);">100.00%</div>
+              <div style="font-family:var(--zzz-font);font-weight:500;font-size:11px;color:rgba(170,255,0,0.5);letter-spacing:0.25em;text-transform:uppercase;margin-bottom:2px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.9));">SCORE</div>
+              <div id="hud-score" style="font-family:var(--zzz-font);font-weight:900;font-size:60px;color:var(--zzz-lime);font-variant-numeric:tabular-nums;line-height:1;letter-spacing:0.02em;filter:drop-shadow(0 0 1px rgba(0,0,0,0.95)) drop-shadow(0 0 1px rgba(0,0,0,0.95)) drop-shadow(0 2px 8px rgba(0,0,0,0.9)) drop-shadow(0 0 20px rgba(170,255,0,0.2));">0</div>
+              <div style="width:80px;height:1px;background:linear-gradient(to right,transparent,rgba(170,255,0,0.3));margin:8px auto 8px 0;"></div>
+              <div style="font-family:var(--zzz-font);font-weight:500;font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:1px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.9));">ACCURACY</div>
+              <div id="hud-accuracy" style="font-family:var(--zzz-mono);font-weight:600;font-size:22px;color:rgba(255,255,255,0.75);font-variant-numeric:tabular-nums;letter-spacing:0.04em;filter:drop-shadow(0 0 1px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.8));">100.00%</div>
             </div>
           </div>
 
-          <!-- ── RIGHT: Combo + Rank (with glassmorphism backing) ── -->
-          <div style="position:absolute;right:5%;top:55%;transform:translateY(-50%) rotateX(28deg);transform-origin:50% 100%;transform-style:preserve-3d;text-align:left;">
-            <div style="position:absolute;top:-12px;bottom:-12px;left:-16px;right:-16px;background:rgba(0,0,0,0.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:12px;border:1px solid rgba(255,255,255,0.06);pointer-events:none;"></div>
+          <!-- ── RIGHT: Combo + Rank (on shared playfield perspective plane) ── -->
+          <div style="position:absolute;right:2.5%;top:56%;transform:rotateX(28deg) translateY(-50%);text-align:left;transform-origin:center 120%;">
+            <!-- Dark glass backing panel -->
+            <div style="position:absolute;inset:-14px -10px -10px -20px;background:rgba(0,0,0,0.45);border-radius:16px;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.04);pointer-events:none;"></div>
             <div style="position:relative;">
               <div style="display:flex;align-items:baseline;gap:8px;">
-                <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:64px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;text-shadow:0 0 40px rgba(255,255,255,0.12),0 4px 16px rgba(0,0,0,0.95),-2px -2px 0 rgba(0,0,0,0.7),2px -2px 0 rgba(0,0,0,0.7),-2px 2px 0 rgba(0,0,0,0.7),2px 2px 0 rgba(0,0,0,0.7);transform-style:preserve-3d;">0</div>
-                <div style="font-family:var(--zzz-font);font-weight:700;font-size:16px;color:rgba(255,255,255,0.5);letter-spacing:0.05em;text-shadow:0 2px 8px rgba(0,0,0,0.9);">x</div>
-                <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="X" style="font-family:var(--zzz-font);font-weight:900;font-size:36px;opacity:1;transform:scale(1) rotate(-25deg);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
+                <div id="hud-combo" style="font-family:var(--zzz-font);font-weight:900;font-size:82px;color:#ffffff;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-0.02em;filter:drop-shadow(0 0 1px rgba(0,0,0,0.95)) drop-shadow(0 0 1px rgba(0,0,0,0.95)) drop-shadow(0 4px 12px rgba(0,0,0,0.9)) drop-shadow(0 0 24px rgba(255,255,255,0.08));">0</div>
+                <div style="font-family:var(--zzz-font);font-weight:700;font-size:20px;color:rgba(255,255,255,0.55);letter-spacing:0.05em;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.9));">x</div>
+                <div id="hud-rank" class="grade-gradient grade-gradient--sm" data-rank="X" style="font-family:var(--zzz-font);font-weight:900;font-size:40px;opacity:1;transform:scale(1) rotate(-25deg);transition:all 0.25s cubic-bezier(0.2,0,0,1);line-height:1;margin-left:4px;"></div>
               </div>
-              <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px;">COMBO</div>
+              <div style="font-family:var(--zzz-font);font-weight:500;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.2em;text-transform:uppercase;margin-top:4px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.9));">COMBO</div>
             </div>
           </div>
 

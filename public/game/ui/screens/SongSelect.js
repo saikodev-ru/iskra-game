@@ -39,6 +39,11 @@ export default class SongSelect {
     this._leavingToMenu = false;  // true when going back to main menu (keep audio playing)
     this._initialized = false;  // true after first init() completes
     this._osuLibrary = null;
+
+    // Memory management: track currently loaded AudioBuffer to allow eviction
+    this._loadedAudioSetId = null;  // ID of the set whose AudioBuffer is currently in memory
+    this._loadingAudio = false;     // guard against parallel loads
+    this._chartErrorTimeout = null;
   }
 
   /** Navigate back to main menu — keeps music preview playing */
@@ -53,12 +58,26 @@ export default class SongSelect {
       this._osuLibrary = new OsuLibrary({
         audio: this.audio,
         oszLoader: this.oszLoader,
-        onImported: (beatmapSet) => {
+        onImported: (beatmapSet, { skipSelect } = {}) => {
           this.beatmapSets.push(beatmapSet);
           this._buildFilteredIndices();
+          // Don't select/preview or re-render the song list if game is active
+          // (would override gameplay background + waste DOM work)
+          if (skipSelect) return;
           this._renderSongList();
           this._selectSong(this.beatmapSets.length - 1);
-        }
+        },
+        existingSetIds: () => {
+          const ids = new Set();
+          for (const bs of this.beatmapSets) {
+            if (bs.onlineSetId != null) ids.add(bs.onlineSetId);
+          }
+          return ids;
+        },
+        isGameActive: () => {
+          if (typeof this._isGameActive === 'function') return this._isGameActive();
+          return false;
+        },
       });
     }
     this._osuLibrary.open();
@@ -151,10 +170,16 @@ export default class SongSelect {
     this._initialized = true;
 
     try {
-      const stored = await this.oszLoader.loadFromStore();
+      // Load metadata only — no AudioBuffers decoded (saves GBs of RAM!)
+      const stored = await this.oszLoader.loadFromStoreMetadata();
       this.beatmapSets = Array.isArray(stored) ? stored : [];
     } catch (err) {
+      console.error('[SongSelect] Failed to load beatmaps from storage:', err);
       this.beatmapSets = [];
+      // Show error to user so they know something went wrong
+      setTimeout(() => {
+        this._showChartError(`Failed to load charts from storage: ${err?.message || err}. Try DELETE ALL CHARTS in Settings.`);
+      }, 500);
     }
 
     // Hide loading overlay
@@ -268,6 +293,14 @@ export default class SongSelect {
     };
     EventBus.on('records:changed', this._recordsChangedHandler);
 
+    // Show chart error toasts
+    this._chartErrorHandler = ({ message }) => this._showChartError(message);
+    EventBus.on('chart:error', this._chartErrorHandler);
+
+    // Listen for "delete all charts" from Settings
+    this._chartsAllDeletedHandler = () => this._handleDeleteAllCharts();
+    EventBus.on('charts:all-deleted', this._chartsAllDeletedHandler);
+
     // Library button
     const libraryBtn = document.getElementById('library-btn');
     if (libraryBtn) {
@@ -369,6 +402,12 @@ export default class SongSelect {
       }
     };
     EventBus.on('records:changed', this._recordsChangedHandler);
+    this._chartErrorHandler = ({ message }) => this._showChartError(message);
+    EventBus.on('chart:error', this._chartErrorHandler);
+
+    // Listen for "delete all charts" from Settings
+    this._chartsAllDeletedHandler = () => this._handleDeleteAllCharts();
+    EventBus.on('charts:all-deleted', this._chartsAllDeletedHandler);
 
     // Library button
     const libraryBtn2 = document.getElementById('library-btn');
@@ -752,6 +791,13 @@ export default class SongSelect {
   async _deleteMap(setIndex) {
     const set = this.beatmapSets[setIndex];
     if (!set) return;
+    // Revoke blob URLs to prevent memory leaks
+    if (set.backgroundUrl && set.backgroundUrl.startsWith('blob:')) {
+      try { URL.revokeObjectURL(set.backgroundUrl); } catch (_) {}
+    }
+    if (set.videoUrl && set.videoUrl.startsWith('blob:')) {
+      try { URL.revokeObjectURL(set.videoUrl); } catch (_) {}
+    }
     try {
       const { BeatmapStore } = await import('../../game/OszLoader.js');
       await BeatmapStore.delete(set.id);
@@ -852,11 +898,21 @@ export default class SongSelect {
       return;
     }
 
+    const prevDiff = set.difficulties[this.selectedDiffIndex];
     this.selectedDiffIndex = diffIndex;
+    const newDiff = set.difficulties[diffIndex];
+
     this._updateSelection();
     this._renderSongInfo(set);
     this._renderPlayButton(set);
     this._saveSelection();
+
+    // Re-play preview if the new difficulty has different audio
+    const prevAudioFile = prevDiff?.audioFilename || '';
+    const newAudioFile = newDiff?.audioFilename || '';
+    if (newDiff?.hasCustomAudio || prevAudioFile !== newAudioFile) {
+      this._playPreview(set);
+    }
 
     // Effectful difficulty switch — brief glitch + channel switch sound
     ZZZTheme.playSwitchSound();
@@ -1153,15 +1209,24 @@ export default class SongSelect {
 
   _playPreview(set) {
     this._stopPreview();
-    if (!set.audioBuffer) return;
-    const previewTime = set.difficulties[this.selectedDiffIndex]?.metadata?.previewTime || 0;
+    // Use difficulty-specific audio buffer if available
+    const diff = set.difficulties[this.selectedDiffIndex];
+    let audioBuffer = diff?.audioBuffer || set.audioBuffer;
+
+    // If AudioBuffer hasn't been decoded yet (metadata-only load), decode it now
+    if (!audioBuffer && (set._audioBufferNeedsDecode || diff?._audioBufferNeedsDecode)) {
+      this._ensureAudioBufferLoaded(set);
+      return; // _ensureAudioBufferLoaded will call _playPreview again after loading
+    }
+    if (!audioBuffer) return;
+    const previewTime = diff?.metadata?.previewTime || 0;
     const savedVolume = parseInt(localStorage.getItem('rhythm-os-volume') || '70') / 100;
     const previewVolume = savedVolume * 0.5;
     this.audio._ensureCtx();
     this.audio.fadeTo(0, 0.2);
     this._previewFadeTimeout = setTimeout(() => {
       if (set !== this.beatmapSets[this.selectedIndex]) return;
-      this.audio.play(set.audioBuffer, Math.max(0, previewTime));
+      this.audio.play(audioBuffer, Math.max(0, previewTime));
       this.audio.fadeTo(previewVolume, 0.4);
       // Sync video to preview time if video is playing
       // Note: video may not be ready yet (async load), ThreeScene.update() handles sync once it's ready
@@ -1176,7 +1241,7 @@ export default class SongSelect {
         }
         if (!this.audio.isPlaying) {
           // Audio ended — restart both audio and video from preview point
-          this.audio.play(set.audioBuffer, Math.max(0, previewTime));
+          this.audio.play(audioBuffer, Math.max(0, previewTime));
           this._syncVideoPreview(set, previewTime);
           // Force video restart for preview loop
           if (this.three && this.three._videoElement && this.three._videoActive) {
@@ -1207,17 +1272,73 @@ export default class SongSelect {
     } catch (_) { /* video not seekable yet */ }
   }
 
-  _stopPreview() {
+  /** Kill all preview timers and stop any currently playing preview audio.
+   *  Safe to call during gameplay pause — game audio is already paused so isPlaying is false. */
+  _killPreviewTimers() {
     if (this._previewFadeTimeout) { clearTimeout(this._previewFadeTimeout); this._previewFadeTimeout = null; }
     if (this._previewInterval) { clearInterval(this._previewInterval); this._previewInterval = null; }
-    // Cancel any previous pending stop
     if (this._previewStopTimeout) { clearTimeout(this._previewStopTimeout); this._previewStopTimeout = null; }
+    // Also stop any currently playing preview audio
+    if (this.audio && this.audio.isPlaying) {
+      this.audio.stop();
+    }
+  }
+
+  _stopPreview() {
+    this._killPreviewTimers();
     this.audio.fadeTo(0, 0.15);
     // Pause video preview
     if (this.three && this.three._videoElement) {
       this.three._videoElement.pause();
     }
     this._previewStopTimeout = setTimeout(() => { this.audio.stop(); this._previewStopTimeout = null; }, 200);
+  }
+
+  /** Ensure AudioBuffer is loaded for a beatmap set (lazy loading).
+   *  Loads from IndexedDB on demand and evicts the previous set's buffer.
+   *  Calls _playPreview() again after loading completes. */
+  async _ensureAudioBufferLoaded(set) {
+    if (this._loadingAudio) return; // prevent parallel loads
+    this._loadingAudio = true;
+
+    try {
+      // Evict previous set's AudioBuffer to free memory
+      if (this._loadedAudioSetId && this._loadedAudioSetId !== set.id) {
+        const prevSet = this.beatmapSets.find(s => s.id === this._loadedAudioSetId);
+        if (prevSet) {
+          prevSet.audioBuffer = null;
+          prevSet._audioBufferNeedsDecode = true;
+          for (const diff of prevSet.difficulties) {
+            if (diff.hasCustomAudio) {
+              diff.audioBuffer = null;
+              diff._audioBufferNeedsDecode = true;
+            }
+          }
+        }
+      }
+
+      const { audioBuffer, diffAudioBuffers } = await this.oszLoader.loadAudioBufferForSet(set.id);
+      set.audioBuffer = audioBuffer;
+      set._audioBufferNeedsDecode = false;
+
+      // Apply per-difficulty AudioBuffers
+      for (const [diffIdx, diffBuffer] of diffAudioBuffers) {
+        if (set.difficulties[diffIdx]) {
+          set.difficulties[diffIdx].audioBuffer = diffBuffer;
+          set.difficulties[diffIdx]._audioBufferNeedsDecode = false;
+        }
+      }
+
+      this._loadedAudioSetId = set.id;
+
+      // Now that AudioBuffer is loaded, retry the preview
+      this._playPreview(set);
+    } catch (err) {
+      console.error('[SongSelect] Failed to load AudioBuffer:', err);
+      EventBus.emit('chart:error', { message: `Failed to load audio: ${err?.message || err}`, setId: set.id });
+    } finally {
+      this._loadingAudio = false;
+    }
   }
 
   _confirmSong() {
@@ -1231,6 +1352,14 @@ export default class SongSelect {
     this._transitioning = true;
     this._leavingToGame = true;
 
+    // If AudioBuffer hasn't been loaded yet, load it first then confirm
+    const audioBuffer = diff.audioBuffer || set.audioBuffer;
+    if (!audioBuffer && (set._audioBufferNeedsDecode || diff?._audioBufferNeedsDecode)) {
+      this._transitioning = false; // reset guard
+      this._ensureAudioBufferLoadedAndConfirm(set);
+      return;
+    }
+
     // Play satisfying game start sound
     ZZZTheme.playGameStartSound();
 
@@ -1238,12 +1367,36 @@ export default class SongSelect {
 
     const map = {
       metadata: { ...(set.metadata || {}), ...diff.metadata, setId: set.id, title: set.title, artist: set.artist, version: diff.version, creator: set.creator },
-      audioBuffer: set.audioBuffer, backgroundUrl: set.backgroundUrl, videoUrl: set.videoUrl,
+      // Use difficulty-specific audio buffer if available (some maps have different audio per diff)
+      audioBuffer: diff.audioBuffer || set.audioBuffer,
+      backgroundUrl: set.backgroundUrl, videoUrl: set.videoUrl,
       notes: diff.notes, laneCount: diff.laneCount, bpmChanges: diff.bpmChanges, difficulty: diff.difficulty,
       kiaiSections: diff.kiaiSections
     };
 
     this._playTransition(set, diff, map);
+  }
+
+  /** Load AudioBuffer on demand, then confirm song selection */
+  async _ensureAudioBufferLoadedAndConfirm(set) {
+    try {
+      const { audioBuffer, diffAudioBuffers } = await this.oszLoader.loadAudioBufferForSet(set.id);
+      set.audioBuffer = audioBuffer;
+      set._audioBufferNeedsDecode = false;
+      for (const [diffIdx, diffBuffer] of diffAudioBuffers) {
+        if (set.difficulties[diffIdx]) {
+          set.difficulties[diffIdx].audioBuffer = diffBuffer;
+          set.difficulties[diffIdx]._audioBufferNeedsDecode = false;
+        }
+      }
+      this._loadedAudioSetId = set.id;
+      // Now retry confirm
+      this._confirmSong();
+    } catch (err) {
+      console.error('[SongSelect] Failed to load AudioBuffer for confirm:', err);
+      this._transitioning = false;
+      EventBus.emit('chart:error', { message: `Failed to load chart audio: ${err?.message || err}`, setId: set.id });
+    }
   }
 
   /** Song → game transition: fade to black then start */
@@ -1387,7 +1540,10 @@ export default class SongSelect {
         this.beatmapSets.push(result);
         this._buildFilteredIndices();
         this._renderSongList();
-        this._selectSong(this.beatmapSets.length - 1);
+        // Don't select/preview the new map if game is active (would override gameplay background)
+        if (!this._isGameActive || !this._isGameActive()) {
+          this._selectSong(this.beatmapSets.length - 1);
+        }
         ZZZTheme.playSwitchSound();
       }
 
@@ -1397,8 +1553,9 @@ export default class SongSelect {
       this._hideImportOverlay();
     } catch (err) {
       console.error('[SongSelect] Import failed:', err);
-      this._setImportStatus('error', 'Import failed');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const errMsg = err?.message || String(err) || 'Unknown error';
+      this._setImportStatus('error', `Error: ${errMsg}`);
+      await new Promise(resolve => setTimeout(resolve, 4000));
       this._hideImportOverlay();
     }
 
@@ -1449,6 +1606,10 @@ export default class SongSelect {
   }
 
   destroy() {
+    // Clean up chart error listener
+    if (this._chartErrorHandler) { EventBus.off('chart:error', this._chartErrorHandler); this._chartErrorHandler = null; }
+    if (this._chartsAllDeletedHandler) { EventBus.off('charts:all-deleted', this._chartsAllDeletedHandler); this._chartsAllDeletedHandler = null; }
+
     // Clean up parallax
     for (const el of this._parallaxEls) {
       ZZZTheme.removeParallax(el);
@@ -1492,5 +1653,67 @@ export default class SongSelect {
     this._transitioning = false;
     this._leavingToGame = false;
     this._leavingToMenu = false;
+  }
+
+  /** Show a toast notification for chart errors */
+  _showChartError(message) {
+    let container = document.getElementById('chart-error-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'chart-error-container';
+      container.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:90vw;';
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.style.cssText = 'font-family:var(--zzz-font);font-size:12px;color:#fff;background:rgba(220,38,38,0.9);border:1px solid rgba(239,68,68,0.5);border-radius:8px;padding:10px 18px;pointer-events:auto;backdrop-filter:blur(10px);box-shadow:0 4px 20px rgba(0,0,0,0.4);animation:pause-fade-in 0.2s ease-out forwards;max-width:400px;word-break:break-word;';
+    toast.textContent = message;
+    container.appendChild(toast);
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s';
+      setTimeout(() => toast.remove(), 300);
+    }, 5000);
+  }
+
+  /** Handle "delete all charts" event from Settings */
+  _handleDeleteAllCharts() {
+    // Stop any preview audio
+    this._stopPreview();
+
+    // Revoke all blob URLs to prevent memory leaks
+    for (const set of this.beatmapSets) {
+      if (set.backgroundUrl && set.backgroundUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(set.backgroundUrl); } catch (_) {}
+      }
+      if (set.videoUrl && set.videoUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(set.videoUrl); } catch (_) {}
+      }
+    }
+
+    // Clear in-memory data
+    this.beatmapSets = [];
+    this.selectedIndex = -1;
+    this.selectedDiffIndex = 0;
+    this._expandedCard = -1;
+    this._loadedAudioSetId = null;
+
+    // Reset Three.js background
+    if (this.three) {
+      this.three._clearBackgroundImage();
+      this.three._clearBackgroundVideo();
+      this.three.setTVStatic();
+    }
+
+    // Update UI
+    this._buildFilteredIndices();
+    this._renderSongList();
+    this._renderEmptyState();
+    const info = document.getElementById('ss-song-info');
+    if (info) info.innerHTML = '';
+    const playArea = document.getElementById('ss-play-area');
+    if (playArea) playArea.innerHTML = '';
+
+    console.log('[SongSelect] All charts deleted and memory freed');
   }
 }

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * Download beatmap sets via catboy.best mirror API.
  * Streams the .osz file (with video) directly to the client.
+ * catboy.best/d/{setId} serves the .osz directly.
  */
 export async function GET(
   request: NextRequest,
@@ -39,6 +40,8 @@ export async function GET(
     const headers: Record<string, string> = {
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${setId}.osz"`,
+      // Expose Content-Length so the frontend can read it for progress tracking
+      'Access-Control-Expose-Headers': 'Content-Length',
     };
     if (contentLength) {
       headers['Content-Length'] = contentLength;

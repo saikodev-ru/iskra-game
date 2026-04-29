@@ -307,6 +307,8 @@ export default class ThreeScene {
       this._clearBackgroundImage();
       return;
     }
+    // ── Memory: store URL for blob revocation on clear ──
+    this._bgImageUrl = url;
 
     new THREE.TextureLoader().load(url, (texture) => {
       if (this._disposed) return;
@@ -559,6 +561,11 @@ export default class ThreeScene {
   _invalidateBgGeom() { this._cachedBgGeom = null; }
 
   _clearBackgroundImage() {
+    // ── Memory: revoke blob URL to free underlying Blob data ──
+    if (this._bgImageUrl && this._bgImageUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(this._bgImageUrl);
+    }
+    this._bgImageUrl = null;
     if (this._bgImageMesh) {
       this.scene.remove(this._bgImageMesh);
       this._bgImageMesh = null;
@@ -590,6 +597,9 @@ export default class ThreeScene {
 
     this._clearBackgroundImage(); // remove any image bg
     if (!url) { this._clearBackgroundVideo(); return; }
+
+    // ── Memory: store URL for blob revocation on clear ──
+    this._videoUrl = url;
 
     this._audioEngineRef = audioEngine || this._audioEngine;
 
@@ -865,6 +875,11 @@ export default class ThreeScene {
     this._videoActive = false;
     this._videoPaused = false;
     this._skipVideoFrame = false;
+    // ── Memory: revoke blob URL to free underlying Blob data (50-200MB for videos) ──
+    if (this._videoUrl && this._videoUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(this._videoUrl);
+    }
+    this._videoUrl = null;
     if (this._videoMesh) {
       this.scene.remove(this._videoMesh);
       this._videoMesh.geometry.dispose();
@@ -906,7 +921,8 @@ export default class ThreeScene {
   }
 
   _setupListeners() {
-    EventBus.on('note:hit', ({ judgement }) => {
+    // ── Memory: store handler references for removal in dispose() ──
+    this._hitHandler = ({ judgement }) => {
       if (this._disposed) return;
       // Subtle bloom boost on hit — no harsh flash
       if (judgement === 'perfect') {
@@ -919,13 +935,15 @@ export default class ThreeScene {
         this._bloomTarget = 0.28;
         this._beatIntensity = 0.08;
       }
-    });
-    EventBus.on('note:miss', () => {
+    };
+    this._missHandler = () => {
       if (!this._disposed) {
         // Red overlay flash instead of camera shake
         this._missFlash = 0.5;
       }
-    });
+    };
+    EventBus.on('note:hit', this._hitHandler);
+    EventBus.on('note:miss', this._missHandler);
   }
 
   createTVMonitor() {
@@ -1049,13 +1067,13 @@ export default class ThreeScene {
     const bassPulse = levels.bass * gfx;
     const audioPulse = levels.intensity * gfx;
 
-    // In gameplay mode, skip all reactive 3D effects — keep background static like song select
+    // In gameplay mode, skip all reactive 3D effects — keep background static.
+    // Playfield darkening/brightening is handled by NoteRenderer (canvas overlay).
     if (this._gameplayMode) {
-      // Still update video sync and render, but don't apply beat/chorus pulsation
       this._beatPulse = 0;
       this._beatIntensity = 0;
       this._chorusBeatPulse = 0;
-      // Keep chorus intensity for potential future use, but don't apply it
+      this._chorusIntensity = 0;
     }
 
     // ── Background shader ──
@@ -1301,8 +1319,14 @@ export default class ThreeScene {
     }
 
     // ── Reverse parallax — move bg opposite to mouse (use cached geom) ──
-    const targetX = -this._mouseX * this._parallaxIntensity;
-    const targetY = this._mouseY * this._parallaxIntensity;
+    // Respect parallax setting from localStorage
+    const parallaxSetting = localStorage.getItem('rhythm-os-parallax') || 'standard';
+    const parallaxMult = parallaxSetting === 'off' ? 0 : parallaxSetting === 'strong' ? 2.0 : 1.0;
+    // Disable parallax during gameplay (distracting when playing)
+    const activeMult = this._gameplayMode ? 0 : parallaxMult;
+    const effectiveIntensity = this._parallaxIntensity * activeMult;
+    const targetX = -this._mouseX * effectiveIntensity;
+    const targetY = this._mouseY * effectiveIntensity;
     this._bgOffsetX += (targetX - this._bgOffsetX) * 0.06;
     this._bgOffsetY += (targetY - this._bgOffsetY) * 0.06;
     const pg = this._calcBgPlaneGeometry();
@@ -1332,6 +1356,10 @@ export default class ThreeScene {
   dispose() {
     if (this._disposed) return;
     this._disposed = true;
+
+    // ── Memory: remove EventBus listeners to prevent closure keeping 'this' alive ──
+    if (this._hitHandler) { EventBus.off('note:hit', this._hitHandler); this._hitHandler = null; }
+    if (this._missHandler) { EventBus.off('note:miss', this._missHandler); this._missHandler = null; }
 
     if (this._resizeHandler) {
       window.removeEventListener('resize', this._resizeHandler);

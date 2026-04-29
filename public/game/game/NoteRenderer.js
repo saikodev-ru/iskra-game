@@ -36,6 +36,7 @@ export default class NoteRenderer {
     this._holdNoteDebugLogged = false;
     this._graphicsPreset = 'disco';
     this._bgDim = parseInt(localStorage.getItem('rhythm-os-bg-dim') || '0');
+    this._useSekaiEffects = true; // Project Sekai style hit effects (set false for old ring effects)
 
     // Hold spark effects — flat arrays for fast iteration
     this._holdSparkPool = [];
@@ -52,6 +53,10 @@ export default class NoteRenderer {
     // Miss flash effects — pool for red flashes at judge line on miss
     this._missFlashPool = [];
     this._missFlashCount = 0;
+
+    // LN Tick hit effects — pool for small ring flashes at judge line on tick hit
+    this._tickEffectPool = [];
+    this._tickEffectCount = 0;
 
     // Kiai time state — burning judge line + beat-synced effects
     this._kiaiIntensity = 0;       // 0–1, set each frame from BeatMap.getKiaiIntensity()
@@ -112,10 +117,15 @@ export default class NoteRenderer {
   clearBackground() {
     this._bgImage = null;
     this._bgLoadAttempted = false;
+    // ── Memory: release bg cache canvas (~32MB at 4K) ──
+    this._bgCacheCanvas = null;
+    this._bgCacheLaneCount = -1;
     // Reset to default colors
     const defaults = [...DEFAULT_COLORS, ...DEFAULT_COLORS];
     NoteRenderer.setLaneColors(defaults);
-    this._rebuildLaneGlowSprites();
+    // ── Memory: clear glow sprites to prevent unbounded Map growth ──
+    this._glowSprites.clear();
+    this._buildGlowSprites();
     this.invalidateBackgroundCache();
   }
 
@@ -201,6 +211,24 @@ export default class NoteRenderer {
         );
       }
     }
+
+    // Project Sekai style: star-burst particles
+    if (this._useSekaiEffects) {
+      effect.sekaiParticles = [];
+      const starN = type === 'perfect' ? 8 : type === 'great' ? 6 : 4;
+      for (let i = 0; i < starN; i++) {
+        const angle = (Math.PI * 2 / starN) * i + (Math.random() - 0.5) * 0.4;
+        effect.sekaiParticles.push({
+          angle,
+          speed: 80 + Math.random() * 120,
+          size: type === 'perfect' ? 6 + Math.random() * 4 : 4 + Math.random() * 3,
+          life: 0.3 + Math.random() * 0.2,
+          rotation: Math.random() * Math.PI * 2,
+          rotSpeed: (Math.random() - 0.5) * 8
+        });
+      }
+    }
+
     this._effectIndex++;
   }
 
@@ -214,6 +242,23 @@ export default class NoteRenderer {
       0.4, 0.4
     );
     this._missFlashCount++;
+  }
+
+  /** Add a tick hit effect at the judge line — like pressing a note but subtler */
+  addTickEffect(lane, laneCount) {
+    if (this._graphicsPreset === 'low') return;
+    if (this._tickEffectCount >= 8) return; // cap for perf
+    const judgeLineY = this._getJudgeLineY();
+    const geom = this._getLaneGeometry(lane, judgeLineY, laneCount);
+    const color = NoteRenderer.LANE_COLORS[lane % NoteRenderer.LANE_COLORS.length] || '#AAFF00';
+    // Each tick effect: [centerX, y, width, life, maxLife, r, g, b] — 8 elements
+    const rgb = this._hexToRgb(color);
+    this._tickEffectPool.push(
+      geom.centerX, judgeLineY, geom.width,
+      0.3, 0.3, // life, maxLife
+      rgb.r, rgb.g, rgb.b
+    );
+    this._tickEffectCount++;
   }
 
   /** Get pre-rendered glow sprite for a color */
@@ -256,6 +301,11 @@ export default class NoteRenderer {
     this._laneGlows.clear();
     this._holdSparkPool.length = 0;
     this._holdSparkCount = 0;
+    this._tickEffectPool.length = 0;
+    this._tickEffectCount = 0;
+    // ── Memory: also clear miss flash pool ──
+    this._missFlashPool.length = 0;
+    this._missFlashCount = 0;
   }
 
   flashLane() { /* no-op */ }
@@ -320,9 +370,12 @@ export default class NoteRenderer {
     }
 
     this._drawBackgroundCached(laneCount);
+    this._drawPlayfieldDimOverlay(laneCount);
     this._drawKiaiEffect(delta, laneCount);
     this._drawBeatLines(currentTime, laneCount);
+    this._drawKiaiNoteGlow(notes, currentTime, laneCount);
     this._drawMissFlashes(delta);
+    this._drawTickEffects(delta);
     this._drawEffects();
     this._drawHoldSparks();
     this._drawLaneGlows(laneCount);
@@ -448,7 +501,7 @@ export default class NoteRenderer {
       cctx.lineTo(judgeGeom.x + judgeGeom.width, judgeLineY);
       cctx.lineTo(judgeGeom.x, judgeLineY);
       cctx.closePath();
-      cctx.fillStyle = i % 2 === 0 ? 'rgba(10,10,12,0.15)' : 'rgba(14,14,16,0.15)';
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(6,6,8,0.55)' : 'rgba(10,10,12,0.55)';
       cctx.fill();
 
       // Subtle glass highlight at 30% height
@@ -476,7 +529,7 @@ export default class NoteRenderer {
       cctx.lineTo(bottomGeom.x + bottomGeom.width, bottomY);
       cctx.lineTo(bottomGeom.x, bottomY);
       cctx.closePath();
-      cctx.fillStyle = i % 2 === 0 ? 'rgba(8,8,10,0.15)' : 'rgba(12,12,14,0.15)';
+      cctx.fillStyle = i % 2 === 0 ? 'rgba(4,4,6,0.55)' : 'rgba(8,8,10,0.55)';
       cctx.fill();
 
       // Subtle fade-to-black at the very bottom edge for smooth edge blending
@@ -546,19 +599,19 @@ export default class NoteRenderer {
     cctx.stroke();
     cctx.restore();
 
-    // ── Lane dividers — clean visible lines with gradient fade ──
+    // ── Lane dividers — subtle gray lines ──
     for (let i = 1; i < laneCount; i++) {
       const topG = this._getLaneGeometry(i, topY, laneCount);
       const judgeG = this._getLaneGeometry(i, judgeLineY, laneCount);
       const bottomG = this._getLaneGeometry(i, bottomY, laneCount);
 
-      // Above judge line — gradient from faint at top to visible near judge line
+      // Above judge line
       cctx.save();
       const divGrad = cctx.createLinearGradient(0, topY, 0, judgeLineY);
       divGrad.addColorStop(0, 'rgba(255,255,255,0.02)');
-      divGrad.addColorStop(0.4, 'rgba(255,255,255,0.08)');
-      divGrad.addColorStop(0.85, 'rgba(255,255,255,0.14)');
-      divGrad.addColorStop(1, 'rgba(255,255,255,0.06)');
+      divGrad.addColorStop(0.5, 'rgba(255,255,255,0.08)');
+      divGrad.addColorStop(0.85, 'rgba(255,255,255,0.12)');
+      divGrad.addColorStop(1, 'rgba(255,255,255,0.04)');
       cctx.strokeStyle = divGrad;
       cctx.lineWidth = 1;
       cctx.beginPath();
@@ -567,12 +620,12 @@ export default class NoteRenderer {
       cctx.stroke();
       cctx.restore();
 
-      // Below judge line
+      // Below judge line (same style as above)
       cctx.save();
       const belowDivGrad = cctx.createLinearGradient(0, judgeLineY, 0, bottomY);
-      belowDivGrad.addColorStop(0, 'rgba(255,255,255,0.10)');
+      belowDivGrad.addColorStop(0, 'rgba(255,255,255,0.12)');
       belowDivGrad.addColorStop(0.5, 'rgba(255,255,255,0.06)');
-      belowDivGrad.addColorStop(1, 'rgba(255,255,255,0.01)');
+      belowDivGrad.addColorStop(1, 'rgba(255,255,255,0.02)');
       cctx.strokeStyle = belowDivGrad;
       cctx.lineWidth = 1;
       cctx.beginPath();
@@ -622,18 +675,69 @@ export default class NoteRenderer {
     this.invalidateBackgroundCache();
   }
 
-  /* ── Chorus Effect — "Aurora Edge" ─────────────────────────────────── */
-  /*  Beautiful, performant, non-distracting chorus visualization.
+  /** Dynamic playfield dim overlay — darker base, lifted during kiai chorus.
+   *  This creates the "dark playfield → bright kiai" contrast that makes
+   *  choruses feel impactful and driving. */
+  _drawPlayfieldDimOverlay(laneCount) {
+    const ctx = this.ctx;
+    const topY = this._getTopY();
+    const judgeLineY = this._getJudgeLineY();
+    const bottomY = this._getBottomY();
+
+    // Base dim: 0.12 (subtle, lanes are already dark). During kiai: lifts toward 0.
+    // The smooth pulse adds extra brightness on each beat.
+    const kiaiLift = this._kiaiIntensity * 0.9;       // up to 90% lift during kiai
+    const beatLift = this._kiaiSmoothPulse * 0.2;     // extra flash on beat
+    const dimAlpha = Math.max(0, 0.12 - kiaiLift - beatLift);
+
+    if (dimAlpha < 0.005) return;
+
+    const leftTop = this._getLaneGeometry(0, topY, laneCount);
+    const rightTop = this._getLaneGeometry(laneCount, topY, laneCount);
+    const leftJudge = this._getLaneGeometry(0, judgeLineY, laneCount);
+    const rightJudge = this._getLaneGeometry(laneCount, judgeLineY, laneCount);
+    const leftBottom = this._getLaneGeometry(0, bottomY, laneCount);
+    const rightBottom = this._getLaneGeometry(laneCount, bottomY, laneCount);
+
+    ctx.save();
+    ctx.globalAlpha = dimAlpha;
+    ctx.fillStyle = '#000000';
+
+    // Above judge line
+    // rightTop.x = right edge of playfield (laneCount lane starts there)
+    ctx.beginPath();
+    ctx.moveTo(leftTop.x, topY);
+    ctx.lineTo(rightTop.x, topY);
+    ctx.lineTo(rightJudge.x, judgeLineY);
+    ctx.lineTo(leftJudge.x, judgeLineY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Below judge line
+    ctx.beginPath();
+    ctx.moveTo(leftJudge.x, judgeLineY);
+    ctx.lineTo(rightJudge.x, judgeLineY);
+    ctx.lineTo(rightBottom.x, bottomY);
+    ctx.lineTo(leftBottom.x, bottomY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /* ── Chorus Effect — "Kiai Drive" ─────────────────────────────────── */
+  /*  High-energy, driving chorus visualization.
    *  Design principles:
-   *    - Does NOT recolor the playfield or notes (keeps readability)
-   *    - Effects are concentrated on the EDGES (walls/borders) and judge line
-   *    - Minimal draw calls for maximum performance
-   *    - Impressive but subtle — enhances without overwhelming
+   *    - Dark base playfield → bright explosive kiai contrast
+   *    - Effects concentrated on EDGES + judge line for readability
+   *    - Minimal draw calls, maximum visual impact
+   *    - Feels rhythmic and powerful — every beat should HIT
    *
    *  Layers:
-   *    1. Aurora border — flowing gradient glow along the playfield walls
-   *    2. Judge line shimmer — gentle bright pulse at the judge line
-   *    3. Edge particles — tiny sparkle dots floating along the walls on beat
+   *    1. Pulsing wall glow — bright gradient pillars along walls
+   *    2. Judge line flare — intense beat-synced flash
+   *    3. Beat burst — expanding ring on each beat
+   *    4. Edge sparkles — accent diamonds on beat
    */
   _drawKiaiEffect(delta, laneCount) {
     if (this._kiaiIntensity < 0.01) {
@@ -660,6 +764,9 @@ export default class NoteRenderer {
     this._kiaiFlamePhase += delta * 12;
 
     // Geometry — key edge points
+    // _getLaneGeometry(laneIndex, y, laneCount).x = left edge of that lane
+    // Left wall = lane 0's left edge (x)
+    // Right wall = lane laneCount's left edge (x) = right edge of playfield
     const lxT = this._getLaneGeometry(0, topY, laneCount).x;
     const rxT = this._getLaneGeometry(laneCount, topY, laneCount).x;
     const lxJ = this._getLaneGeometry(0, judgeLineY, laneCount).x;
@@ -667,98 +774,89 @@ export default class NoteRenderer {
     const lxB = this._getLaneGeometry(0, bottomY, laneCount).x;
     const rxB = this._getLaneGeometry(laneCount, bottomY, laneCount).x;
 
-    // Get accent color
+    // Get accent color (use first lane color as accent)
     const lcHex = NoteRenderer.LANE_COLORS[0] || '#AAFF00';
     const lc = this._hexToRgb(lcHex);
 
     // ════════════════════════════════════════════════════════════════
-    //  AURORA LAYER 1: Flowing border glow along walls
-    //  Animated gradient that flows up/down along the playfield edges.
-    //  This is the main visual signature of the chorus — an aurora-like
-    //  shimmer along the borders that breathes with the beat.
+    //  LAYER 1: Pulsing wall glow — bright gradient pillars
+    //  The main signature: glowing light pillars along the playfield edges
+    //  that breathe with intensity and pulse hard on each beat.
     // ════════════════════════════════════════════════════════════════
     this._kiaiBorderGlow += (pulse - this._kiaiBorderGlow) * Math.min(1, delta * 14);
-    const borderA = intensity * 0.6 + this._kiaiBorderGlow * 0.5;
+    const borderA = intensity * 0.7 + this._kiaiBorderGlow * 0.6;
 
     if (borderA > 0.01) {
-      // Flowing phase for the aurora animation
-      const flowPhase = this._kiaiFlamePhase * 0.3;
-
-      // Left wall aurora
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
 
-      // Create a vertical gradient that shifts over time (aurora flow)
+      const flowPhase = this._kiaiFlamePhase * 0.3;
       const auroraShift = Math.sin(flowPhase) * 0.15 + 0.5;
 
-      // Left wall glow — wider, softer
-      const lwW = 20 + this._kiaiBorderGlow * 18;
-      const lGrad = ctx.createLinearGradient(lxJ - lwW, topY, lxJ, topY);
+      // ── Left wall glow — wide soft fill ──
+      const lwW = 28 + this._kiaiBorderGlow * 24;
+      const lGrad = ctx.createLinearGradient(lxJ - lwW, topY, lxJ + 4, topY);
       lGrad.addColorStop(0, `rgba(${lc.r},${lc.g},${lc.b},0)`);
-      lGrad.addColorStop(0.3, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.06})`);
-      lGrad.addColorStop(0.7, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.12})`);
-      lGrad.addColorStop(1, `rgba(255,255,255,${borderA * 0.08})`);
+      lGrad.addColorStop(0.4, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.08})`);
+      lGrad.addColorStop(0.75, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.18})`);
+      lGrad.addColorStop(1, `rgba(255,255,255,${borderA * 0.12})`);
       ctx.fillStyle = lGrad;
-
-      // Draw as a tapered strip (narrower at top, wider at judge line)
       ctx.beginPath();
       ctx.moveTo(lxT - lwW * 0.5, topY);
-      ctx.lineTo(lxT, topY);
-      ctx.lineTo(lxJ, judgeLineY);
+      ctx.lineTo(lxT + 4, topY);
+      ctx.lineTo(lxJ + 4, judgeLineY);
       ctx.lineTo(lxJ - lwW, judgeLineY);
       ctx.closePath();
       ctx.fill();
 
-      // Left wall — bright edge line
+      // ── Left wall bright edge line ──
       const edgeGrad = ctx.createLinearGradient(0, topY, 0, judgeLineY);
-      edgeGrad.addColorStop(0, `rgba(255,255,255,${borderA * 0.05})`);
-      edgeGrad.addColorStop(auroraShift - 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.15})`);
-      edgeGrad.addColorStop(auroraShift, `rgba(255,255,255,${borderA * 0.5})`);
-      edgeGrad.addColorStop(auroraShift + 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.15})`);
-      edgeGrad.addColorStop(1, `rgba(255,255,255,${borderA * 0.05})`);
+      edgeGrad.addColorStop(0, `rgba(255,255,255,${borderA * 0.06})`);
+      edgeGrad.addColorStop(auroraShift - 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.2})`);
+      edgeGrad.addColorStop(auroraShift, `rgba(255,255,255,${borderA * 0.7})`);
+      edgeGrad.addColorStop(auroraShift + 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.2})`);
+      edgeGrad.addColorStop(1, `rgba(255,255,255,${borderA * 0.06})`);
       ctx.strokeStyle = edgeGrad;
-      ctx.lineWidth = 1.5 + this._kiaiBorderGlow * 2;
+      ctx.lineWidth = 2 + this._kiaiBorderGlow * 3;
       ctx.beginPath();
       ctx.moveTo(lxT, topY);
       ctx.lineTo(lxJ, judgeLineY);
       ctx.stroke();
 
-      // Right wall aurora (mirror)
-      const rwW = 20 + this._kiaiBorderGlow * 18;
-      const rGrad = ctx.createLinearGradient(rxJ, topY, rxJ + rwW, topY);
-      rGrad.addColorStop(0, `rgba(255,255,255,${borderA * 0.08})`);
-      rGrad.addColorStop(0.3, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.12})`);
-      rGrad.addColorStop(0.7, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.06})`);
+      // ── Right wall glow — wide soft fill ──
+      const rwW = 28 + this._kiaiBorderGlow * 24;
+      const rGrad = ctx.createLinearGradient(rxJ - 4, topY, rxJ + rwW, topY);
+      rGrad.addColorStop(0, `rgba(255,255,255,${borderA * 0.12})`);
+      rGrad.addColorStop(0.25, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.18})`);
+      rGrad.addColorStop(0.6, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.08})`);
       rGrad.addColorStop(1, `rgba(${lc.r},${lc.g},${lc.b},0)`);
       ctx.fillStyle = rGrad;
-
       ctx.beginPath();
-      ctx.moveTo(rxT, topY);
+      ctx.moveTo(rxT - 4, topY);
       ctx.lineTo(rxT + rwW * 0.5, topY);
       ctx.lineTo(rxJ + rwW, judgeLineY);
-      ctx.lineTo(rxJ, judgeLineY);
+      ctx.lineTo(rxJ - 4, judgeLineY);
       ctx.closePath();
       ctx.fill();
 
-      // Right wall — bright edge line (phase-shifted for asymmetry)
+      // ── Right wall bright edge line ──
       const rAuroraShift = Math.sin(flowPhase + 1.5) * 0.15 + 0.5;
       const redgeGrad = ctx.createLinearGradient(0, topY, 0, judgeLineY);
-      redgeGrad.addColorStop(0, `rgba(255,255,255,${borderA * 0.05})`);
-      redgeGrad.addColorStop(rAuroraShift - 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.15})`);
-      redgeGrad.addColorStop(rAuroraShift, `rgba(255,255,255,${borderA * 0.5})`);
-      redgeGrad.addColorStop(rAuroraShift + 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.15})`);
-      redgeGrad.addColorStop(1, `rgba(255,255,255,${borderA * 0.05})`);
+      redgeGrad.addColorStop(0, `rgba(255,255,255,${borderA * 0.06})`);
+      redgeGrad.addColorStop(rAuroraShift - 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.2})`);
+      redgeGrad.addColorStop(rAuroraShift, `rgba(255,255,255,${borderA * 0.7})`);
+      redgeGrad.addColorStop(rAuroraShift + 0.15, `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.2})`);
+      redgeGrad.addColorStop(1, `rgba(255,255,255,${borderA * 0.06})`);
       ctx.strokeStyle = redgeGrad;
-      ctx.lineWidth = 1.5 + this._kiaiBorderGlow * 2;
+      ctx.lineWidth = 2 + this._kiaiBorderGlow * 3;
       ctx.beginPath();
       ctx.moveTo(rxT, topY);
       ctx.lineTo(rxJ, judgeLineY);
       ctx.stroke();
 
-      // Below-judge sections (fainter mirror)
-      const bwW = 14 + this._kiaiBorderGlow * 10;
-      // Left below
-      ctx.fillStyle = `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.04})`;
+      // ── Below-judge faint echo ──
+      const bwW = 18 + this._kiaiBorderGlow * 14;
+      ctx.fillStyle = `rgba(${lc.r},${lc.g},${lc.b},${borderA * 0.05})`;
       ctx.beginPath();
       ctx.moveTo(lxJ - bwW, judgeLineY);
       ctx.lineTo(lxJ, judgeLineY);
@@ -766,7 +864,6 @@ export default class NoteRenderer {
       ctx.lineTo(lxB - bwW * 0.5, bottomY);
       ctx.closePath();
       ctx.fill();
-      // Right below
       ctx.beginPath();
       ctx.moveTo(rxJ, judgeLineY);
       ctx.lineTo(rxJ + bwW, judgeLineY);
@@ -780,52 +877,82 @@ export default class NoteRenderer {
     }
 
     // ════════════════════════════════════════════════════════════════
-    //  AURORA LAYER 2: Judge line shimmer
-    //  A clean, gentle white/accent glow at the judge line that pulses
-    //  with the beat. NOT a fire/inferno — just a clean breathing glow.
+    //  LAYER 2: Judge line flare — intense beat-synced flash
+    //  A bright, punchy glow that fires on every beat during kiai.
+    //  This is the "heartbeat" of the effect.
     // ════════════════════════════════════════════════════════════════
     {
       const judgeWidth = rxJ - lxJ;
       const judgeCX = (lxJ + rxJ) / 2;
-      const glowH = 10 + pulse * 14;
-      const glowA = intensity * 0.4 + pulse * 0.3;
+      const glowH = 14 + pulse * 24;  // taller on beat
+      const glowA = intensity * 0.5 + pulse * 0.5;
 
       const shimmerGrad = ctx.createLinearGradient(judgeCX, judgeLineY - glowH, judgeCX, judgeLineY + glowH);
       shimmerGrad.addColorStop(0, `rgba(255,255,255,0)`);
-      shimmerGrad.addColorStop(0.3, `rgba(${lc.r},${lc.g},${lc.b},${glowA * 0.15})`);
-      shimmerGrad.addColorStop(0.45, `rgba(255,255,255,${glowA * 0.4})`);
-      shimmerGrad.addColorStop(0.5, `rgba(255,255,255,${glowA * 0.6})`);
-      shimmerGrad.addColorStop(0.55, `rgba(255,255,255,${glowA * 0.4})`);
-      shimmerGrad.addColorStop(0.7, `rgba(${lc.r},${lc.g},${lc.b},${glowA * 0.15})`);
+      shimmerGrad.addColorStop(0.25, `rgba(${lc.r},${lc.g},${lc.b},${glowA * 0.2})`);
+      shimmerGrad.addColorStop(0.4, `rgba(255,255,255,${glowA * 0.5})`);
+      shimmerGrad.addColorStop(0.5, `rgba(255,255,255,${glowA * 0.8})`);
+      shimmerGrad.addColorStop(0.6, `rgba(255,255,255,${glowA * 0.5})`);
+      shimmerGrad.addColorStop(0.75, `rgba(${lc.r},${lc.g},${lc.b},${glowA * 0.2})`);
       shimmerGrad.addColorStop(1, `rgba(255,255,255,0)`);
 
       ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = shimmerGrad;
-      ctx.fillRect(lxJ - 4, judgeLineY - glowH, judgeWidth + 8, glowH * 2);
+      ctx.fillRect(lxJ - 6, judgeLineY - glowH, judgeWidth + 12, glowH * 2);
       ctx.restore();
     }
 
     // ════════════════════════════════════════════════════════════════
-    //  AURORA LAYER 3: Edge sparkles on beat
-    //  Tiny diamond sparkles that appear along the walls on each beat.
-    //  Very few particles (max 4 per side) for performance.
+    //  LAYER 3: Beat burst — expanding ring on each beat
+    //  A fast-expanding, fading ring that fires from the judge line
+    //  outward on each beat. Feels like a shockwave.
     // ════════════════════════════════════════════════════════════════
-    if (this._kiaiBeatPulse > 0.3) {
+    if (this._kiaiBeatPulse > 0.2) {
+      const burstA = (this._kiaiBeatPulse - 0.2) * intensity * 0.4;
+      const burstExpand = (1 - this._kiaiBeatPulse) * 60; // expands as pulse decays
+      const judgeWidth = rxJ - lxJ;
+      const judgeCX = (lxJ + rxJ) / 2;
+
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const sparkA = (this._kiaiBeatPulse - 0.3) * intensity * 0.6;
-      const sparkCount = 4;
+
+      // Horizontal burst line that shoots outward from judge line
+      const burstH = 3 + this._kiaiBeatPulse * 6;
+      const burstW = judgeWidth * (0.6 + this._kiaiBeatPulse * 0.4);
+      const burstGrad = ctx.createLinearGradient(judgeCX, judgeLineY - burstH - burstExpand, judgeCX, judgeLineY + burstH + burstExpand);
+      burstGrad.addColorStop(0, `rgba(255,255,255,0)`);
+      burstGrad.addColorStop(0.3, `rgba(255,255,255,${burstA * 0.15})`);
+      burstGrad.addColorStop(0.5, `rgba(255,255,255,${burstA * 0.6})`);
+      burstGrad.addColorStop(0.7, `rgba(255,255,255,${burstA * 0.15})`);
+      burstGrad.addColorStop(1, `rgba(255,255,255,0)`);
+      ctx.fillStyle = burstGrad;
+      ctx.fillRect(judgeCX - burstW / 2, judgeLineY - burstH - burstExpand, burstW, (burstH + burstExpand) * 2);
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.restore();
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  LAYER 4: Edge sparkles on beat
+    //  Diamond sparkles along the walls. More of them, brighter.
+    // ════════════════════════════════════════════════════════════════
+    if (this._kiaiBeatPulse > 0.2) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const sparkA = (this._kiaiBeatPulse - 0.2) * intensity * 0.8;
+      const sparkCount = 6;
 
       for (let i = 0; i < sparkCount; i++) {
         const seed1 = Math.sin(this._kiaiFlamePhase * 1.1 + i * 31.7) * 0.5 + 0.5;
         const seed2 = Math.cos(this._kiaiFlamePhase * 0.8 + i * 19.3) * 0.5 + 0.5;
-        const sparkSize = 2 + seed1 * 3;
+        const sparkSize = 3 + seed1 * 4;
 
         // Left wall sparkles
         const lY = topY + seed2 * (judgeLineY - topY);
         const lXPersp = lxT + (lxJ - lxT) * seed2;
-        const lsx = lXPersp - 8 - seed1 * 12;
-        ctx.fillStyle = `rgba(255,255,255,${sparkA * (0.4 + seed2 * 0.6)})`;
+        const lsx = lXPersp - 10 - seed1 * 14;
+        ctx.fillStyle = `rgba(255,255,255,${sparkA * (0.5 + seed2 * 0.5)})`;
         ctx.beginPath();
         ctx.moveTo(lsx, lY - sparkSize);
         ctx.lineTo(lsx + sparkSize * 0.4, lY);
@@ -836,8 +963,8 @@ export default class NoteRenderer {
 
         // Right wall sparkles
         const rXPersp = rxT + (rxJ - rxT) * seed2;
-        const rsx = rXPersp + 8 + seed1 * 12;
-        ctx.fillStyle = `rgba(255,255,255,${sparkA * (0.3 + seed1 * 0.5)})`;
+        const rsx = rXPersp + 10 + seed1 * 14;
+        ctx.fillStyle = `rgba(255,255,255,${sparkA * (0.4 + seed1 * 0.6)})`;
         ctx.beginPath();
         ctx.moveTo(rsx, lY - sparkSize);
         ctx.lineTo(rsx + sparkSize * 0.4, lY);
@@ -1081,6 +1208,93 @@ export default class NoteRenderer {
     }
   }
 
+  /* ── Kiai Note Glow — drawn BEHIND notes, using lane colors ── */
+  /*  During kiai, each visible note gets a colored glow halo behind it.
+   *  The glow uses the note's lane color, is drawn BEFORE notes so it
+   *  appears behind them, and is focused/tight (not a wide bloom that
+   *  washes out the playfield). */
+
+  _drawKiaiNoteGlow(notes, currentTime, laneCount) {
+    if (this._kiaiIntensity < 0.01) return;
+    if (this._graphicsPreset === 'low') return;
+
+    const ctx = this.ctx;
+    const judgeLineY = this._getJudgeLineY();
+    const topY = this._getTopY();
+    const bottomY = this._getBottomY();
+    const clipTop = topY - 80;
+    const clipBottom = bottomY + 20;
+    const kiai = this._kiaiIntensity;
+    const pulse = this._kiaiSmoothPulse;
+    const kiaiPulse = 0.85 + pulse * 0.15;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
+      // Skip fully resolved notes (hit and not missed, and hold notes fully released)
+      if (note.hit && note.judgement !== 'miss' && note.type !== 'hold') continue;
+      // Skip missed notes that faded out
+      if (note.judgement === 'miss') {
+        const noteY = this._noteY(note.time, currentTime, judgeLineY);
+        if (this._fadeOut(noteY, judgeLineY) <= 0) continue;
+      }
+
+      // Glow at head position
+      const headY = this._noteY(note.time, currentTime, judgeLineY);
+      if (headY >= clipTop && headY <= clipBottom) {
+        const fadeIn = this._fadeIn(headY, judgeLineY);
+        const fadeOut = this._fadeOut(headY, judgeLineY);
+        const missAlpha = note.judgement === 'miss' ? 0.7 : 1;
+        const alpha = fadeIn * fadeOut * missAlpha;
+        if (alpha > 0.01) {
+          let color = NoteRenderer.LANE_COLORS[note.lane % NoteRenderer.LANE_COLORS.length];
+          if (headY > judgeLineY) color = this._desaturateColor(color, headY);
+          this._drawKiaiGlowAt(note.lane, headY, laneCount, color, alpha, kiai, kiaiPulse);
+        }
+      }
+
+      // For hold notes: glow at tail position too
+      if (note.type === 'hold' && note.duration >= NoteRenderer.MIN_HOLD_DURATION) {
+        const tailY = this._noteY(note.time + note.duration, currentTime, judgeLineY);
+        if (tailY >= clipTop && tailY <= clipBottom) {
+          const fadeIn = this._fadeIn(tailY, judgeLineY);
+          const fadeOut = this._fadeOut(tailY, judgeLineY);
+          const missAlpha = note.judgement === 'miss' ? 0.7 : 1;
+          const alpha = fadeIn * fadeOut * missAlpha;
+          if (alpha > 0.01) {
+            let color = NoteRenderer.LANE_COLORS[note.lane % NoteRenderer.LANE_COLORS.length];
+            if (tailY > judgeLineY) color = this._desaturateColor(color, tailY);
+            this._drawKiaiGlowAt(note.lane, tailY, laneCount, color, alpha, kiai, kiaiPulse);
+          }
+        }
+      }
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  }
+
+  /** Draw a single kiai glow sprite at a given lane/Y position */
+  _drawKiaiGlowAt(lane, noteY, laneCount, color, alpha, kiai, kiaiPulse) {
+    const ctx = this.ctx;
+    const corners = this._getNoteCorners(lane, noteY, laneCount);
+    const glowSprite = this._getGlowSprite(color);
+    if (!glowSprite) return;
+
+    // Layer 1: wide soft glow halo behind the note (lane color)
+    const gs = Math.max(corners.width, corners.height) * 1.6 * corners.scale;
+    const glowSize = gs * (1.3 + kiai * 0.4) * kiaiPulse;
+    ctx.globalAlpha = alpha * 0.35 * kiai * kiaiPulse;
+    ctx.drawImage(glowSprite, corners.centerX - glowSize / 2, noteY - glowSize / 2, glowSize, glowSize);
+
+    // Layer 2: tight bright core glow (lane color, more intense)
+    const coreSize = gs * 0.9 * kiaiPulse;
+    ctx.globalAlpha = alpha * 0.2 * kiai * kiaiPulse;
+    ctx.drawImage(glowSprite, corners.centerX - coreSize / 2, noteY - coreSize / 2, coreSize, coreSize);
+  }
+
   /* ── Black bars ── */
 
   _drawBlackBars() {
@@ -1307,7 +1521,6 @@ export default class NoteRenderer {
     const ctx = this.ctx;
     const corners = this._getNoteCorners(lane, noteY, laneCount);
     const r = Math.max(2, 8 * corners.scale);
-    const kiai = this._kiaiIntensity;
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -1315,29 +1528,16 @@ export default class NoteRenderer {
     this._drawPerspectiveRoundRect(ctx, corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y, corners.br.x, corners.br.y, corners.bl.x, corners.bl.y, r);
     ctx.fill();
 
-    // Glow via pre-rendered sprite
+    // Subtle base glow (always visible) — drawn ON the note, very subtle
+    // Kiai glow is now drawn separately BEFORE notes via _drawKiaiNoteGlow
     const glowSprite = this._getGlowSprite(color);
     if (glowSprite) {
-      // Base glow (always visible, subtle)
-      const gs = Math.max(corners.width, corners.height) * 1.2 * corners.scale;
-      ctx.globalAlpha = alpha * 0.08;
+      const gs = Math.max(corners.width, corners.height) * 1.0 * corners.scale;
+      ctx.globalAlpha = alpha * 0.06;
       ctx.drawImage(glowSprite, corners.centerX - gs / 2, noteY - gs / 2, gs, gs);
-
-      // Kiai glow — soft volumetric color halo, pulsing gently
-      if (kiai > 0.01) {
-        const kiaiPulse = 0.85 + this._kiaiSmoothPulse * 0.15;
-        // Outer volumetric bloom — wide, soft, colored
-        const bloomSize = gs * (2.5 + kiai * 0.8) * kiaiPulse;
-        ctx.globalAlpha = alpha * 0.06 * kiai * kiaiPulse;
-        ctx.drawImage(glowSprite, corners.centerX - bloomSize / 2, noteY - bloomSize / 2, bloomSize, bloomSize);
-
-        // Mid glow — slightly brighter core
-        const midSize = gs * (1.6 + kiai * 0.4) * kiaiPulse;
-        ctx.globalAlpha = alpha * 0.10 * kiai * kiaiPulse;
-        ctx.drawImage(glowSprite, corners.centerX - midSize / 2, noteY - midSize / 2, midSize, midSize);
-      }
       ctx.globalAlpha = alpha;
     }
+
     const grad = ctx.createLinearGradient(corners.centerX, corners.tl.y, corners.centerX, corners.bl.y);
     grad.addColorStop(0, 'rgba(255,255,255,0.35)');
     grad.addColorStop(0.3, 'rgba(255,255,255,0.05)');
@@ -1348,7 +1548,7 @@ export default class NoteRenderer {
     ctx.restore();
   }
 
-  /* ── Hold note ── */
+  /* ── Hold note (Project Sekai style) ── */
 
   _drawHoldNote(note, currentTime, laneCount, judgeLineY, topY, bottomY) {
     const headTime = note.time;
@@ -1381,14 +1581,9 @@ export default class NoteRenderer {
     const bodyTop = Math.max(tailY, clipTop);
     const bodyBottom = Math.min(headY, clipBottom);
 
-    // Draw body with per-pixel gradient fade
+    // Draw body with per-pixel gradient fade (Project Sekai style)
     if (bodyTop < bodyBottom && bodyBottom > clipTop && bodyTop < clipBottom) {
-      this._drawHoldBody(note, laneCount, color, bodyTop, bodyBottom, judgeLineY, isMissed, isHolding);
-    }
-
-    // ── Project Sekai-style beat ticks along the hold body ──
-    if (bodyTop < bodyBottom && this._currentBpm && !isMissed) {
-      this._drawHoldTicks(note, laneCount, color, tailTime, headTime, currentTime, judgeLineY, bodyTop, bodyBottom, isHolding);
+      this._drawHoldBody(note, laneCount, color, bodyTop, bodyBottom, judgeLineY, isMissed, isHolding, currentTime);
     }
 
     // Draw tail cap with fade-in / fade-out
@@ -1419,130 +1614,264 @@ export default class NoteRenderer {
   }
 
   /**
-   * Draw hold note body with gradient fade — the tail fades in smoothly
-   * while the head (near judge line) is fully opaque.
-   * Uses a vertical gradient to blend alpha along the body length.
+   * Draw hold note body — Project Sekai style:
+   * - Smooth translucent body fill (NO horizontal segment lines)
+   * - Continuous side edge borders (left + right only)
+   * - Bright center "ribbon" spine running down the middle
+   * - Rhythmic tick markers (prominent diamond + bright line) at beat positions
+   * - Glowing edges when holding
    */
-  _drawHoldBody(note, laneCount, color, topY, bottomY, judgeLineY, isMissed, isHolding) {
+  _drawHoldBody(note, laneCount, color, topY, bottomY, judgeLineY, isMissed, isHolding, currentTime) {
     const ctx = this.ctx;
-    const gfx = this._gfx();
     const missAlpha = isMissed ? 0.7 : 1;
 
-    // Draw in N segments, each with its own alpha based on _fadeIn/_fadeOut at that Y position
-    const segments = Math.max(1, Math.ceil((bottomY - topY) / 12)); // one segment per ~12px (perf)
+    // ── Helper: get left/right edge X at a given Y ──
+    const getEdgeX = (y) => {
+      const geom = this._getLaneGeometry(note.lane, y, laneCount);
+      const scale = this._getNoteScale(y);
+      const pad = 3 * scale;
+      return { left: geom.x + pad, right: geom.x + geom.width - pad, cx: geom.centerX, scale };
+    };
+
+    // ── 1. Draw smooth body fill (segmented for perspective, NO stroke borders) ──
+    const segments = Math.max(1, Math.ceil((bottomY - topY) / 12));
     const segH = (bottomY - topY) / segments;
 
     for (let s = 0; s < segments; s++) {
       const segTop = topY + s * segH;
-      const segBot = segTop + segH + 0.5; // +0.5 to avoid gaps
+      const segBot = Math.min(segTop + segH + 0.5, bottomY);
 
-      // Fade alpha: gradient from tail fade to head full opacity, including fadeOut below judge line
       const fadeAtTop = this._fadeIn(segTop, judgeLineY) * this._fadeOut(segTop, judgeLineY) * missAlpha;
       const fadeAtBot = this._fadeIn(segBot, judgeLineY) * this._fadeOut(segBot, judgeLineY) * missAlpha;
       const avgAlpha = (fadeAtTop + fadeAtBot) / 2;
-      if (avgAlpha < 0.005) continue; // skip nearly invisible segments
+      if (avgAlpha < 0.005) continue;
 
-      const segMid = (segTop + segBot) / 2;
-      const geom = this._getLaneGeometry(note.lane, segMid, laneCount);
-      const scale = this._getNoteScale(segMid);
-      const pad = 3 * scale;
-
-      const botGeom = this._getLaneGeometry(note.lane, segBot, laneCount);
-      const topGeom = this._getLaneGeometry(note.lane, segTop, laneCount);
-
-      const botX = geom.x + pad;
-      const botW = geom.width - pad * 2;
-      const topX = topGeom.x + pad * this._getNoteScale(segTop) / scale;
-      const topW = topGeom.width - pad * 2 * this._getNoteScale(segTop) / scale;
+      const topEdge = getEdgeX(segTop);
+      const botEdge = getEdgeX(segBot);
 
       ctx.save();
       ctx.globalAlpha = avgAlpha;
 
-      // Body fill (no shadowBlur — major perf gain)
-      ctx.fillStyle = isHolding ? this._withAlpha(color, 0.30) : this._withAlpha(color, 0.18);
+      // Body fill only — no stroke! Borders are drawn separately as continuous side lines
+      ctx.fillStyle = isHolding ? this._withAlpha(color, 0.38) : this._withAlpha(color, 0.24);
       ctx.beginPath();
-      ctx.moveTo(topX, segTop);
-      ctx.lineTo(topX + topW, segTop);
-      ctx.lineTo(botX + botW, segBot);
-      ctx.lineTo(botX, segBot);
+      ctx.moveTo(topEdge.left, segTop);
+      ctx.lineTo(topEdge.right, segTop);
+      ctx.lineTo(botEdge.right, segBot);
+      ctx.lineTo(botEdge.left, segBot);
       ctx.closePath();
       ctx.fill();
 
-      // Stroke
-      ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.7) : this._withAlpha(color, 0.45);
-      ctx.lineWidth = (isHolding ? 2 : 1.5) * scale;
-      ctx.stroke();
-      ctx.restore();
-
-      // Center glow line for this segment (no shadowBlur)
-      ctx.save();
-      ctx.globalAlpha = avgAlpha * (isHolding ? 0.4 : 0.2);
-      ctx.strokeStyle = isHolding ? '#ffffff' : this._withAlpha(color, 0.8);
-      ctx.lineWidth = (isHolding ? 4 : 2) * scale;
-      ctx.beginPath();
-      const topCx = topGeom.x + topGeom.width / 2;
-      const botCx = geom.x + geom.width / 2;
-      ctx.moveTo(topCx, segTop);
-      ctx.lineTo(botCx, segBot);
-      ctx.stroke();
       ctx.restore();
     }
-  }
 
-  /**
-   * Draw Project Sekai-style beat ticks along the hold note body.
-   * Small horizontal marks at each beat position, with brighter marks on whole beats.
-   * Ticks get wider near the judge line (perspective scaling) and are clipped to the lane.
-   */
-  _drawHoldTicks(note, laneCount, color, tailTime, headTime, currentTime, judgeLineY, bodyTop, bodyBottom, isHolding) {
-    const ctx = this.ctx;
-    const bpm = this._currentBpm || 120;
-    const beatInterval = 60 / bpm;
-    const halfBeatInterval = beatInterval / 2;
+    // ── 2. Draw continuous side edge borders (left + right lines only) ──
+    // This replaces per-segment strokes — eliminates horizontal stripes
+    const borderAlpha = isHolding ? 0.85 : 0.55;
+    const borderWidth = isHolding ? 2.5 : 1.5;
 
-    // Start from first beat after tail
-    const firstBeat = Math.ceil(tailTime / beatInterval) * beatInterval;
-
-    for (let t = firstBeat; t < headTime; t += halfBeatInterval) {
-      const y = this._noteY(t, currentTime, judgeLineY);
-      if (y < bodyTop || y > bodyBottom) continue;
-
-      const isWholeBeat = Math.abs((t / beatInterval) - Math.round(t / beatInterval)) < 0.01;
-
-      const geom = this._getLaneGeometry(note.lane, y, laneCount);
-      const scale = this._getNoteScale(y);
-      const pad = 3 * scale;
-
-      const tickW = geom.width - pad * 2;
-      const cx = geom.x + geom.width / 2;
-
-      // Fade alpha matching the body fade
-      const fadeIn = this._fadeIn(y, judgeLineY);
-      const fadeOut = this._fadeOut(y, judgeLineY);
-      const alpha = fadeIn * fadeOut;
-      if (alpha < 0.01) continue;
-
-      ctx.save();
-      if (isWholeBeat) {
-        // Whole beat: wider, brighter tick
-        ctx.globalAlpha = alpha * (isHolding ? 0.6 : 0.35);
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2 * scale;
-        ctx.beginPath();
-        ctx.moveTo(cx - tickW * 0.35, y);
-        ctx.lineTo(cx + tickW * 0.35, y);
-        ctx.stroke();
+    ctx.save();
+    // Left edge
+    ctx.beginPath();
+    const step = 4; // sub-pixel steps for smooth perspective curve
+    for (let y = topY; y <= bottomY; y += step) {
+      const edge = getEdgeX(y);
+      const fade = this._fadeIn(y, judgeLineY) * this._fadeOut(y, judgeLineY) * missAlpha;
+      if (fade < 0.005) continue;
+      if (y === topY) {
+        ctx.moveTo(edge.left, y);
       } else {
-        // Half beat: short, subtle tick
-        ctx.globalAlpha = alpha * (isHolding ? 0.35 : 0.18);
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1 * scale;
-        ctx.beginPath();
-        ctx.moveTo(cx - tickW * 0.18, y);
-        ctx.lineTo(cx + tickW * 0.18, y);
-        ctx.stroke();
+        ctx.lineTo(edge.left, y);
       }
-      ctx.restore();
+    }
+    // ensure we hit bottomY exactly
+    {
+      const edge = getEdgeX(bottomY);
+      ctx.lineTo(edge.left, bottomY);
+    }
+    ctx.strokeStyle = this._withAlpha(color, borderAlpha);
+    ctx.lineWidth = borderWidth;
+    ctx.globalAlpha = 1;
+    ctx.stroke();
+
+    // Right edge
+    ctx.beginPath();
+    for (let y = topY; y <= bottomY; y += step) {
+      const edge = getEdgeX(y);
+      const fade = this._fadeIn(y, judgeLineY) * this._fadeOut(y, judgeLineY) * missAlpha;
+      if (fade < 0.005) continue;
+      if (y === topY) {
+        ctx.moveTo(edge.right, y);
+      } else {
+        ctx.lineTo(edge.right, y);
+      }
+    }
+    {
+      const edge = getEdgeX(bottomY);
+      ctx.lineTo(edge.right, bottomY);
+    }
+    ctx.strokeStyle = this._withAlpha(color, borderAlpha);
+    ctx.lineWidth = borderWidth;
+    ctx.stroke();
+    ctx.restore();
+
+    // ── 3. Draw center ribbon (continuous bright spine) ──
+    ctx.save();
+    // Outer glow ribbon
+    ctx.beginPath();
+    for (let y = topY; y <= bottomY; y += step) {
+      const edge = getEdgeX(y);
+      const fade = this._fadeIn(y, judgeLineY) * this._fadeOut(y, judgeLineY) * missAlpha;
+      if (fade < 0.005) continue;
+      if (y === topY) {
+        ctx.moveTo(edge.cx, y);
+      } else {
+        ctx.lineTo(edge.cx, y);
+      }
+    }
+    {
+      const edge = getEdgeX(bottomY);
+      ctx.lineTo(edge.cx, bottomY);
+    }
+    ctx.strokeStyle = isHolding ? this._withAlpha(color, 0.5) : this._withAlpha(color, 0.25);
+    ctx.lineWidth = isHolding ? 8 : 4;
+    ctx.stroke();
+
+    // Inner bright spine
+    ctx.beginPath();
+    for (let y = topY; y <= bottomY; y += step) {
+      const edge = getEdgeX(y);
+      const fade = this._fadeIn(y, judgeLineY) * this._fadeOut(y, judgeLineY) * missAlpha;
+      if (fade < 0.005) continue;
+      if (y === topY) {
+        ctx.moveTo(edge.cx, y);
+      } else {
+        ctx.lineTo(edge.cx, y);
+      }
+    }
+    {
+      const edge = getEdgeX(bottomY);
+      ctx.lineTo(edge.cx, bottomY);
+    }
+    ctx.strokeStyle = isHolding ? '#ffffff' : this._withAlpha(color, 0.9);
+    ctx.lineWidth = isHolding ? 3 : 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // ── 4. Draw LN tick markers — prominent Project Sekai style ──
+    if (note.ticks && note.ticks.length > 0 && currentTime !== undefined) {
+      const judgeLineYLocal = this._getJudgeLineY();
+      for (let t = 0; t < note.ticks.length; t++) {
+        const tickTime = note.ticks[t];
+        const tickY = this._noteY(tickTime, currentTime, judgeLineYLocal);
+
+        if (tickY < topY - 2 || tickY > bottomY + 2) continue;
+
+        const tickFadeIn = this._fadeIn(tickY, judgeLineYLocal);
+        const tickFadeOut = this._fadeOut(tickY, judgeLineYLocal);
+        const tickAlpha = tickFadeIn * tickFadeOut * missAlpha;
+
+        if (tickAlpha < 0.01) continue;
+
+        const tickGeom = this._getLaneGeometry(note.lane, tickY, laneCount);
+        const tickScale = this._getNoteScale(tickY);
+        const tickPad = 5 * tickScale;
+        const cx = tickGeom.centerX;
+        const lineLeft = tickGeom.x + tickPad;
+        const lineRight = tickGeom.x + tickGeom.width - tickPad;
+
+        ctx.save();
+        ctx.globalAlpha = tickAlpha;
+
+        if (note._tickHit && note._tickHit[t]) {
+          // ── Hit tick: bright white flash ──
+          const ds = Math.max(6, 9 * tickScale);
+
+          // Bright horizontal line across body
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3 * tickScale;
+          ctx.globalAlpha = tickAlpha * 0.85;
+          ctx.beginPath();
+          ctx.moveTo(lineLeft, tickY);
+          ctx.lineTo(lineRight, tickY);
+          ctx.stroke();
+
+          // Diamond shape
+          ctx.fillStyle = '#ffffff';
+          ctx.globalAlpha = tickAlpha * 0.95;
+          ctx.beginPath();
+          ctx.moveTo(cx, tickY - ds);
+          ctx.lineTo(cx + ds, tickY);
+          ctx.lineTo(cx, tickY + ds);
+          ctx.lineTo(cx - ds, tickY);
+          ctx.closePath();
+          ctx.fill();
+        } else if (note._tickMissed && note._tickMissed[t]) {
+          // ── Missed tick: dim red ──
+          const ds = Math.max(5, 7 * tickScale);
+
+          // Red line
+          ctx.strokeStyle = 'rgba(255,60,60,0.6)';
+          ctx.lineWidth = 2 * tickScale;
+          ctx.globalAlpha = tickAlpha * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(lineLeft, tickY);
+          ctx.lineTo(lineRight, tickY);
+          ctx.stroke();
+
+          // Red diamond
+          ctx.fillStyle = 'rgba(255,60,60,0.7)';
+          ctx.globalAlpha = tickAlpha * 0.6;
+          ctx.beginPath();
+          ctx.moveTo(cx, tickY - ds);
+          ctx.lineTo(cx + ds, tickY);
+          ctx.lineTo(cx, tickY + ds);
+          ctx.lineTo(cx - ds, tickY);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          // ── Upcoming tick: prominent colored marker ──
+          const ds = Math.max(5, 8 * tickScale);
+
+          // Bright horizontal line across body — the main tick visual
+          ctx.strokeStyle = isHolding ? '#ffffff' : this._withAlpha(color, 0.8);
+          ctx.lineWidth = 2 * tickScale;
+          ctx.globalAlpha = tickAlpha * (isHolding ? 0.75 : 0.6);
+          ctx.beginPath();
+          ctx.moveTo(lineLeft, tickY);
+          ctx.lineTo(lineRight, tickY);
+          ctx.stroke();
+
+          // Diamond marker at center
+          ctx.fillStyle = isHolding ? '#ffffff' : color;
+          ctx.globalAlpha = tickAlpha * (isHolding ? 0.85 : 0.7);
+          ctx.beginPath();
+          ctx.moveTo(cx, tickY - ds);
+          ctx.lineTo(cx + ds, tickY);
+          ctx.lineTo(cx, tickY + ds);
+          ctx.lineTo(cx - ds, tickY);
+          ctx.closePath();
+          ctx.fill();
+
+          // Small glow around diamond
+          if (tickScale > 0.5) {
+            ctx.shadowColor = isHolding ? '#ffffff' : color;
+            ctx.shadowBlur = 6 * tickScale;
+            ctx.fillStyle = isHolding ? '#ffffff' : color;
+            ctx.globalAlpha = tickAlpha * 0.3;
+            ctx.beginPath();
+            ctx.moveTo(cx, tickY - ds);
+            ctx.lineTo(cx + ds, tickY);
+            ctx.lineTo(cx, tickY + ds);
+            ctx.lineTo(cx - ds, tickY);
+            ctx.closePath();
+            ctx.fill();
+            ctx.shadowBlur = 0;
+          }
+        }
+
+        ctx.restore();
+      }
     }
   }
 
@@ -1550,7 +1879,6 @@ export default class NoteRenderer {
     const ctx = this.ctx;
     const corners = this._getNoteCorners(laneIndex, y, laneCount);
     const r = Math.max(2, 8 * corners.scale);
-    const kiai = this._kiaiIntensity;
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -1558,26 +1886,15 @@ export default class NoteRenderer {
     this._drawPerspectiveRoundRect(ctx, corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y, corners.br.x, corners.br.y, corners.bl.x, corners.bl.y, r);
     ctx.fill();
 
-    // Glow via pre-rendered sprite
+    // Subtle base glow — kiai glow is now drawn separately BEFORE notes via _drawKiaiNoteGlow
     const glowSprite = this._getGlowSprite(color);
     if (glowSprite) {
-      const gs = Math.max(corners.width, corners.height) * 1.2 * corners.scale;
+      const gs = Math.max(corners.width, corners.height) * 1.0 * corners.scale;
       ctx.globalAlpha = alpha * 0.06;
       ctx.drawImage(glowSprite, corners.centerX - gs / 2, y - gs / 2, gs, gs);
-
-      // Kiai glow on hold caps — soft volumetric color halo
-      if (kiai > 0.01) {
-        const kiaiPulse = 0.85 + this._kiaiSmoothPulse * 0.15;
-        const bloomSize = gs * (2.3 + kiai * 0.7) * kiaiPulse;
-        ctx.globalAlpha = alpha * 0.05 * kiai * kiaiPulse;
-        ctx.drawImage(glowSprite, corners.centerX - bloomSize / 2, y - bloomSize / 2, bloomSize, bloomSize);
-
-        const midSize = gs * (1.5 + kiai * 0.3) * kiaiPulse;
-        ctx.globalAlpha = alpha * 0.08 * kiai * kiaiPulse;
-        ctx.drawImage(glowSprite, corners.centerX - midSize / 2, y - midSize / 2, midSize, midSize);
-      }
       ctx.globalAlpha = alpha;
     }
+
     const grad = ctx.createLinearGradient(corners.centerX, corners.tl.y, corners.centerX, corners.bl.y);
     grad.addColorStop(0, 'rgba(255,255,255,0.35)');
     grad.addColorStop(0.35, 'rgba(255,255,255,0)');
@@ -1678,6 +1995,68 @@ export default class NoteRenderer {
     }
   }
 
+  /* ── LN Tick Hit Effects — small colored ring flash at judge line on tick ── */
+
+  _drawTickEffects(delta) {
+    if (this._tickEffectCount === 0) return;
+    const ctx = this.ctx;
+    const STRIDE = 8; // [centerX, y, width, life, maxLife, r, g, b]
+
+    let write = 0;
+    for (let i = 0; i < this._tickEffectCount; i++) {
+      const base = i * STRIDE;
+      this._tickEffectPool[base + 3] -= delta; // life
+      if (this._tickEffectPool[base + 3] <= 0) continue;
+      if (write !== i) {
+        for (let j = 0; j < STRIDE; j++) this._tickEffectPool[write * STRIDE + j] = this._tickEffectPool[base + j];
+      }
+      write++;
+    }
+    this._tickEffectCount = write;
+    if (write === 0) return;
+
+    for (let i = 0; i < write; i++) {
+      const base = i * STRIDE;
+      const cx = this._tickEffectPool[base];       // center x
+      const y = this._tickEffectPool[base + 1];     // y
+      const w = this._tickEffectPool[base + 2];     // width
+      const life = this._tickEffectPool[base + 3];
+      const maxLife = this._tickEffectPool[base + 4];
+      const r = Math.round(this._tickEffectPool[base + 5]);
+      const g = Math.round(this._tickEffectPool[base + 6]);
+      const b = Math.round(this._tickEffectPool[base + 7]);
+      const ratio = life / maxLife;
+
+      // Expanding ring effect — like hitting a note but smaller
+      const expandProgress = 1 - ratio;
+      const ringW = w * (0.5 + expandProgress * 0.6);
+      const ringH = 6 + expandProgress * 10;
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+
+      // Colored glow ring
+      ctx.globalAlpha = ratio * 0.5;
+      const grad = ctx.createLinearGradient(0, y - ringH, 0, y + ringH);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+      grad.addColorStop(0.3, `rgba(${r},${g},${b},${ratio * 0.4})`);
+      grad.addColorStop(0.5, `rgba(${r},${g},${b},${ratio * 0.7})`);
+      grad.addColorStop(0.7, `rgba(${r},${g},${b},${ratio * 0.4})`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(cx - ringW / 2, y - ringH, ringW, ringH * 2);
+
+      // White center flash
+      ctx.globalAlpha = ratio * 0.6;
+      const coreW = w * 0.5;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx - coreW / 2, y - 2, coreW, 4);
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.restore();
+    }
+  }
+
   /* ── HP Bar — perspective trapezoid ─ */
 
   _drawHPBar(laneCount) {
@@ -1688,7 +2067,8 @@ export default class NoteRenderer {
     const gfx = this._gfx();
 
     const barGap = 6;
-    const baseBarWidth = 16;
+    const baseBarWidth = 20;
+    const backPad = 4; // padding for backing around the bar
 
     const barTopY = sa.y + sa.h * 0.46;
     const barBotY = judgeLineY;
@@ -1706,7 +2086,31 @@ export default class NoteRenderer {
 
     ctx.save();
 
-    // Background bar
+    // ── Backing: black semi-transparent panel with rounded perspective shape ──
+    // Slightly wider than the bar to create a visible underlay
+    const bkPadTop = backPad * topScale;
+    const bkPadBot = backPad;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    ctx.moveTo(topBarX - bkPadTop, barTopY - bkPadTop);
+    ctx.lineTo(topBarX + topBarWidth + bkPadTop, barTopY - bkPadTop);
+    ctx.lineTo(botBarX + botBarWidth + bkPadBot, barBotY + bkPadBot);
+    ctx.lineTo(botBarX - bkPadBot, barBotY + bkPadBot);
+    ctx.closePath();
+    ctx.fill();
+
+    // Subtle inner border on the backing
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(topBarX - bkPadTop, barTopY - bkPadTop);
+    ctx.lineTo(topBarX + topBarWidth + bkPadTop, barTopY - bkPadTop);
+    ctx.lineTo(botBarX + botBarWidth + bkPadBot, barBotY + bkPadBot);
+    ctx.lineTo(botBarX - bkPadBot, barBotY + bkPadBot);
+    ctx.closePath();
+    ctx.stroke();
+
+    // ── Background bar (inside backing) ──
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.beginPath();
     ctx.moveTo(topBarX, barTopY);
@@ -1716,18 +2120,7 @@ export default class NoteRenderer {
     ctx.closePath();
     ctx.fill();
 
-    // Border
-    ctx.strokeStyle = 'rgba(170,255,0,0.12)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(topBarX, barTopY);
-    ctx.lineTo(topBarX + topBarWidth, barTopY);
-    ctx.lineTo(botBarX + botBarWidth, barBotY);
-    ctx.lineTo(botBarX, barBotY);
-    ctx.closePath();
-    ctx.stroke();
-
-    // Health fill
+    // ── Health fill with glow ──
     const fillRatio = health / 100;
     if (fillRatio > 0) {
       const fillTopY = barBotY - (barBotY - barTopY) * fillRatio;
@@ -1748,6 +2141,10 @@ export default class NoteRenderer {
         glowColor = '#AAFF00';
       }
 
+      // Glow behind the fill
+      ctx.save();
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 12;
       ctx.fillStyle = fillColor;
       ctx.beginPath();
       ctx.moveTo(fillTopBarX, fillTopY);
@@ -1756,6 +2153,27 @@ export default class NoteRenderer {
       ctx.lineTo(botBarX, barBotY);
       ctx.closePath();
       ctx.fill();
+      ctx.restore();
+
+      // Solid fill on top
+      ctx.fillStyle = fillColor;
+      ctx.beginPath();
+      ctx.moveTo(fillTopBarX, fillTopY);
+      ctx.lineTo(fillTopBarX + fillTopBarWidth, fillTopY);
+      ctx.lineTo(botBarX + botBarWidth, barBotY);
+      ctx.lineTo(botBarX, barBotY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Bright top edge highlight
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(fillTopBarX, fillTopY);
+      ctx.lineTo(fillTopBarX + fillTopBarWidth, fillTopY);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     ctx.restore();
@@ -1826,6 +2244,17 @@ export default class NoteRenderer {
 
   _drawEffects() {
     if (this._graphicsPreset === 'low') return;
+    if (this._useSekaiEffects) {
+      this._drawEffectsSekai();
+    } else {
+      this._drawEffectsLegacy();
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     LEGACY EFFECTS — kept as fallback (set _useSekaiEffects = false)
+     ══════════════════════════════════════════════════════════════════ */
+  _drawEffectsLegacy() {
     const ctx = this.ctx;
     const gfx = this._gfx();
     const delta = this._frameDelta || 0.016;
@@ -1947,6 +2376,113 @@ export default class NoteRenderer {
           }
           ctx.restore();
         }
+      }
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     PROJECT SEKAI STYLE HIT EFFECTS
+     - Sharp diamond-star burst particles
+     - Focused bright flash (not blurry bloom)
+     - Color-coded by judgement quality
+     - Lane-shaped perspective flash
+     ══════════════════════════════════════════════════════════════════ */
+  _drawEffectsSekai() {
+    const ctx = this.ctx;
+    const delta = this._frameDelta || 0.016;
+
+    for (const e of this._effectsPool) {
+      if (!e.active) continue;
+      e.age += delta;
+      const dur = 0.35;
+      const p = e.age / dur;
+      if (p >= 1) { e.active = false; continue; }
+
+      const easeOut = 1 - (1 - p) * (1 - p);
+      const fade = 1 - p * p;
+      const isPerfect = e.type === 'perfect';
+      const isGreat = e.type === 'great';
+      const sprite = this._getGlowSprite(e.color);
+
+      // ── Layer 1: Sharp white flash at center (fast, bright, focused) ──
+      if (p < 0.2) {
+        const flashP = p / 0.2;
+        const flashSize = isPerfect ? 60 : isGreat ? 45 : 30;
+        const fSize = flashSize * (1 - flashP * 0.5);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = (1 - flashP) * (isPerfect ? 0.9 : 0.7);
+        if (this._whiteGlow) {
+          ctx.drawImage(this._whiteGlow, e.x - fSize, e.y - fSize, fSize * 2, fSize * 2);
+        }
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.restore();
+      }
+
+      // ── Layer 2: Focused color glow (tight, not blurry) ──
+      {
+        const glowSize = (isPerfect ? 50 : isGreat ? 40 : 25) * easeOut;
+        ctx.save();
+        ctx.globalAlpha = fade * 0.4;
+        ctx.drawImage(sprite, e.x - glowSize, e.y - glowSize, glowSize * 2, glowSize * 2);
+        ctx.restore();
+      }
+
+      // ── Layer 3: Diamond-star burst particles ──
+      if (e.sekaiParticles && e.sekaiParticles.length > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        for (const pt of e.sekaiParticles) {
+          const dP = Math.min(1, e.age / pt.life);
+          if (dP >= 1) continue;
+
+          const dist = pt.speed * easeOut;
+          const px = e.x + Math.cos(pt.angle) * dist;
+          const py = e.y + Math.sin(pt.angle) * dist;
+          const sz = pt.size * (1 - dP * 0.6);
+          const alpha = fade * (1 - dP) * 0.85;
+
+          // Rotating diamond shape
+          const rot = pt.rotation + pt.rotSpeed * e.age;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(rot);
+          ctx.globalAlpha = alpha;
+
+          // White diamond
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(0, -sz);
+          ctx.lineTo(sz * 0.4, 0);
+          ctx.lineTo(0, sz);
+          ctx.lineTo(-sz * 0.4, 0);
+          ctx.closePath();
+          ctx.fill();
+
+          // Color glow halo
+          const haloSz = sz * 3;
+          ctx.globalAlpha = alpha * 0.4;
+          ctx.drawImage(sprite, -haloSz, -haloSz, haloSz * 2, haloSz * 2);
+
+          ctx.restore();
+        }
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.restore();
+      }
+
+      // ── Layer 4: Thin expanding ring (sharp, not thick) ──
+      {
+        const ringR = (isPerfect ? 80 : isGreat ? 60 : 35) * easeOut;
+        ctx.save();
+        ctx.globalAlpha = fade * 0.3;
+        ctx.strokeStyle = e.color;
+        ctx.lineWidth = Math.max(0.5, 1.5 * (1 - p));
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       }
     }
   }

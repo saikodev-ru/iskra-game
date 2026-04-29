@@ -122,6 +122,11 @@ export default class Settings {
         <div class="zzz-label" style="margin-bottom:8px;">KEY BINDINGS (4-KEY)</div>
         <div id="keybinds" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
       </div>
+      <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--zzz-graphite);">
+        <div class="zzz-label" style="margin-bottom:8px;color:var(--zzz-red);">DATA</div>
+        <button id="settings-delete-all-charts" class="zzz-btn" style="width:100%;border-color:var(--zzz-red);color:var(--zzz-red);font-size:12px;padding:10px 16px;">DELETE ALL CHARTS</button>
+        <div style="font-size:9px;color:var(--zzz-muted);margin-top:4px;font-family:var(--zzz-mono);">Removes all imported beatmaps from storage</div>
+      </div>
     `;
   }
 
@@ -196,6 +201,10 @@ export default class Settings {
     });
 
     this._renderKeybinds();
+
+    // Delete all charts button
+    const deleteAllBtn = document.getElementById('settings-delete-all-charts');
+    if (deleteAllBtn) deleteAllBtn.addEventListener('click', () => this._deleteAllCharts());
 
     // Overlay close handlers — ONLY attach when NOT in pause context
     // (pause context sets _onClose before init(), main menu context does not)
@@ -364,6 +373,49 @@ export default class Settings {
     localStorage.setItem('rhythm-os-quick-restart-key', code);
     this._rebindingQR = false;
     this._updateQRKeyBtn();
+  }
+
+  async _deleteAllCharts() {
+    // Confirmation dialog
+    const confirmed = window.confirm('DELETE ALL CHARTS?\n\nThis will permanently remove all imported beatmaps. This cannot be undone.');
+    if (!confirmed) return;
+
+    const btn = document.getElementById('settings-delete-all-charts');
+    if (btn) {
+      btn.textContent = 'DELETING...';
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+    }
+
+    try {
+      const { BeatmapStore } = await import('../../game/OszLoader.js');
+      await BeatmapStore.deleteAll([]);
+      // Emit event so SongSelect clears its in-memory data
+      EventBus.emit('charts:all-deleted');
+      if (btn) {
+        btn.textContent = 'ALL CHARTS DELETED';
+        btn.style.borderColor = '#22c55e';
+        btn.style.color = '#22c55e';
+      }
+    } catch (err) {
+      console.error('[Settings] Failed to delete all charts:', err);
+      if (btn) {
+        btn.textContent = 'DELETE FAILED';
+        btn.style.borderColor = 'var(--zzz-red)';
+        btn.style.color = 'var(--zzz-red)';
+      }
+    }
+
+    // Reset button after 3 seconds
+    setTimeout(() => {
+      if (btn) {
+        btn.textContent = 'DELETE ALL CHARTS';
+        btn.disabled = false;
+        btn.style.opacity = '';
+        btn.style.borderColor = 'var(--zzz-red)';
+        btn.style.color = 'var(--zzz-red)';
+      }
+    }, 3000);
   }
 
   destroy() {

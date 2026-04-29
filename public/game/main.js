@@ -175,18 +175,19 @@ async function boot() {
     } else if (key === 'bgDim') {
       noteRenderer.setBackgroundDim(value);
     } else if (key === 'parallax') {
-      // Update parallax elements' multiplier — ZZZTheme reads localStorage dynamically
+      // Update parallax elements — ZZZTheme reads localStorage dynamically per frame
+      // but we need to immediately reset transforms when turning off
       if (ZZZTheme._parallaxEls) {
-        const mult = value === 'off' ? 0 : value === 'strong' ? 2.0 : 1.0;
-        ZZZTheme._parallaxEls.forEach(el => {
-          if (value === 'off') el.style.transform = '';
-        });
+        if (value === 'off') {
+          ZZZTheme._parallaxEls.forEach(el => { el.style.transform = ''; });
+        }
       }
+      // ThreeScene reads localStorage dynamically in render loop, no extra action needed
     }
   });
 
   const startGame = (map) => {
-    if (gameActive) { _skipResult = true; endGame(); }
+    if (gameActive) { _skipResult = true; _quitGame = true; endGame(); }
     _dying = false;
     if (_deathTimeout) { clearTimeout(_deathTimeout); _deathTimeout = null; }
     GameCursor.hide(); // Hide cursor during gameplay
@@ -250,6 +251,12 @@ async function boot() {
     // Hide screen container during gameplay — prevents stale menu overlays from showing
     const screenContainer = document.getElementById('screen');
     if (screenContainer) { screenContainer.style.opacity = '0'; screenContainer.style.visibility = 'hidden'; }
+
+    // Kill any lingering SongSelect preview timers (e.g. _previewStopTimeout from _stopPreview)
+    // This prevents the timeout from firing after game audio starts and killing it
+    if (_songSelectInstance) {
+      _songSelectInstance._killPreviewTimers();
+    }
 
     // Clear previous background state
     noteRenderer.clearBackground();
@@ -347,6 +354,20 @@ async function boot() {
     };
     const comboBreakHandler = ({ combo }) => { judgementDisplay.showComboBreak(combo); };
 
+    // LN tick handlers — visual + audio feedback for hold note ticks
+    const tickHandler = ({ note, tickTime, tickIndex }) => {
+      if (!gameActive || _inCountdown) return;
+      // Tick hit effect — like pressing a note but subtler
+      noteRenderer.addTickEffect(note.lane, currentLaneCount);
+      // Quiet tick hitsound
+      if (hitSounds) hitSounds.tick();
+    };
+    const tickMissHandler = ({ note, tickTime, tickIndex }) => {
+      if (!gameActive || _inCountdown) return;
+      // Missed tick — subtle red flash
+      noteRenderer.addMissFlash(note.lane, currentLaneCount);
+    };
+
     // Kiai beat pulse: on each beat during kiai, trigger a visual pulse on the renderer
     const kiaiBeatHandler = ({ kickBased } = {}) => {
       if (!gameActive || !currentBeatMap) return;
@@ -388,6 +409,8 @@ async function boot() {
     EventBus.on('note:miss', missHandler);
     EventBus.on('note:sliderbreak', sliderBreakHandler);
     EventBus.on('combo:break', comboBreakHandler);
+    EventBus.on('note:tick', tickHandler);
+    EventBus.on('note:tickmiss', tickMissHandler);
     EventBus.on('beat:pulse', kiaiBeatHandler);
 
     hud.show();
@@ -433,6 +456,7 @@ async function boot() {
 
         _updateQuickRestart();
         currentJudgement.checkMisses(ct);
+        currentJudgement.checkTicks(ct);
         // osu!mania HP drain: tick per frame
         currentJudgement.tickHP(delta);
         const stats = currentJudgement.getStats();
@@ -479,16 +503,13 @@ async function boot() {
           // After music finishes slowing, show pause menu (no continue button)
           _deathTimeout = setTimeout(() => {
             _deathTimeout = null;
-            // Reset death visual state before showing pause menu
+            // Keep red death visual state when showing pause menu (don't clear dying classes)
+            // The red death overlay and dying classes persist so the game over screen
+            // shows the dramatic red effect. They will be cleaned up by endGame().
             _dying = false;
-            const deathOverlay = document.getElementById('death-overlay');
-            if (deathOverlay) deathOverlay.remove();
-            const gcEl = document.getElementById('game');
-            const tcEl = document.getElementById('three');
-            if (gcEl) gcEl.classList.remove('dying');
-            if (tcEl) tcEl.classList.remove('dying');
-            // Show pause menu without Continue button (mark as quit so result not saved)
-            _quitGame = true;
+            // Show pause menu without Continue button
+            // DON'T set _quitGame = true — death is a normal game completion, not a quit.
+            // The result should be saved with the "died" flag.
             pauseGame({ noResume: true });
           }, 2800);
         }
@@ -515,6 +536,8 @@ async function boot() {
       EventBus.off('note:miss', missHandler);
       EventBus.off('note:sliderbreak', sliderBreakHandler);
       EventBus.off('combo:break', comboBreakHandler);
+      EventBus.off('note:tick', tickHandler);
+      EventBus.off('note:tickmiss', tickMissHandler);
       EventBus.off('beat:pulse', kiaiBeatHandler);
     };
   };
@@ -531,6 +554,22 @@ async function boot() {
     _removeQuickRestartOverlay();
     gameActive = false;
     input.disable();
+
+    // ── Memory cleanup: release the shifted AudioBuffer (lead-in buffer) ──
+    // This is a copy of the original audio with 1s silence prepended,
+    // and can be ~85MB per song. Free it to prevent memory buildup.
+    if (currentBeatMap && currentBeatMap.audioBuffer) {
+      currentBeatMap.audioBuffer = null;
+    }
+    // Also evict the AudioBuffer from currentMapData so SongSelect
+    // can reload it on-demand from IndexedDB (prevents RAM accumulation)
+    if (currentMapData && currentMapData.audioBuffer) {
+      currentMapData.audioBuffer = null;
+    }
+    // Release AudioEngine's internal buffer reference (~85MB lead-in buffer)
+    audio.releaseBuffer();
+    // Also release kick times array
+    _kickTimes = [];
     // Cancel pending death timeout (if endGame was called manually before timeout fired)
     if (_deathTimeout) { clearTimeout(_deathTimeout); _deathTimeout = null; }
     // Remove overlays
@@ -563,8 +602,14 @@ async function boot() {
     three.showBgMesh(); // Restore dark gradient bg mesh for menus
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
-    // Save result ONLY if the game was played to completion (song end / death), not on quit
-    if (!_quitGame && currentMapData && stats) {
+    // Save result ONLY if the game was played to completion (song end / death), not on quit.
+    // Extra safeguard: also require minimum progress (>10% of song) to prevent saving
+    // results from accidental starts or very early quits.
+    const audioDuration = currentMapData?.audioBuffer ? currentMapData.audioBuffer.duration : 0;
+    const gameTime = audio.currentTime;
+    const minProgress = audioDuration > 0 ? gameTime / audioDuration : 0;
+    const playedToCompletion = !_quitGame && currentMapData && stats && minProgress > 0.1;
+    if (playedToCompletion) {
       try {
         const setId = currentMapData.metadata?.setId || currentMapData.metadata?.title || '';
         const diffVersion = currentMapData.metadata?.version || '';
@@ -577,13 +622,20 @@ async function boot() {
     if (screenEl) { screenEl.style.opacity = ''; screenEl.style.visibility = ''; }
     GameCursor.show(); // Show custom cursor back on menus
     EventBus.emit('game:over', stats);
+    // ── Memory: release game state objects after result screen references are set ──
+    // currentMapData is still needed by the result screen, so defer cleanup
+    const _mapDataForResult = currentMapData;
+    currentBeatMap = null;
+    currentJudgement = null;
     // Use a small delay to ensure ScreenManager transition completes
     // and avoid race conditions with the game loop's requestAnimationFrame
     requestAnimationFrame(() => {
       _endingGame = false;
       // If restart was triggered, skip showing the result screen
-      if (_skipResult) { _skipResult = false; return; }
-      screens.show('result', { stats, map: currentMapData });
+      if (_skipResult) { _skipResult = false; currentMapData = null; return; }
+      screens.show('result', { stats, map: _mapDataForResult });
+      // Release mapData after result screen has copied what it needs
+      setTimeout(() => { currentMapData = null; }, 5000);
     });
     // Safety: ensure death timeout is always cleared (belt-and-suspenders)
     if (_deathTimeout) { clearTimeout(_deathTimeout); _deathTimeout = null; }
@@ -595,10 +647,30 @@ async function boot() {
   const pauseGame = (opts = {}) => {
     if (!gameActive) return;
     gameActive = false;
+    // Save audio position BEFORE stopping, so resumeGame() can restore it
+    const savedPosition = audio.currentTime;
     audio.pause();
+    audio.stopBeatScheduler();
     if (gameLoop) gameLoop.stop();
     three.pauseVideo();
     hud.freeze(); // Stop score/combo animation while paused
+
+    // Kill any lingering SongSelect preview timers and stop preview audio.
+    // This is critical: the _previewInterval can restart audio via
+    // audio.play() even after audio.pause(), so we must clear all timers
+    // AND forcibly stop the audio engine to prevent any residual playback.
+    if (_songSelectInstance) {
+      _songSelectInstance._killPreviewTimers();
+    }
+    // Force-stop after killing timers to catch any edge case where
+    // a timer fired between pause() and _killPreviewTimers()
+    audio.stop();
+
+    // Ensure resumeGame() will restore from the correct position
+    // (audio.stop() doesn't clear _pausedAt, but just in case)
+    if (!audio._pausedAt || audio._pausedAt <= 0) {
+      audio._pausedAt = savedPosition;
+    }
 
     const { noResume = false } = opts;
     const sa = calcSafeArea();
@@ -625,9 +697,9 @@ async function boot() {
     if (!noResume) {
       document.getElementById('resume-btn').addEventListener('click', () => { _closePause(); resumeGame(); });
     }
-    document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); startGame(currentMapData); });
+    document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = !_deadPause; endGame(); startGame(currentMapData); });
     document.getElementById('settings-btn').addEventListener('click', () => { _openPauseSettings(); });
-    document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = true; endGame(); screens.show('song-select'); });
+    document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = !_deadPause; endGame(); screens.show('song-select'); });
     EventBus.emit('game:pause');
   };
 
@@ -952,7 +1024,7 @@ async function boot() {
       _volumeOverlay.remove();
       _volumeOverlay = null;
     }
-    _volumeHideTimer && clearTimeout(_volumeHideTimer);
+    if (_volumeHideTimer) clearTimeout(_volumeHideTimer);
     const sa = calcSafeArea();
     // Master knob is larger than the others
     const masterSz = Math.min(100, Math.floor(sa.w * 0.10));
@@ -1051,7 +1123,7 @@ async function boot() {
     if (!_volumeOverlay) _showVol(id);
     else {
       _hlKnob(id);
-      _volumeHideTimer && clearTimeout(_volumeHideTimer);
+      if (_volumeHideTimer) clearTimeout(_volumeHideTimer);
       _volumeHideTimer = setTimeout(_hideVol, 2200);
     }
     _updKnob(id, nv);
@@ -1191,6 +1263,7 @@ async function boot() {
       return _songSelectInstance;
     }
     _songSelectInstance = new SongSelect({ audio, three, screens });
+    _songSelectInstance._isGameActive = () => gameActive || _pauseOverlay !== null;
     return _songSelectInstance;
   });
   screens.register('settings', () => new Settings({ audio, input, screens, overlayMode: true }));

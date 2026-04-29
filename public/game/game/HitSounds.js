@@ -66,6 +66,10 @@ export default class HitSounds {
     const g = this._ctx.createGain();
     g.connect(this._masterGain);
     fn(g);
+    // ── Memory: auto-disconnect GainNode after sound finishes ──
+    // Without this, hundreds of orphaned GainNodes accumulate in the
+    // Web Audio graph across a song session (1000+ keypresses).
+    setTimeout(() => { try { g.disconnect(); } catch(_) {} }, 3000);
   }
 
   /** Play a preloaded buffer if available */
@@ -83,6 +87,9 @@ export default class HitSounds {
     src.buffer = buf;
     src.connect(g);
     src.start();
+    // ── Memory: auto-disconnect GainNode after sound finishes ──
+    const dur = buf.duration;
+    setTimeout(() => { try { g.disconnect(); } catch(_) {} }, (dur + 0.1) * 1000);
     return true;
   }
 
@@ -168,6 +175,29 @@ export default class HitSounds {
       filt.type = 'bandpass'; filt.frequency.value = 6000; filt.Q.value = 1.0;
       src.connect(filt); filt.connect(g);
       g.gain.setValueAtTime(0.6, this._ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
+      src.start(); src.stop(this._ctx.currentTime + dur);
+    });
+  }
+
+  /** LN tick hit — quiet, subtle sound like a soft note press.
+   *  Uses the tap sound at lower volume, with a synthesized softer fallback. */
+  tick() {
+    if (this._playBuffer('tap', 0.35)) return;
+    // Synthesized fallback — very soft short tick
+    this._play(g => {
+      const dur = 0.025;
+      const buf = this._ctx.createBuffer(1, this._ctx.sampleRate * dur, this._ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 7) * 0.2;
+      }
+      const src = this._ctx.createBufferSource();
+      src.buffer = buf;
+      const filt = this._ctx.createBiquadFilter();
+      filt.type = 'highpass'; filt.frequency.value = 8000;
+      src.connect(filt); filt.connect(g);
+      g.gain.setValueAtTime(0.25, this._ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + dur);
       src.start(); src.stop(this._ctx.currentTime + dur);
     });

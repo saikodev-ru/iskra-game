@@ -5,7 +5,7 @@ import DifficultyAnalyzer from './DifficultyAnalyzer.js';
 class BeatmapStore {
   static DB_NAME = 'rhythm-os-db';
   static STORE_NAME = 'beatmaps';
-  static DB_VERSION = 5; // v5: bump to clear old AVI video data
+  static DB_VERSION = 6; // v6: strip videoData from IndexedDB to save memory
 
   /** Open (or create) the database */
   static async open() {
@@ -36,6 +36,30 @@ class BeatmapStore {
             console.log('[BeatmapStore] Cleared cached beatmaps (v5 migration: AVI video fix + note conflict resolution)');
           } catch (err) {
             console.warn('[BeatmapStore] v5 migration clear failed:', err);
+          }
+        }
+        // v5→v6: strip videoData from stored beatmaps to save memory
+        // Video files can be 50-200MB each and are not needed in IndexedDB
+        if (e.oldVersion < 6 && e.oldVersion > 0) {
+          try {
+            const tx = e.target.transaction;
+            const store = tx.objectStore(BeatmapStore.STORE_NAME);
+            const request = store.openCursor();
+            request.onsuccess = (event) => {
+              const cursor = event.target.result;
+              if (cursor) {
+                const entry = cursor.value;
+                if (entry.videoData) {
+                  delete entry.videoData;
+                  delete entry.videoMime;
+                  cursor.update(entry);
+                }
+                cursor.continue();
+              }
+            };
+            console.log('[BeatmapStore] Stripping videoData from stored beatmaps (v6 migration: memory optimization)');
+          } catch (err) {
+            console.warn('[BeatmapStore] v6 migration strip failed:', err);
           }
         }
       };
@@ -95,7 +119,26 @@ class BeatmapStore {
 
       // Deep-clone the difficulties array to avoid mutating original
       // (notes arrays etc. may have typed arrays inside)
-      storable.difficulties = JSON.parse(JSON.stringify(storable.difficulties));
+      // Also serialize per-difficulty AudioBuffers (some maps have different audio per diff)
+      storable.difficulties = storable.difficulties.map(diff => {
+        const clone = { ...diff };
+        if (clone.audioBuffer instanceof AudioBuffer) {
+          clone.audioBuffer = BeatmapStore._serializeAudioBuffer(clone.audioBuffer);
+          clone._hasDiffAudioBuffer = true;
+        }
+        // Deep-clone notes and other nested arrays
+        clone.notes = JSON.parse(JSON.stringify(clone.notes || []));
+        clone.bpmChanges = JSON.parse(JSON.stringify(clone.bpmChanges || []));
+        clone.kiaiSections = JSON.parse(JSON.stringify(clone.kiaiSections || []));
+        return clone;
+      });
+
+      // STRIP videoData from stored object — videos can be 50-200MB each
+      // and cause massive memory usage when loaded from IndexedDB.
+      // videoUrl (blob: URL) is session-only and will be reconstructed from backgroundData.
+      // If the user wants the video back, they can re-download the map.
+      delete storable.videoData;
+      delete storable.videoMime;
 
       // backgroundData (Uint8Array) and backgroundMime (string) are
       // structured-clone compatible, so they survive IndexedDB put() natively.
@@ -109,6 +152,8 @@ class BeatmapStore {
 
   /**
    * Load all stored beatmap sets, reconstructing AudioBuffers and backgroundUrls.
+   * WARNING: This loads ALL AudioBuffers into memory at once — can use GBs of RAM!
+   * Use loadAllMetadata() instead for the song list, and loadAudioBuffer() on demand.
    */
   static async loadAll(audioCtx) {
     const db = await BeatmapStore.open();
@@ -128,7 +173,7 @@ class BeatmapStore {
     }
 
     const results = raw.map((entry) => {
-      // Reconstruct AudioBuffer
+      // Reconstruct AudioBuffer (set-level)
       if (entry._hasAudioBuffer && entry.audioBuffer?.sampleRate && entry.audioBuffer?.channelData) {
         try {
           entry.audioBuffer = BeatmapStore._deserializeAudioBuffer(ctx, entry.audioBuffer);
@@ -138,44 +183,22 @@ class BeatmapStore {
         }
       }
 
-      // Reconstruct backgroundUrl from backgroundData
-      // Blob URLs are session-only and die on reload, so we always recreate them
-      if (entry.backgroundData && entry.backgroundMime) {
-        try {
-          // backgroundData may be a Uint8Array (v2) or a plain object from old JSON serialization
-          let data = entry.backgroundData;
-          if (!(data instanceof Uint8Array)) {
-            // Old format: JSON-serialized Uint8Array → plain object like {"0": 255, ...}
-            const keys = Object.keys(data).map(Number).sort((a, b) => a - b);
-            const arr = new Uint8Array(keys.length);
-            keys.forEach(k => { arr[k] = data[k]; });
-            data = arr;
+      // Reconstruct per-difficulty AudioBuffers (for maps with different audio per diff)
+      if (entry.difficulties && Array.isArray(entry.difficulties)) {
+        for (const diff of entry.difficulties) {
+          if (diff._hasDiffAudioBuffer && diff.audioBuffer?.sampleRate && diff.audioBuffer?.channelData) {
+            try {
+              diff.audioBuffer = BeatmapStore._deserializeAudioBuffer(ctx, diff.audioBuffer);
+            } catch (err) {
+              console.warn(`Failed to reconstruct diff AudioBuffer for ${entry.id}:`, err);
+              diff.audioBuffer = null;
+            }
           }
-          const blob = new Blob([data], { type: entry.backgroundMime });
-          entry.backgroundUrl = URL.createObjectURL(blob);
-        } catch (err) {
-          console.warn(`Failed to reconstruct backgroundUrl for ${entry.id}:`, err);
-          entry.backgroundUrl = null;
         }
       }
 
-      // Reconstruct videoUrl from videoData
-      if (entry.videoData && entry.videoMime) {
-        try {
-          let data = entry.videoData;
-          if (!(data instanceof Uint8Array)) {
-            const keys = Object.keys(data).map(Number).sort((a, b) => a - b);
-            const arr = new Uint8Array(keys.length);
-            keys.forEach(k => { arr[k] = data[k]; });
-            data = arr;
-          }
-          const blob = new Blob([data], { type: entry.videoMime });
-          entry.videoUrl = URL.createObjectURL(blob);
-        } catch (err) {
-          console.warn(`Failed to reconstruct videoUrl for ${entry.id}:`, err);
-          entry.videoUrl = null;
-        }
-      }
+      // Reconstruct backgroundUrl from backgroundData
+      BeatmapStore._reconstructBlobUrls(entry);
 
       return entry;
     });
@@ -185,6 +208,133 @@ class BeatmapStore {
     }
 
     return results;
+  }
+
+  /**
+   * Load all stored beatmap sets as METADATA ONLY — no AudioBuffers decoded.
+   * This is the memory-efficient way to load the song list.
+   * AudioBuffers should be loaded on-demand via loadAudioBuffer().
+   * Background URLs are reconstructed from stored image data.
+   */
+  static async loadAllMetadata() {
+    const db = await BeatmapStore.open();
+    const raw = await new Promise((resolve, reject) => {
+      const tx = db.transaction(BeatmapStore.STORE_NAME, 'readonly');
+      const store = tx.objectStore(BeatmapStore.STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    const results = raw.map((entry) => {
+      // Mark that this entry HAS an AudioBuffer available but don't decode it
+      // entry._hasAudioBuffer is already true/false
+      if (entry._hasAudioBuffer && entry.audioBuffer) {
+        entry._audioBufferNeedsDecode = true;
+        // CRITICAL: Strip serialized PCM channelData from memory!
+        // Each song's channelData can be 30-80MB of Float32Array buffers.
+        // Keeping them all in memory causes OOM (8GB+ RAM usage).
+        // The data remains in IndexedDB and is loaded on-demand via loadAudioBuffer().
+        if (entry.audioBuffer.channelData) {
+          for (let i = 0; i < entry.audioBuffer.channelData.length; i++) {
+            entry.audioBuffer.channelData[i] = null;
+          }
+          entry.audioBuffer.channelData = null;
+        }
+        entry.audioBuffer = null; // Fully null it — loadAudioBuffer() reads from IndexedDB
+      }
+
+      // Same for per-difficulty AudioBuffers
+      if (entry.difficulties && Array.isArray(entry.difficulties)) {
+        for (const diff of entry.difficulties) {
+          if (diff._hasDiffAudioBuffer && diff.audioBuffer) {
+            diff._audioBufferNeedsDecode = true;
+            // Strip per-difficulty serialized PCM data too
+            if (diff.audioBuffer.channelData) {
+              for (let i = 0; i < diff.audioBuffer.channelData.length; i++) {
+                diff.audioBuffer.channelData[i] = null;
+              }
+              diff.audioBuffer.channelData = null;
+            }
+            diff.audioBuffer = null;
+          }
+        }
+      }
+
+      // Reconstruct backgroundUrl from backgroundData FIRST (needs the raw data)
+      BeatmapStore._reconstructBlobUrls(entry);
+
+      // Now strip backgroundData from in-memory entries to save RAM.
+      // The backgroundUrl (blob:) is already reconstructed above.
+      // Typical background images are 1-5MB each, but with many maps this adds up.
+      if (entry.backgroundData) {
+        entry.backgroundData = null;
+      }
+
+      return entry;
+    });
+
+    console.log(`[BeatmapStore] Loaded ${results.length} beatmap sets (metadata only, AudioBuffers + big data stripped)`);
+    return results;
+  }
+
+  /**
+   * Load and decode the AudioBuffer for a single beatmap set (on demand).
+   * This is the memory-efficient replacement for loading all AudioBuffers at once.
+   * @param {string} id - The beatmap set ID
+   * @param {AudioContext} audioCtx - AudioContext for decoding
+   * @returns {{ audioBuffer: AudioBuffer|null, diffAudioBuffers: Map<string, AudioBuffer> }}
+   */
+  static async loadAudioBuffer(id, audioCtx) {
+    const db = await BeatmapStore.open();
+    const entry = await new Promise((resolve, reject) => {
+      const tx = db.transaction(BeatmapStore.STORE_NAME, 'readonly');
+      const store = tx.objectStore(BeatmapStore.STORE_NAME);
+      const request = store.get(id);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    if (!entry) return { audioBuffer: null, diffAudioBuffers: new Map() };
+
+    let ctx = audioCtx;
+    let shouldClose = false;
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      shouldClose = true;
+    }
+
+    let audioBuffer = null;
+    const diffAudioBuffers = new Map(); // diffIndex → AudioBuffer
+
+    // Decode set-level AudioBuffer
+    if (entry._hasAudioBuffer && entry.audioBuffer?.sampleRate && entry.audioBuffer?.channelData) {
+      try {
+        audioBuffer = BeatmapStore._deserializeAudioBuffer(ctx, entry.audioBuffer);
+      } catch (err) {
+        console.warn(`Failed to decode AudioBuffer for ${id}:`, err);
+      }
+    }
+
+    // Decode per-difficulty AudioBuffers
+    if (entry.difficulties && Array.isArray(entry.difficulties)) {
+      for (let i = 0; i < entry.difficulties.length; i++) {
+        const diff = entry.difficulties[i];
+        if (diff._hasDiffAudioBuffer && diff.audioBuffer?.sampleRate && diff.audioBuffer?.channelData) {
+          try {
+            diffAudioBuffers.set(i, BeatmapStore._deserializeAudioBuffer(ctx, diff.audioBuffer));
+          } catch (err) {
+            console.warn(`Failed to decode diff AudioBuffer for ${id}:`, err);
+          }
+        }
+      }
+    }
+
+    if (shouldClose) {
+      try { await ctx.close(); } catch (_) { /* ignore */ }
+    }
+
+    return { audioBuffer, diffAudioBuffers };
   }
 
   /** Delete a single beatmap set by id */
@@ -209,6 +359,75 @@ class BeatmapStore {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
+  }
+
+  /**
+   * Delete ALL beatmap sets from IndexedDB and revoke all blob URLs.
+   * Call this when the user wants to wipe their chart library.
+   * @param {Object[]} inMemorySets - The current beatmapSets array to revoke blob URLs from
+   */
+  static async deleteAll(inMemorySets = []) {
+    // Revoke all blob URLs to prevent memory leaks
+    for (const set of inMemorySets) {
+      if (set.backgroundUrl && set.backgroundUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(set.backgroundUrl); } catch (_) {}
+      }
+      if (set.videoUrl && set.videoUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(set.videoUrl); } catch (_) {}
+      }
+    }
+    // Clear IndexedDB
+    return BeatmapStore.clear();
+  }
+
+  /**
+   * Reconstruct blob URLs (background, video) from stored binary data.
+   * Called by both loadAll() and loadAllMetadata().
+   */
+  static _reconstructBlobUrls(entry) {
+    // ── Memory: revoke old blob URLs before creating new ones ──
+    if (entry.backgroundUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(entry.backgroundUrl);
+    }
+    // Reconstruct backgroundUrl from backgroundData
+    if (entry.backgroundData && entry.backgroundMime) {
+      try {
+        let data = entry.backgroundData;
+        if (!(data instanceof Uint8Array)) {
+          const keys = Object.keys(data).map(Number).sort((a, b) => a - b);
+          const arr = new Uint8Array(keys.length);
+          keys.forEach(k => { arr[k] = data[k]; });
+          data = arr;
+        }
+        const blob = new Blob([data], { type: entry.backgroundMime });
+        entry.backgroundUrl = URL.createObjectURL(blob);
+      } catch (err) {
+        console.warn(`Failed to reconstruct backgroundUrl for ${entry.id}:`, err);
+        entry.backgroundUrl = null;
+      }
+    }
+
+    // ── Memory: revoke old video blob URL before creating new one ──
+    if (entry.videoUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(entry.videoUrl);
+    }
+    // Reconstruct videoUrl from videoData (only present in older DB versions or current session)
+    if (entry.videoData && entry.videoMime) {
+      try {
+        let data = entry.videoData;
+        if (!(data instanceof Uint8Array)) {
+          const keys = Object.keys(data).map(Number).sort((a, b) => a - b);
+          const arr = new Uint8Array(keys.length);
+          keys.forEach(k => { arr[k] = data[k]; });
+          data = arr;
+        }
+        const blob = new Blob([data], { type: entry.videoMime });
+        entry.videoUrl = URL.createObjectURL(blob);
+      } catch (err) {
+        console.warn(`Failed to reconstruct videoUrl for ${entry.id}:`, err);
+        entry.videoUrl = null;
+      }
+    }
   }
 }
 
@@ -280,19 +499,33 @@ export default class OszLoader {
       // ── Use the first valid .osu for shared resources (audio / bg) ────
       const firstParsed = parsedMaps[0];
 
-      // Decode audio
-      let audioBuffer = null;
-      const audioFileName = firstParsed.general.AudioFilename?.toLowerCase();
-      if (audioFileName && audioFiles[audioFileName]) {
-        const audioData = audioFiles[audioFileName];
-        audioBuffer = await this._decodeAudio(audioData);
-      } else {
-        // Fallback: use the first audio file found
-        const firstAudio = Object.values(audioFiles)[0];
-        if (firstAudio) {
-          audioBuffer = await this._decodeAudio(firstAudio);
+      // ── Decode audio files — support different audio per difficulty ──────
+      // Some osu!mania maps have different audio files per difficulty
+      // (e.g., normal speed vs. accelerated versions).
+      // We decode each unique audio file and store them in a map.
+
+      // Collect all unique audio filenames referenced by difficulties
+      const audioFilenames = new Set();
+      for (const parsed of parsedMaps) {
+        const af = parsed.general.AudioFilename?.toLowerCase();
+        if (af) audioFilenames.add(af);
+      }
+
+      // Decode each unique audio file
+      const audioBufferMap = {}; // filename → AudioBuffer
+      for (const filename of audioFilenames) {
+        if (audioFiles[filename]) {
+          try {
+            audioBufferMap[filename] = await this._decodeAudio(audioFiles[filename]);
+          } catch (err) {
+            console.warn(`[OszLoader] Failed to decode audio "${filename}":`, err);
+          }
         }
       }
+
+      // Primary audio buffer: use the first parsed .osu's audio (for preview)
+      const primaryAudioFilename = firstParsed.general.AudioFilename?.toLowerCase();
+      let audioBuffer = audioBufferMap[primaryAudioFilename] || Object.values(audioBufferMap)[0] || null;
 
       // Create background Object URL and also store raw data for persistence
       let backgroundUrl = null;
@@ -348,8 +581,15 @@ export default class OszLoader {
       const difficulties = [];
 
       for (const parsed of parsedMaps) {
-        const diff = this._buildDifficulty(parsed, audioBuffer);
+        const diffAudioFilename = parsed.general.AudioFilename?.toLowerCase() || primaryAudioFilename;
+        const diffAudioBuffer = audioBufferMap[diffAudioFilename] || audioBuffer;
+        const diff = this._buildDifficulty(parsed, diffAudioBuffer);
         if (diff) {
+          // Store per-difficulty audio info for correct playback
+          diff.audioFilename = diffAudioFilename;
+          diff.audioBuffer = diffAudioBuffer;
+          // Flag if this difficulty uses a different audio than the set's primary
+          diff.hasCustomAudio = diffAudioFilename !== primaryAudioFilename && !!diffAudioBuffer;
           difficulties.push(diff);
         }
       }
@@ -358,8 +598,15 @@ export default class OszLoader {
       difficulties.sort((a, b) => a.difficulty.stars - b.difficulty.stars);
 
       // ── Assemble BeatmapSet ────────────────────────────────────────────
+      // Extract online set ID from .osu metadata (for matching with osu! library)
+      const onlineSetIdRaw = firstParsed.metadata.BeatmapSetID;
+      const onlineSetId = onlineSetIdRaw && onlineSetIdRaw !== '-1'
+        ? parseInt(onlineSetIdRaw, 10) || null
+        : null;
+
       const beatmapSet = {
         id: `osz-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        onlineSetId,
         title: firstParsed.metadata.Title || 'Unknown',
         artist: firstParsed.metadata.Artist || 'Unknown',
         creator: firstParsed.metadata.Creator || '',
@@ -390,6 +637,8 @@ export default class OszLoader {
 
   /**
    * Load all beatmap sets from IndexedDB, reconstructing AudioBuffers and backgroundUrls.
+   * WARNING: This loads ALL AudioBuffers into memory — can use GBs of RAM!
+   * Use loadFromStoreMetadata() instead for the song list.
    * @returns {Object[]} Array of BeatmapSet objects
    */
   async loadFromStore() {
@@ -399,6 +648,36 @@ export default class OszLoader {
     } catch (err) {
       console.error('OszLoader.loadFromStore error:', err);
       return [];
+    }
+  }
+
+  /**
+   * Load all beatmap sets as METADATA ONLY — no AudioBuffers decoded.
+   * This is the memory-efficient way to load the song list.
+   * Use loadAudioBufferForSet() to load audio on demand.
+   * @returns {Object[]} Array of BeatmapSet objects (audioBuffer will be null/serialized)
+   */
+  async loadFromStoreMetadata() {
+    try {
+      return await BeatmapStore.loadAllMetadata();
+    } catch (err) {
+      console.error('OszLoader.loadFromStoreMetadata error:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Load and decode the AudioBuffer for a single beatmap set (on demand).
+   * @param {string} id - The beatmap set ID
+   * @returns {{ audioBuffer: AudioBuffer|null, diffAudioBuffers: Map<number, AudioBuffer> }}
+   */
+  async loadAudioBufferForSet(id) {
+    try {
+      const audioCtx = this.audio?.ctx || this.audio?.context || null;
+      return await BeatmapStore.loadAudioBuffer(id, audioCtx);
+    } catch (err) {
+      console.error('OszLoader.loadAudioBufferForSet error:', err);
+      return { audioBuffer: null, diffAudioBuffers: new Map() };
     }
   }
 

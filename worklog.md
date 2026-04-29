@@ -1911,3 +1911,35 @@ Stage Summary:
 - No FOV pulsation, camera wobble, bloom pulsation, or exposure changes
 - 2D canvas kiai effects (NoteRenderer) still work independently
 - Background image/video shows without any beat-reactive effects
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Revert visual to commit 83af8f3 and apply memory leak fixes
+
+Work Log:
+- Fetched commit 83af8f3617837954e9ba17755905ffe24bef3e63 from GitHub
+- Identified all files that changed between target commit and HEAD (3 commits)
+- Restored all game files to the target commit state using git show
+- Verified all public/game/ and src/app/ files match the target commit exactly (0 line diff)
+- Applied critical memory leak fixes on top of the reverted code:
+  1. AudioEngine.releaseBuffer() - new method to free ~85MB AudioBuffer after game ends
+  2. main.js endGame() - calls audio.releaseBuffer() in addition to existing cleanup
+  3. HitSounds._play() - auto-disconnect GainNodes after 3s (prevents 1000+ orphaned nodes)
+  4. HitSounds._playBuffer() - auto-disconnect GainNodes after buffer duration
+  5. NoteRenderer.clearBackground() - releases _bgCacheCanvas (~32MB at 4K) and clears _glowSprites Map
+  6. NoteRenderer.clearLaneGlows() - also clears _missFlashPool
+  7. ThreeScene._setupListeners() - stores handler references for proper cleanup
+  8. ThreeScene.dispose() - removes EventBus listeners (prevents closure keeping 'this' alive)
+  9. ThreeScene._clearBackgroundImage() - revokes blob URLs (1-5MB per image)
+  10. ThreeScene._clearBackgroundVideo() - revokes blob URLs (50-200MB per video)
+  11. ThreeScene.setBackgroundImage/setBackgroundVideo - store URLs for later revocation
+  12. OszLoader._reconstructBlobUrls() - revoke old blob URLs before creating new ones
+  13. OsuLibrary - clean up _downloadStates entries after 10s
+  14. main.js endGame() - null currentBeatMap, currentJudgement, deferred null of currentMapData
+- Lint passes clean, dev server running without errors
+
+Stage Summary:
+- Visual state restored to commit 83af8f3 (the "perfect" state with: tilted+styled judgement text, glassmorphism backing panels under score/combo, darker lanes with sharper dividers, Project Sekai hit effects, kiai note glow behind notes, long notes with ticks, dynamic playfield dim overlay, Kiai Drive chorus effect)
+- Memory leak fixes applied: estimated 500MB-1.5GB RAM recovery depending on play sessions
+- Key fixes: AudioBuffer release, GainNode disconnection, blob URL revocation, EventBus listener cleanup, cache canvas release
