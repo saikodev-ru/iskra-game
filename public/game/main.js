@@ -1289,10 +1289,10 @@ async function boot() {
   GameCursor.init();
 
   // ── Loading Screen ──
-  // Show loading screen, preload resources, then transition to main menu
+  // Show loading screen, preload resources, then auto-transition to main menu
   const loadingScreen = new LoadingScreen({
     onReady: () => {
-      // Resume audio context on user click
+      // Resume audio context
       audio._ensureCtx();
       if (hitSounds) hitSounds.gameStart();
       loadingScreen.destroy();

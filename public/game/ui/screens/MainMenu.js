@@ -6,130 +6,69 @@ export default class MainMenu {
     this.audio = audio;
     this.screens = screens;
     this._keyHandler = null;
-    this._tickerInterval = null;
-    this._initTime = Date.now();
+    this._animFrame = null;
+    this._menuMusicSource = null;
+    this._menuMusicGain = null;
+    this._triangles = [];
+    this._triangleCanvas = null;
+    this._triangleCtx = null;
+    this._destroyed = false;
+    this._logoScale = 1;
+    this._logoTargetScale = 1;
+    this._logoRotation = 0;
+    this._beatPulse = 0;
   }
 
   build() {
     return `
-      <div id="mm-root" style="display:flex;flex-direction:column;height:100%;position:relative;overflow:hidden;">
-        <!-- Animated background grain -->
-        <div style="position:absolute;inset:0;opacity:0.03;pointer-events:none;background-image:url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E');animation:mm-grain 0.5s steps(4) infinite;"></div>
+      <div id="mm-root" style="display:flex;flex-direction:column;height:100%;position:relative;overflow:hidden;background:#000;">
+        <!-- Triangles background canvas -->
+        <canvas id="mm-triangles" style="position:absolute;inset:0;width:100%;height:100%;z-index:0;"></canvas>
 
-        <!-- Full-screen darkening for background -->
-        <div style="position:absolute;inset:0;pointer-events:none;z-index:0;background:rgba(0,0,0,0.25);"></div>
-
-        <!-- Top gradient fade -->
-        <div style="position:absolute;top:0;left:0;right:0;height:120px;background:linear-gradient(to bottom,rgba(0,0,0,0.7),transparent);pointer-events:none;z-index:1;"></div>
+        <!-- Dark vignette overlay -->
+        <div style="position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.6) 100%);"></div>
 
         <!-- Main content -->
-        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 40px;position:relative;z-index:2;">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;z-index:2;">
 
-          <!-- Title block -->
-          <div id="mm-parallax-title" class="parallax-layer" data-parallax="5" style="text-align:center;margin-bottom:8px;">
-            <!-- Glitch title -->
-            <div style="position:relative;display:inline-block;">
-              <h1 id="mm-title" class="mm-title" style="font-family:var(--zzz-font);font-weight:900;font-size:clamp(42px,9vw,80px);letter-spacing:0.2em;line-height:1;margin:0;position:relative;">
-                <span style="color:var(--zzz-lime);text-shadow:0 0 60px rgba(170,255,0,0.35),0 0 120px rgba(170,255,0,0.15);">RHYMIX</span>
-              </h1>
-              <!-- Glitch overlay layer -->
-              <div id="mm-glitch-layer" style="position:absolute;inset:0;pointer-events:none;overflow:hidden;" aria-hidden="true"></div>
+          <!-- Logo -->
+          <div id="mm-logo-wrap" style="position:relative;margin-bottom:40px;">
+            <div id="mm-logo-ring" class="mm-logo-ring">
+              <div id="mm-logo-inner" class="mm-logo-inner">
+                <span class="mm-logo-text">iskra</span>
+              </div>
             </div>
-            <!-- Subtitle -->
-            <div id="mm-subtitle" style="margin-top:12px;font-family:var(--zzz-font);font-weight:500;font-size:12px;color:var(--zzz-muted);letter-spacing:0.6em;text-transform:uppercase;opacity:0;animation:mm-fade-up 0.6s 0.3s ease-out forwards;">БЕСПЛАТНАЯ WEB РИТМ-ИГРА</div>
-            <!-- Animated underline -->
-            <div style="margin:16px auto 0;width:0;height:2px;background:linear-gradient(90deg,transparent,var(--zzz-lime),transparent);animation:mm-line-expand 0.8s 0.5s ease-out forwards;border-radius:1px;box-shadow:0 0 12px rgba(170,255,0,0.3);"></div>
           </div>
 
-          <!-- Navigation buttons -->
-          <div id="mm-parallax-btns" class="parallax-layer" data-parallax="3" style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:36px;">
-            <button class="mm-nav-btn mm-nav-btn--primary" data-action="play" style="opacity:0;animation:mm-fade-up 0.5s 0.4s ease-out forwards;">
-              <span class="mm-nav-icon" style="font-size:18px;">▶</span>
-              <span class="mm-nav-text">PLAY</span>
-              <span class="mm-nav-arrow" style="opacity:0.4;">→</span>
+          <!-- Menu buttons bar -->
+          <div class="mm-menu-bar">
+            <button class="mm-menu-btn mm-menu-btn--play" data-action="play">
+              <span class="mm-menu-btn-icon">▶</span>
+              <span class="mm-menu-btn-label">Play</span>
             </button>
-            <button class="mm-nav-btn" data-action="settings" style="opacity:0;animation:mm-fade-up 0.5s 0.5s ease-out forwards;">
-              <span class="mm-nav-icon" style="font-size:16px;">⚙</span>
-              <span class="mm-nav-text">SETTINGS</span>
-              <span class="mm-nav-arrow" style="opacity:0.4;">→</span>
+            <button class="mm-menu-btn mm-menu-btn--settings" data-action="settings">
+              <span class="mm-menu-btn-icon">⚙</span>
+              <span class="mm-menu-btn-label">Settings</span>
             </button>
-          </div>
-
-          <!-- Stats row -->
-          <div class="parallax-layer" data-parallax="2" style="display:flex;gap:10px;justify-content:center;margin-top:40px;opacity:0;animation:mm-fade-up 0.5s 0.6s ease-out forwards;">
-            <div class="mm-stat-card">
-              <div class="mm-stat-label">BEATMAPS</div>
-              <div id="mm-stat-maps" class="mm-stat-value" style="color:var(--zzz-lime);">—</div>
-            </div>
-            <div class="mm-stat-card">
-              <div class="mm-stat-label">BEST SCORE</div>
-              <div id="mm-stat-best" class="mm-stat-value" style="color:var(--zzz-yellow);">—</div>
-            </div>
-            <div class="mm-stat-card">
-              <div class="mm-stat-label">PLAY TIME</div>
-              <div id="mm-stat-time" class="mm-stat-value">0h</div>
-            </div>
-            <div class="mm-stat-card">
-              <div class="mm-stat-label">TOTAL PLAYS</div>
-              <div id="mm-stat-plays" class="mm-stat-value" style="color:var(--zzz-purple);">—</div>
-            </div>
+            <button class="mm-menu-btn mm-menu-btn--exit" data-action="exit">
+              <span class="mm-menu-btn-icon">✕</span>
+              <span class="mm-menu-btn-label">Exit</span>
+            </button>
           </div>
         </div>
 
-        <!-- Bottom section -->
-        <div style="position:relative;z-index:2;flex-shrink:0;">
-          <!-- News ticker -->
-          <div style="position:relative;height:32px;overflow:hidden;margin:0 40px 12px;border-top:1px solid rgba(170,255,0,0.08);border-bottom:1px solid rgba(170,255,0,0.08);opacity:0;animation:mm-fade-up 0.5s 0.7s ease-out forwards;">
-            <div style="position:absolute;left:0;top:0;bottom:0;width:80px;background:linear-gradient(90deg,rgba(0,0,0,0.95),transparent);z-index:2;display:flex;align-items:center;padding-left:12px;">
-              <span style="font-family:var(--zzz-font);font-weight:900;font-size:9px;color:var(--zzz-lime);letter-spacing:0.15em;">NEWS</span>
-            </div>
-            <div id="mm-ticker" style="position:absolute;inset:0;display:flex;align-items:center;">
-              <div id="mm-ticker-content" style="white-space:nowrap;font-family:var(--zzz-font);font-weight:500;font-size:11px;color:var(--zzz-muted);letter-spacing:0.04em;padding-left:90px;animation:mm-ticker-scroll 30s linear infinite;">
-                <span style="color:var(--zzz-lime);margin-right:8px;">●</span> Season 1 ranked play coming soon
-                <span style="color:var(--zzz-graphite-2);margin:0 24px;">│</span>
-                <span style="color:var(--zzz-yellow);margin-right:8px;">●</span> New difficulty analyzer with star ratings
-                <span style="color:var(--zzz-graphite-2);margin:0 24px;">│</span>
-                <span style="color:var(--zzz-purple);margin-right:8px;">●</span> Video backgrounds now supported
-                <span style="color:var(--zzz-graphite-2);margin:0 24px;">│</span>
-                <span style="color:var(--zzz-red);margin-right:8px;">●</span> Custom keybindings available in settings
-                <span style="color:var(--zzz-graphite-2);margin:0 24px;">│</span>
-                <span style="color:var(--zzz-lime);margin-right:8px;">●</span> Import your .osz beatmaps and start playing
-              </div>
-            </div>
-            <div style="position:absolute;right:0;top:0;bottom:0;width:40px;background:linear-gradient(270deg,rgba(0,0,0,0.95),transparent);z-index:2;"></div>
+        <!-- Bottom bar -->
+        <div style="position:relative;z-index:2;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="mm-version">iskra</span>
+            <span style="color:rgba(255,255,255,0.12);">·</span>
+            <span class="mm-version-sub">v0.5.0</span>
           </div>
-
-          <!-- Featured card -->
-          <div style="padding:0 40px 8px;opacity:0;animation:mm-fade-up 0.5s 0.75s ease-out forwards;">
-            <div class="mm-featured-card">
-              <div class="mm-featured-glow"></div>
-              <div style="position:relative;padding:20px 24px;display:flex;align-items:center;gap:16px;">
-                <div style="flex-shrink:0;width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg, var(--zzz-lime), var(--zzz-purple));display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 24px rgba(170,255,0,0.15);">
-                  ★
-                </div>
-                <div style="flex:1;min-width:0;">
-                  <div class="mm-featured-label">FEATURED</div>
-                  <div class="mm-featured-title">RANKED SEASON 1 — COMING SOON</div>
-                  <div class="mm-featured-desc">Compete on global leaderboards and climb the ranks</div>
-                </div>
-                <div style="flex-shrink:0;">
-                  <div style="font-family:var(--zzz-font);font-weight:700;font-size:10px;color:var(--zzz-lime);letter-spacing:0.1em;padding:6px 14px;border:1px solid rgba(170,255,0,0.2);border-radius:9999px;white-space:nowrap;">VIEW DETAILS →</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Bottom bar -->
-          <div style="padding:12px 40px 16px;display:flex;align-items:center;justify-content:space-between;opacity:0;animation:mm-fade-up 0.5s 0.8s ease-out forwards;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <span class="mm-version">v0.5.0</span>
-              <span style="color:rgba(255,255,255,0.1);">·</span>
-              <span class="mm-version-sub">NEON EDITION</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span class="mm-hint-key">ENTER</span>
-              <span class="mm-version-sub">TO PLAY</span>
-            </div>
+          <div id="mm-audio-indicator" class="mm-audio-indicator">
+            <div class="mm-audio-bar"></div>
+            <div class="mm-audio-bar"></div>
+            <div class="mm-audio-bar"></div>
+            <div class="mm-audio-bar"></div>
           </div>
         </div>
       </div>
@@ -138,109 +77,273 @@ export default class MainMenu {
 
   init() {
     this.container = document.getElementById('screen');
+
+    // Button handlers
     this.container.querySelectorAll('[data-action]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const action = e.currentTarget.dataset.action;
         if (action === 'play') this.screens.show('song-select');
         else if (action === 'settings') EventBus.emit('settings:open-overlay');
+        else if (action === 'exit') {
+          // Go blank — browser games can't really "exit"
+          document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:rgba(255,255,255,0.3);font-family:sans-serif;font-size:14px;">Thanks for playing iskra!</div>';
+        }
       });
     });
+
+    // Keyboard shortcut
     this._keyHandler = (e) => {
       if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); this.screens.show('song-select'); }
     };
     window.addEventListener('keydown', this._keyHandler);
 
-    // Add parallax layers
-    const p1 = document.getElementById('mm-parallax-title');
-    const p2 = document.getElementById('mm-parallax-btns');
-    if (p1) ZZZTheme.addParallax(p1, 5);
-    if (p2) ZZZTheme.addParallax(p2, 3);
+    // Start triangles animation
+    this._initTriangles();
 
-    // Load stats
-    this._loadStats();
+    // Start menu music
+    this._startMenuMusic();
 
-    // Start periodic title glitch effect
-    this._startGlitchLoop();
+    // Logo beat pulse animation
+    this._startLogoAnimation();
   }
 
-  async _loadStats() {
-    try {
-      const db = await new Promise((resolve, reject) => {
-        const req = indexedDB.open('rhythm-os', 2);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-      const tx = db.transaction('beatmaps', 'readonly');
-      const store = tx.objectStore('beatmaps');
-      const count = await new Promise((resolve, reject) => {
-        const req = store.count();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-      const el = document.getElementById('mm-stat-maps');
-      if (el) el.textContent = count;
+  /** Initialize the osu! Triangles-style animated background */
+  _initTriangles() {
+    this._triangleCanvas = document.getElementById('mm-triangles');
+    if (!this._triangleCanvas) return;
 
-      // Count total plays from all records
-      let bestScore = 0;
-      let totalPlays = 0;
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('rhythm-record-')) {
-          try {
-            const rec = JSON.parse(localStorage.getItem(key));
-            if (rec) {
-              totalPlays++;
-              if (rec.score > bestScore) bestScore = rec.score;
-            }
-          } catch (_) {}
-        }
+    const dpr = window.devicePixelRatio || 1;
+    const w = this._triangleCanvas.clientWidth;
+    const h = this._triangleCanvas.clientHeight;
+    this._triangleCanvas.width = w * dpr;
+    this._triangleCanvas.height = h * dpr;
+    this._triangleCtx = this._triangleCanvas.getContext('2d');
+    this._triangleCtx.scale(dpr, dpr);
+    this._canvasW = w;
+    this._canvasH = h;
+
+    // Create triangles
+    this._triangles = [];
+    const count = Math.min(50, Math.floor(w * h / 15000));
+    for (let i = 0; i < count; i++) {
+      this._triangles.push(this._createTriangle());
+    }
+
+    // Start animation loop
+    const animate = () => {
+      if (this._destroyed) return;
+      this._drawTriangles();
+      this._animFrame = requestAnimationFrame(animate);
+    };
+    animate();
+
+    // Handle resize
+    this._resizeHandler = () => {
+      if (!this._triangleCanvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const w = this._triangleCanvas.clientWidth;
+      const h = this._triangleCanvas.clientHeight;
+      this._triangleCanvas.width = w * dpr;
+      this._triangleCanvas.height = h * dpr;
+      this._triangleCtx = this._triangleCanvas.getContext('2d');
+      this._triangleCtx.scale(dpr, dpr);
+      this._canvasW = w;
+      this._canvasH = h;
+    };
+    window.addEventListener('resize', this._resizeHandler);
+  }
+
+  _createTriangle() {
+    const size = 20 + Math.random() * 60;
+    const depth = Math.random(); // 0 = far (slow, dim), 1 = near (fast, bright)
+    return {
+      x: Math.random() * (this._canvasW || window.innerWidth),
+      y: Math.random() * (this._canvasH || window.innerHeight),
+      size,
+      depth,
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 0.01,
+      vy: -(0.15 + depth * 0.4), // float upward
+      vx: (Math.random() - 0.5) * 0.3,
+      opacity: 0.03 + depth * 0.08,
+      hue: 70 + Math.random() * 30, // lime-green hue range
+    };
+  }
+
+  _drawTriangles() {
+    const ctx = this._triangleCtx;
+    if (!ctx) return;
+    const w = this._canvasW;
+    const h = this._canvasH;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Beat pulse from audio
+    const beatScale = 1 + this._beatPulse * 0.02;
+
+    for (const tri of this._triangles) {
+      // Update position
+      tri.x += tri.vx;
+      tri.y += tri.vy;
+      tri.rotation += tri.rotationSpeed;
+
+      // Wrap around
+      if (tri.y < -tri.size * 2) {
+        tri.y = h + tri.size;
+        tri.x = Math.random() * w;
       }
-      const bestEl = document.getElementById('mm-stat-best');
-      if (bestEl) bestEl.textContent = bestScore > 0 ? bestScore.toLocaleString() : '—';
-      const playsEl = document.getElementById('mm-stat-plays');
-      if (playsEl) playsEl.textContent = totalPlays;
-    } catch (_) {
-      const el = document.getElementById('mm-stat-maps');
-      if (el) el.textContent = '0';
+      if (tri.x < -tri.size * 2) tri.x = w + tri.size;
+      if (tri.x > w + tri.size * 2) tri.x = -tri.size;
+
+      // Draw triangle
+      ctx.save();
+      ctx.translate(tri.x, tri.y);
+      ctx.rotate(tri.rotation);
+      ctx.scale(beatScale, beatScale);
+
+      const s = tri.size;
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.6);
+      ctx.lineTo(-s * 0.5, s * 0.4);
+      ctx.lineTo(s * 0.5, s * 0.4);
+      ctx.closePath();
+
+      const alpha = tri.opacity * beatScale;
+      ctx.strokeStyle = `hsla(${tri.hue}, 100%, 60%, ${alpha})`;
+      ctx.lineWidth = 1 + tri.depth * 1.5;
+      ctx.stroke();
+
+      // Very subtle fill for close triangles
+      if (tri.depth > 0.6) {
+        ctx.fillStyle = `hsla(${tri.hue}, 100%, 60%, ${alpha * 0.15})`;
+        ctx.fill();
+      }
+
+      ctx.restore();
     }
   }
 
-  /** Periodic subtle glitch on the title */
-  _startGlitchLoop() {
-    const glitch = () => {
-      if (this.container !== document.getElementById('screen')) return; // destroyed
-      const layer = document.getElementById('mm-glitch-layer');
-      if (!layer) return;
+  /** Start the logo pulsing animation */
+  _startLogoAnimation() {
+    const logoRing = document.getElementById('mm-logo-ring');
+    const logoInner = document.getElementById('mm-logo-inner');
+    if (!logoRing) return;
 
-      // Random glitch burst (short, subtle)
-      const intensity = Math.random() < 0.3 ? 0.6 : 0.15;
-      const duration = 80 + Math.random() * 120;
-      const offset = () => (Math.random() - 0.5) * 4 * intensity;
+    let lastTime = performance.now();
+    const tick = (now) => {
+      if (this._destroyed) return;
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
 
-      layer.innerHTML = `
-        <div style="position:absolute;inset:0;transform:translate(${offset()}px, ${offset()}px);clip-path:inset(${Math.random()*30}% 0 ${Math.random()*30}% 0);color:var(--zzz-lime);opacity:${intensity};font-family:var(--zzz-font);font-weight:900;font-size:clamp(42px,9vw,80px);letter-spacing:0.2em;line-height:1;pointer-events:none;">
-          <span>RHYMIX</span>
-        </div>
-        <div style="position:absolute;inset:0;transform:translate(${offset()}px, ${offset()}px);clip-path:inset(${Math.random()*40}% 0 ${Math.random()*40}% 0);color:var(--zzz-red);opacity:${intensity * 0.7};font-family:var(--zzz-font);font-weight:900;font-size:clamp(42px,9vw,80px);letter-spacing:0.2em;line-height:1;pointer-events:none;">
-          <span>RHYMIX</span>
-        </div>
-      `;
-      setTimeout(() => { if (layer) layer.innerHTML = ''; }, duration);
+      // Smooth logo scale
+      this._logoScale += (this._logoTargetScale - this._logoScale) * Math.min(1, dt * 8);
 
-      // Schedule next glitch (3-8 seconds)
-      this._glitchTimeout = setTimeout(glitch, 3000 + Math.random() * 5000);
+      // Slow continuous rotation
+      this._logoRotation += dt * 8; // degrees per second
+
+      // Decay beat pulse
+      this._beatPulse *= Math.pow(0.9, dt * 60);
+
+      if (logoRing) {
+        logoRing.style.transform = `rotate(${this._logoRotation}deg) scale(${this._logoScale + this._beatPulse * 0.05})`;
+      }
+
+      this._animFrame = requestAnimationFrame(tick);
     };
-    // First glitch after 2-4 seconds
-    this._glitchTimeout = setTimeout(glitch, 2000 + Math.random() * 2000);
+    this._animFrame = requestAnimationFrame(tick);
+  }
+
+  /** Play menu theme music */
+  async _startMenuMusic() {
+    try {
+      this.audio._ensureCtx();
+      const ctx = this.audio.ctx;
+      if (!ctx) return;
+
+      // Fetch and decode the menu theme
+      const response = await fetch('/audio/menu-theme.mp3');
+      if (!response.ok) return;
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = await ctx.decodeAudioData(arrayBuffer);
+
+      if (this._destroyed) return;
+
+      // Create gain node for menu music volume
+      this._menuMusicGain = ctx.createGain();
+      this._menuMusicGain.gain.value = 0;
+      this._menuMusicGain.connect(this.audio._gain);
+
+      // Create source
+      this._menuMusicSource = ctx.createBufferSource();
+      this._menuMusicSource.buffer = buffer;
+      this._menuMusicSource.loop = true;
+      this._menuMusicSource.connect(this._menuMusicGain);
+
+      // Fade in
+      this._menuMusicSource.start(0);
+      this._menuMusicGain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 1.5);
+
+      // Beat detection for logo pulse — simple bass frequency analysis
+      this._startBeatDetection();
+    } catch (err) {
+      console.warn('[MainMenu] Could not play menu music:', err);
+    }
+  }
+
+  /** Simple beat detection from audio analyser for logo pulsing */
+  _startBeatDetection() {
+    if (!this.audio._analyser) return;
+
+    const analyser = this.audio._analyser;
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+    let prevBass = 0;
+    const detect = () => {
+      if (this._destroyed) return;
+      analyser.getByteFrequencyData(freqData);
+
+      // Average bass frequencies (0-10 bins, roughly 0-860Hz)
+      let bass = 0;
+      for (let i = 0; i < 10; i++) bass += freqData[i];
+      bass /= 10;
+
+      // Detect beat onset
+      const delta = bass - prevBass;
+      if (delta > 15) {
+        this._beatPulse = Math.min(1, this._beatPulse + 0.5);
+      }
+      prevBass = bass * 0.7 + prevBass * 0.3; // smooth
+
+      this._beatDetectFrame = requestAnimationFrame(detect);
+    };
+    this._beatDetectFrame = requestAnimationFrame(detect);
+  }
+
+  /** Stop menu music */
+  _stopMenuMusic() {
+    try {
+      if (this._menuMusicGain && this.audio.ctx) {
+        this._menuMusicGain.gain.linearRampToValueAtTime(0, this.audio.ctx.currentTime + 0.5);
+        const source = this._menuMusicSource;
+        const gain = this._menuMusicGain;
+        setTimeout(() => {
+          try { source?.stop(); } catch (_) {}
+          try { gain?.disconnect(); } catch (_) {}
+        }, 600);
+      }
+    } catch (_) {}
+    this._menuMusicSource = null;
+    this._menuMusicGain = null;
   }
 
   destroy() {
+    this._destroyed = true;
+
     if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler);
-    if (this._glitchTimeout) clearTimeout(this._glitchTimeout);
-    // Clean up parallax
-    const p1 = document.getElementById('mm-parallax-title');
-    const p2 = document.getElementById('mm-parallax-btns');
-    if (p1) ZZZTheme.removeParallax(p1);
-    if (p2) ZZZTheme.removeParallax(p2);
+    if (this._animFrame) cancelAnimationFrame(this._animFrame);
+    if (this._beatDetectFrame) cancelAnimationFrame(this._beatDetectFrame);
+    if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
+
+    this._stopMenuMusic();
   }
 }
