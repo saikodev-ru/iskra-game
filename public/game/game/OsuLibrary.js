@@ -620,7 +620,7 @@ export default class OsuLibrary {
 
     tile.innerHTML = `
       <div class="lib-tile-cover" style="background-image:url('${coverUrl}');">
-        ${isOwned ? '<div class="lib-tile-owned-overlay"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#AAFF00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>' : ''}
+        ${isOwned ? '<div class="lib-tile-owned-overlay"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#AAFF00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>' : ''}
         <div class="lib-tile-progress" style="display:none;"><div class="lib-tile-progress-fill" style="height:0%;"></div></div>
       </div>
       <div class="lib-tile-info">

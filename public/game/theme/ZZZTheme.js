@@ -1932,95 +1932,99 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 .lib-overlay {
   position: fixed; z-index: 100;
   /* inset is set by JS to match safe area — left/top/width/height */
-  background: rgba(8,8,12,0.94);
-  backdrop-filter: blur(28px);
+  background: rgba(6,6,10,0.96);
+  backdrop-filter: blur(32px);
   display: flex; flex-direction: column;
   animation: lib-overlay-in 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
   font-family: var(--zzz-font);
-  border-radius: 6px;
+  border-radius: 12px;
   overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.05);
+  box-shadow: 0 0 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,229,255,0.03);
 }
 .lib-overlay.lib-overlay-closing {
   animation: lib-overlay-out 0.25s cubic-bezier(0.4,0,0.2,1) forwards;
 }
 @keyframes lib-overlay-in {
-  from { opacity: 0; transform: translateY(24px) scale(0.98); }
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes lib-overlay-out {
   from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 0; transform: translateY(20px) scale(0.97); }
 }
 
 .lib-header {
   display: flex; align-items: center; gap: 14px;
-  padding: 14px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
-  background: rgba(0,0,0,0.35);
+  background: linear-gradient(180deg, rgba(0,0,0,0.5), rgba(0,0,0,0.2));
 }
 
 .lib-title {
-  font-weight: 900; font-size: 14px; color: #00E5FF;
-  text-transform: uppercase; letter-spacing: 0.12em;
+  font-weight: 900; font-size: 15px; color: #00E5FF;
+  text-transform: uppercase; letter-spacing: 0.15em;
   flex-shrink: 0;
+  filter: drop-shadow(0 0 12px rgba(0,229,255,0.25));
 }
 
 .lib-search {
-  flex: 1; max-width: 380px;
-  padding: 9px 16px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 12px;
+  flex: 1; max-width: 420px;
+  padding: 10px 18px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
   color: var(--zzz-text);
-  font-family: var(--zzz-font); font-weight: 500; font-size: 12px;
-  outline: none; transition: all 0.2s;
+  font-family: var(--zzz-font); font-weight: 500; font-size: 13px;
+  outline: none; transition: all 0.25s;
 }
 .lib-search:focus {
-  border-color: rgba(0,229,255,0.35);
-  box-shadow: 0 0 16px rgba(0,229,255,0.08);
-  background: rgba(255,255,255,0.07);
+  border-color: rgba(0,229,255,0.4);
+  box-shadow: 0 0 20px rgba(0,229,255,0.08);
+  background: rgba(255,255,255,0.06);
 }
 .lib-search::placeholder { color: rgba(255,255,255,0.2); }
 
 .lib-close-btn {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07);
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
   color: var(--zzz-muted); cursor: pointer; display: flex;
   align-items: center; justify-content: center;
   transition: all 0.2s ease; flex-shrink: 0;
 }
 .lib-close-btn:hover {
   background: rgba(255,61,61,0.15); border-color: rgba(255,61,61,0.3); color: #ff6b6b;
-  transform: scale(1.05);
+  transform: scale(1.08);
 }
 
 /* ── Library grid: scrollable list with fixed-height cards ── */
 .lib-grid {
   flex: 1; overflow-y: auto; overflow-x: hidden;
-  padding: 12px 16px;
+  padding: 16px 20px;
   display: flex; flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* ── Library tile: horizontal row card (fixed height, scrollable list) ── */
 .lib-tile {
   display: flex; flex-direction: row; align-items: stretch;
-  height: 72px;
-  background: rgba(18,18,22,0.88);
-  border: 1px solid rgba(255,255,255,0.04);
-  border-radius: 10px; overflow: hidden;
+  height: 80px;
+  background: rgba(16,16,22,0.85);
+  border: 1px solid rgba(255,255,255,0.03);
+  border-radius: 12px; overflow: hidden;
   cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
   animation: lib-tile-in 0.3s cubic-bezier(0.22,1,0.36,1) forwards;
   position: relative;
   flex-shrink: 0;
 }
 .lib-tile:hover {
-  background: rgba(26,26,32,0.96);
-  border-color: rgba(0,229,255,0.12);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,229,255,0.04);
+  background: rgba(24,24,32,0.95);
+  border-color: rgba(0,229,255,0.15);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,229,255,0.06), inset 0 1px 0 rgba(255,255,255,0.04);
+  transform: translateX(4px);
 }
 @keyframes lib-tile-in {
   from { opacity: 0; transform: translateX(-12px); }
@@ -2029,16 +2033,23 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 
 /* Cover image: square thumbnail on the left */
 .lib-tile-cover {
-  width: 72px; height: 72px; min-width: 72px;
+  width: 80px; height: 80px; min-width: 80px;
   background-size: cover; background-position: center;
   position: relative;
   flex-shrink: 0;
+}
+.lib-tile-cover::after {
+  content: '';
+  position: absolute; right: 0; top: 0; bottom: 0; width: 20px;
+  background: linear-gradient(270deg, rgba(16,16,22,0.85), transparent);
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* Owned overlay on cover */
 .lib-tile-owned-overlay {
   position: absolute; inset: 0;
-  background: rgba(170,255,0,0.08);
+  background: rgba(170,255,0,0.06);
   display: flex; align-items: center; justify-content: center;
   padding: 4px;
 }
@@ -2046,36 +2057,38 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 /* Tile info section — fills remaining space */
 .lib-tile-info {
   flex: 1; display: flex; flex-direction: column; justify-content: center;
-  padding: 8px 12px; overflow: hidden; gap: 1px;
+  padding: 10px 14px; overflow: hidden; gap: 2px;
   min-width: 0;
 }
 
 .lib-tile-title {
-  font-weight: 800; font-size: 12px; color: var(--zzz-text);
-  text-transform: uppercase; letter-spacing: 0.02em;
+  font-weight: 800; font-size: 13px; color: var(--zzz-text);
+  text-transform: uppercase; letter-spacing: 0.03em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   line-height: 1.3;
 }
 
 .lib-tile-artist {
-  font-weight: 500; font-size: 10px; color: var(--zzz-muted);
+  font-weight: 500; font-size: 11px; color: var(--zzz-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0.7;
 }
 
 .lib-tile-meta {
-  display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
-  margin-top: 1px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+  margin-top: 2px;
 }
 
 .lib-tile-stars {
-  font-weight: 700; font-size: 10px;
+  font-weight: 700; font-size: 11px;
   font-family: var(--zzz-mono);
   flex-shrink: 0;
 }
 
 .lib-tile-diff-count {
-  font-size: 9px; color: var(--zzz-muted);
+  font-size: 10px; color: var(--zzz-muted);
   flex-shrink: 0;
+  opacity: 0.7;
 }
 
 .lib-tile-badge {
@@ -2093,7 +2106,7 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 /* Download button area — right side of tile */
 .lib-tile-actions {
   display: flex; align-items: center; justify-content: center;
-  padding: 0 10px;
+  padding: 0 14px;
   z-index: 4;
   flex-shrink: 0;
   position: relative;
@@ -2111,7 +2124,7 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   height: 0%;
   background: #00E5FF;
   transition: height 0.12s linear;
-  box-shadow: 0 0 6px rgba(0,229,255,0.5);
+  box-shadow: 0 0 8px rgba(0,229,255,0.5);
 }
 
 /* Owned badge */
@@ -2119,27 +2132,27 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
   display: inline-flex; align-items: center; gap: 3px;
   font-size: 9px; font-weight: 700;
   color: #AAFF00;
-  background: rgba(170,255,0,0.12);
-  border: 1px solid rgba(170,255,0,0.25);
-  border-radius: 4px; padding: 2px 7px;
+  background: rgba(170,255,0,0.1);
+  border: 1px solid rgba(170,255,0,0.2);
+  border-radius: 5px; padding: 2px 8px;
   letter-spacing: 0.06em;
 }
 
 /* ── Radial progress download button ── */
 .lib-dl-btn {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: rgba(0,229,255,0.08); border: 2px solid rgba(0,229,255,0.2);
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(0,229,255,0.06); border: 2px solid rgba(0,229,255,0.15);
   color: #00E5FF; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: all 0.2s ease; position: relative;
+  transition: all 0.25s ease; position: relative;
   padding: 0;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
 .lib-dl-btn:hover:not(:disabled) {
   background: rgba(0,229,255,0.18);
-  border-color: rgba(0,229,255,0.4);
-  box-shadow: 0 2px 14px rgba(0,229,255,0.2);
-  transform: scale(1.1);
+  border-color: rgba(0,229,255,0.45);
+  box-shadow: 0 2px 16px rgba(0,229,255,0.2);
+  transform: scale(1.12);
 }
 .lib-dl-btn:disabled {
   cursor: not-allowed;
@@ -2149,12 +2162,12 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 
 /* ── Download states ── */
 .lib-dl-btn--done {
-  background: rgba(170,255,0,0.1); border-color: rgba(170,255,0,0.3);
+  background: rgba(170,255,0,0.08); border-color: rgba(170,255,0,0.25);
   color: var(--zzz-lime);
-  box-shadow: 0 2px 10px rgba(170,255,0,0.1);
+  box-shadow: 0 2px 12px rgba(170,255,0,0.08);
 }
 .lib-dl-btn--error {
-  background: rgba(255,61,61,0.1); border-color: rgba(255,61,61,0.3);
+  background: rgba(255,61,61,0.08); border-color: rgba(255,61,61,0.25);
   color: var(--zzz-red);
 }
 
@@ -2271,11 +2284,11 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); box-sha
 }
 
 @media (max-width: 768px) {
-  .lib-header { padding: 10px 12px; gap: 8px; }
+  .lib-header { padding: 12px 14px; gap: 8px; }
   .lib-search { max-width: none; }
   .lib-notif-container { max-width: 240px; }
-  .lib-tile { height: 64px; }
-  .lib-tile-cover { width: 64px; height: 64px; min-width: 64px; }
+  .lib-tile { height: 68px; }
+  .lib-tile-cover { width: 68px; height: 68px; min-width: 68px; }
   .lib-tile-title { font-size: 11px; }
   .lib-tile-artist { font-size: 9px; }
   .lib-dl-btn { width: 32px; height: 32px; }

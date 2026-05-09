@@ -610,13 +610,21 @@ async function boot() {
     three.showBgMesh(); // Restore dark gradient bg mesh for menus
     if (startGame._cleanup) { startGame._cleanup(); startGame._cleanup = null; }
     const stats = currentJudgement.getStats();
+
+    // ── Save audioDuration BEFORE releasing the buffer ──
+    // currentMapData.audioBuffer may be the LEAD-IN buffer (1s silence prepended),
+    // so subtract LEAD_IN to get the original song duration for progress calculation.
+    const leadInBufferDuration = currentMapData?.audioBuffer?.duration || 0;
+    const originalAudioDuration = leadInBufferDuration > 0 ? Math.max(0, leadInBufferDuration - LEAD_IN) : 0;
+
     // Save result ONLY if the game was played to completion (song end / death), not on quit.
     // Extra safeguard: also require minimum progress (>10% of song) to prevent saving
     // results from accidental starts or very early quits.
-    const audioDuration = currentMapData?.audioBuffer ? currentMapData.audioBuffer.duration : 0;
-    const gameTime = audio.currentTime;
-    const minProgress = audioDuration > 0 ? gameTime / audioDuration : 0;
-    const playedToCompletion = !_quitGame && currentMapData && stats && minProgress > 0.1;
+    const gameTime = audio._pausedAt || audio.currentTime || 0;
+    // Subtract LEAD_IN from gameTime since game time includes the 1s lead-in
+    const gamePlayTime = Math.max(0, gameTime - LEAD_IN);
+    const minProgress = originalAudioDuration > 0 ? gamePlayTime / originalAudioDuration : 0;
+    const playedToCompletion = !_quitGame && currentMapData && stats && (minProgress > 0.1 || gameTime > 5);
     if (playedToCompletion) {
       try {
         const setId = currentMapData.metadata?.setId || currentMapData.metadata?.title || '';
@@ -712,7 +720,20 @@ async function boot() {
     }
     document.getElementById('restart-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = !_deadPause; _isRestart = true; endGame(); startGame(currentMapData); });
     document.getElementById('settings-btn').addEventListener('click', () => { _openPauseSettings(); });
-    document.getElementById('quit-btn').addEventListener('click', () => { _closePause(); _skipResult = true; _quitGame = !_deadPause; endGame(); screens.show('song-select'); });
+    document.getElementById('quit-btn').addEventListener('click', () => {
+      _closePause();
+      if (_deadPause) {
+        // Death → quit: show result screen, save record (don't set _quitGame)
+        _skipResult = false;
+        _quitGame = false;
+      } else {
+        // Normal pause → quit: skip result screen, don't save record
+        _skipResult = true;
+        _quitGame = true;
+      }
+      endGame();
+      if (!_deadPause) screens.show('song-select');
+    });
     EventBus.emit('game:pause');
   };
 

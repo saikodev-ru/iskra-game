@@ -115,28 +115,10 @@ export default class HUD {
         <!-- ── Pause button ── -->
         <button id="hud-pause" class="zzz-btn zzz-btn--sm" style="position:absolute;top:16px;right:16px;pointer-events:all;font-size:11px;padding:6px 14px;opacity:0.5;transition:opacity 0.2s;">⏸</button>
 
-        <!-- ── Instability Indicator — bottom right corner (osu! style) ── -->
-        <div id="hud-instability" style="display:none;position:absolute;right:12px;bottom:12px;z-index:10;">
-          <!-- FPS -->
-          <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:4px;margin-bottom:4px;">
-            <span id="hud-ur-label" style="font-family:var(--zzz-mono);font-size:8px;color:rgba(255,255,255,0.3);letter-spacing:0.05em;">UR</span>
-            <span id="hud-ur" style="font-family:var(--zzz-mono);font-size:11px;color:rgba(255,255,255,0.55);font-variant-numeric:tabular-nums;">0.00</span>
-          </div>
-          <!-- Hit error bar -->
-          <div id="hud-error-bar" style="position:relative;width:120px;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:visible;margin-bottom:4px;">
-            <!-- Timing window colored zones -->
-            <div style="position:absolute;left:50%;transform:translateX(-50%);width:33.6%;height:100%;background:rgba(0,255,100,0.08);border-radius:1px;"></div> <!-- ±45ms of ±200ms -->
-            <div style="position:absolute;left:50%;transform:translateX(-50%);width:67.2%;height:100%;background:rgba(255,200,0,0.06);border-radius:2px;"></div> <!-- ±90ms -->
-            <!-- Center line (perfect timing) -->
-            <div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,0.35);transform:translateX(-0.5px);"></div>
-            <!-- Hit error marks container -->
-            <div id="hud-error-marks" style="position:absolute;inset:0;overflow:hidden;border-radius:3px;"></div>
-          </div>
-          <!-- FPS -->
-          <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:4px;">
-            <span id="hud-fps-label" style="font-family:var(--zzz-mono);font-size:8px;color:rgba(255,255,255,0.3);letter-spacing:0.05em;">FPS</span>
-            <span id="hud-fps" style="font-family:var(--zzz-mono);font-size:11px;color:rgba(255,255,255,0.45);font-variant-numeric:tabular-nums;">0</span>
-          </div>
+        <!-- ── FPS Display — bottom right corner ── -->
+        <div id="hud-instability" style="display:none;position:absolute;right:16px;bottom:16px;z-index:10;">
+          <span id="hud-fps" style="font-family:var(--zzz-mono);font-size:28px;color:rgba(255,255,255,0.45);font-variant-numeric:tabular-nums;font-weight:700;letter-spacing:0.02em;">0</span>
+          <span style="font-family:var(--zzz-mono);font-size:11px;color:rgba(255,255,255,0.25);letter-spacing:0.08em;font-weight:600;">FPS</span>
         </div>
       </div>
     `;
@@ -151,8 +133,6 @@ export default class HUD {
       pause: document.getElementById('hud-pause'),
       instability: document.getElementById('hud-instability'),
       fps: document.getElementById('hud-fps'),
-      ur: document.getElementById('hud-ur'),
-      errorMarks: document.getElementById('hud-error-marks'),
     };
     this.els.pause.addEventListener('click', () => EventBus.emit('game:pause', {}));
     this.els.pause.addEventListener('mouseenter', () => { this.els.pause.style.opacity = '1'; });
@@ -379,16 +359,13 @@ export default class HUD {
       if (this.els.accuracy) this.els.accuracy.textContent = this._displayAccuracy.toFixed(2) + '%';
     }
 
-    /* ── Instability indicator ── */
+    /* ── FPS display ── */
     if (this._instabilityEnabled) {
       this._updateFPS();
 
-      // Update display every ~4 frames to avoid thrashing DOM
       if (now - this._lastFpsUpdate > 66) {
         this._lastFpsUpdate = now;
         if (this.els.fps) this.els.fps.textContent = this._fps;
-        if (this.els.ur) this.els.ur.textContent = this._unstableRate.toFixed(2);
-        this._renderHitErrorBar();
       }
     }
   }
