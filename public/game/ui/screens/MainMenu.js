@@ -319,21 +319,27 @@ export default class MainMenu {
     this._beatDetectFrame = requestAnimationFrame(detect);
   }
 
-  /** Stop menu music */
+  /** Stop menu music — immediate hard stop */
   _stopMenuMusic() {
-    try {
-      if (this._menuMusicGain && this.audio.ctx) {
-        this._menuMusicGain.gain.linearRampToValueAtTime(0, this.audio.ctx.currentTime + 0.5);
-        const source = this._menuMusicSource;
-        const gain = this._menuMusicGain;
-        setTimeout(() => {
-          try { source?.stop(); } catch (_) {}
-          try { gain?.disconnect(); } catch (_) {}
-        }, 600);
-      }
-    } catch (_) {}
+    const source = this._menuMusicSource;
+    const gain = this._menuMusicGain;
     this._menuMusicSource = null;
     this._menuMusicGain = null;
+    if (this._beatDetectFrame) cancelAnimationFrame(this._beatDetectFrame);
+    this._beatDetectFrame = null;
+
+    // Quick fade then hard stop
+    if (gain && this.audio && this.audio.ctx) {
+      try {
+        const ctx = this.audio.ctx;
+        gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
+      } catch (_) {}
+    }
+    setTimeout(() => {
+      if (source) { try { source.stop(); } catch (_) {} }
+      if (gain) { try { gain.disconnect(); } catch (_) {} }
+    }, 150);
   }
 
   destroy() {

@@ -266,6 +266,7 @@ export default class Settings {
     this._keyHandler = (e) => {
       if (e.code === 'Escape') {
         e.preventDefault();
+        e.stopImmediatePropagation(); // Prevent game's ESC handler from also firing
         if (this._rebinding) { this._rebinding = null; this._renderKeybinds(); }
         else if (this._rebindingQR) { this._rebindingQR = false; this._updateQRKeyBtn(); }
         else this._closeOverlay();

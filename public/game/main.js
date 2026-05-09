@@ -194,6 +194,10 @@ async function boot() {
     if (gameActive) { _skipResult = true; _quitGame = true; endGame(); }
     _dying = false;
     if (_deathTimeout) { clearTimeout(_deathTimeout); _deathTimeout = null; }
+
+    // Kill any lingering menu music before starting gameplay
+    if (_mainMenuInstance) { _mainMenuInstance._stopMenuMusic(); }
+
     GameCursor.hide(); // Hide cursor during gameplay
     initAudio();
 
@@ -654,6 +658,10 @@ async function boot() {
     gameActive = false;
     // Save audio position BEFORE stopping, so resumeGame() can restore it
     const savedPosition = audio.currentTime;
+
+    // Kill any lingering menu music (safety net in case destroy() didn't fully stop it)
+    if (_mainMenuInstance) { _mainMenuInstance._stopMenuMusic(); }
+
     audio.pause();
     audio.stopBeatScheduler();
     if (gameLoop) gameLoop.stop();
@@ -720,7 +728,7 @@ async function boot() {
     const panelWidth = Math.max(Math.min(380, sa.w * 0.7), Math.min(240, sa.w * 0.5));
     const settingsPanel = document.createElement('div');
     settingsPanel.id = 'pause-settings';
-    settingsPanel.style.cssText = `position:fixed;left:${sa.x}px;top:${sa.y}px;width:${sa.w}px;height:${sa.h}px;z-index:60;display:flex;overflow:hidden;`;
+    settingsPanel.style.cssText = `position:fixed;left:${sa.x}px;top:${sa.y}px;width:${sa.w}px;height:${sa.h}px;z-index:60;display:flex;overflow:hidden;background:rgba(0,0,0,0.6);`;
     settingsPanel.innerHTML = `
       <div id="pause-settings-inner" style="width:${panelWidth}px;min-width:${Math.min(240, sa.w * 0.5)}px;height:100%;background:rgba(17,17,17,0.95);backdrop-filter:blur(20px);border-right:2px solid var(--zzz-graphite);overflow-y:auto;padding:28px 20px;animation:settings-slide-in 0.25s ease-out forwards;" class="zzz-scroll"></div>
       <div id="pause-settings-bg" style="flex:1;min-width:0;"></div>
@@ -743,9 +751,9 @@ async function boot() {
     const aspectRatios = ['16:9', '16:10', '4:3', '21:9', 'Fill'];
     const savedAspect = localStorage.getItem('rhythm-os-aspect-ratio') || '16:9';
     const savedResScale = localStorage.getItem('rhythm-os-res-scale') || '100';
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = settings._buildSettingsContent(aspectRatios, savedAspect, savedResScale);
-    inner.appendChild(tempDiv);
+    const contentDiv = document.createElement('div');
+    contentDiv.innerHTML = settings._buildSettingsContent(aspectRatios, savedAspect, savedResScale);
+    inner.appendChild(contentDiv);
     settings.init();
     _pauseSettingsInstance = settings;
 
@@ -767,7 +775,7 @@ async function boot() {
       _pauseOverlay.style.top = sa.y + 'px';
       _pauseOverlay.style.width = sa.w + 'px';
       _pauseOverlay.style.height = sa.h + 'px';
-      _pauseOverlay.style.display = '';
+      _pauseOverlay.style.display = 'flex';
     }
     // Re-apply safe area in case aspect ratio changed
     updateSafeArea();
@@ -1261,7 +1269,11 @@ async function boot() {
     }
   });
 
-  screens.register('main-menu', () => new MainMenu({ audio, screens }));
+  let _mainMenuInstance = null;
+  screens.register('main-menu', () => {
+    _mainMenuInstance = new MainMenu({ audio, screens });
+    return _mainMenuInstance;
+  });
   let _songSelectInstance = null;
   screens.register('song-select', () => {
     if (_songSelectInstance) {
