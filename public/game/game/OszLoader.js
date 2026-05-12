@@ -5,7 +5,7 @@ import DifficultyAnalyzer from './DifficultyAnalyzer.js';
 class BeatmapStore {
   static DB_NAME = 'rhythm-os-db';
   static STORE_NAME = 'beatmaps';
-  static DB_VERSION = 6; // v6: strip videoData from IndexedDB to save memory
+  static DB_VERSION = 7; // v7: keep videoData/videoMime in IndexedDB for video preview
 
   /** Open (or create) the database */
   static async open() {
@@ -62,6 +62,8 @@ class BeatmapStore {
             console.warn('[BeatmapStore] v6 migration strip failed:', err);
           }
         }
+        // v6→v7: no migration needed — v7 just keeps videoData/videoMime that v6 stripped
+        // Existing data at v6 already had videoData stripped, re-downloading will restore it
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -133,12 +135,9 @@ class BeatmapStore {
         return clone;
       });
 
-      // STRIP videoData from stored object — videos can be 50-200MB each
-      // and cause massive memory usage when loaded from IndexedDB.
-      // videoUrl (blob: URL) is session-only and will be reconstructed from backgroundData.
-      // If the user wants the video back, they can re-download the map.
-      delete storable.videoData;
-      delete storable.videoMime;
+      // v7: KEEP videoData/videoMime in IndexedDB so video previews work
+      // after page reload. Videos are reconstructed from stored data on load.
+      // (Previously v6 stripped them to save memory, but this broke video preview.)
 
       // backgroundData (Uint8Array) and backgroundMime (string) are
       // structured-clone compatible, so they survive IndexedDB put() natively.
