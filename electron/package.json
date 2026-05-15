@@ -1,0 +1,38 @@
+{
+  "name": "iskra-game-electron",
+  "version": "1.0.0",
+  "description": "iskra-game — rhythm game (osu!mania clone) Electron wrapper",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.saikodev.iskra-game",
+    "productName": "iskra-game",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron-main.js",
+      "preload.js",
+      "../.next/standalone/**/*",
+      "../.next/static/**/*",
+      "../public/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
