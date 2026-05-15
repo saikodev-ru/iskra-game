@@ -1,17 +1,17 @@
 # iskra-game — Electron Launcher
 
-Запуск ритм-игры iskra-game через Electron.
+Запуск ритм-игры iskra-game через Electron на десктопе.
 
 ## Быстрый старт (Development)
 
 1. **Установи зависимости основного проекта** (из корня репозитория):
    ```bash
-   bun install
+   npm install
    ```
 
 2. **Запусти Next.js dev-сервер** (из корня репозитория):
    ```bash
-   bun run dev
+   npm run dev
    ```
 
 3. **Установи зависимости Electron** (из папки `electron/`):
@@ -21,6 +21,13 @@
    ```
 
 4. **Запусти Electron** (из папки `electron/`):
+
+   **Windows PowerShell:**
+   ```powershell
+   $env:NODE_ENV="development"; npm start
+   ```
+
+   **Linux/macOS:**
    ```bash
    NODE_ENV=development npm start
    ```
@@ -31,7 +38,7 @@ Electron откроет окно и загрузит `http://localhost:3000` —
 
 1. **Собери Next.js** (из корня репозитория):
    ```bash
-   bun run build
+   npm run build
    ```
 
 2. **Собери Electron-пакет** (из папки `electron/`):
@@ -58,3 +65,8 @@ electron/
 - Для production используется standalone-сервер Next.js, запускаемый автоматически
 - Минимальный размер окна: 800×600
 - Если нужна консоль разработчика — раскомментируй строку `openDevTools()` в `electron-main.js`
+
+## Требования
+
+- [Node.js](https://nodejs.org/) 18+ 
+- npm (идёт в комплекте с Node.js)
